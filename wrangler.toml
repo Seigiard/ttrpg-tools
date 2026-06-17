@@ -1,0 +1,15 @@
+# Cloudflare Workers + Static Assets — конфиг для деплоя Astro-статики.
+# См. https://developers.cloudflare.com/workers/static-assets/
+
+name = "ttrpg-tools"
+compatibility_date = "2026-06-17"
+
+[assets]
+# Cloudflare раздаёт всё из этого каталога как статику.
+# Astro собирает сюда (build output: dist/).
+directory = "./dist"
+
+# Поведение при ненайденном пути:
+# "none" — отдаёт 404 (наш случай: Astro генерит /index.html, /mausritter/locations/index.html).
+# "single-page-application" — отдавал бы index.html для всего; нам не нужно (у нас MPA).
+not_found_handling = "404-page"

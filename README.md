@@ -34,25 +34,35 @@ bun run typecheck  # astro check
 
 ## Деплой
 
-Cloudflare Pages через git-интеграцию.
+Cloudflare Workers with Static Assets через git-интеграцию.
+
+Конфиг — `wrangler.toml`. Cloudflare билдит репо и раздаёт статику из `dist/`.
 
 **Первоначальная настройка (один раз):**
 
-1. Создать пустой репозиторий на GitHub `<user>/ttrpg-tools`, запушить `main`.
-2. В Cloudflare Dashboard → Workers & Pages → Create → Pages → **Connect to Git**.
-3. Выбрать репозиторий, ветка `main`.
-4. Параметры билда:
-   - Framework preset: **Astro**
+1. В Cloudflare Dashboard → **Workers & Pages** → **Create** → **Import a repository**.
+2. Выбрать репозиторий `Seigiard/ttrpg-tools`, ветка `main`.
+3. Параметры билда:
+   - Project name: `ttrpg-tools`
    - Build command: `bun run build`
-   - Build output: `dist`
-5. Environment variables:
+   - Deploy command: `npx wrangler deploy`
+4. В **Advanced settings** → Build variables:
    - `BUN_VERSION` = `1.3.14` (или новее)
+5. **Deploy**.
 
-После сохранения первый деплой запустится автоматически. Дальше — каждый push в `main` триггерит новую сборку; для PR создаются preview-деплои.
+После сохранения первый деплой запустится автоматически (~1–2 мин). Дальше каждый push в `main` триггерит новую сборку; для PR создаются preview-деплои.
 
-**Если что-то отвалится:** проверь в Cloudflare → Project → Build logs. Чаще всего — несовместимость версий Node/Bun или забытые env vars.
+**Локальный деплой** (если нужен — нормально пушить через git):
 
-CI на GitHub Actions проверяет lint + test + build на PR (`.github/workflows/ci.yml`) — Cloudflare сам деплоит, GA только страхует от слома `main`.
+```sh
+bun run deploy   # build + wrangler deploy
+```
+
+Потребует залогиниться в Wrangler первый раз (`bunx wrangler login`).
+
+**Если что-то отвалится:** проверь в Cloudflare → Project → Build logs. Чаще всего — несовместимость версий Node/Bun или забытый `BUN_VERSION`.
+
+CI на GitHub Actions проверяет lint + format + test + typecheck + build на PR (`.github/workflows/ci.yml`) — Cloudflare сам деплоит, GA только страхует от слома `main`.
 
 ## Документация
 
