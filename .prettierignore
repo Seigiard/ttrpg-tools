@@ -1,0 +1,6 @@
+dist/
+node_modules/
+.astro/
+bun.lock
+*.md
+src/**/*.{ts,tsx,js,jsx,json}

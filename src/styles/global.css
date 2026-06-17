@@ -1,0 +1,82 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Дизайн-токены TTRPG Tools. Единственный источник правды — docs/DESIGN.md.
+ * Используется два слоя токенов:
+ *   1. Семантические — `surface`, `text`, `text-muted`, `border` и т.п. — для собственных компонентов.
+ *   2. shadcn-совместимые — `background`, `foreground`, `primary` и т.п. — для генерируемых shadcn-компонентов.
+ * Оба слоя ссылаются на одну палитру, см. :root ниже.
+ */
+
+@theme {
+  /* Семантические токены TTRPG Tools */
+  --color-primary: #b45309; /* burnt sienna */
+  --color-primary-foreground: #fbf7ef;
+  --color-secondary: #7c2d12; /* dried blood */
+  --color-secondary-foreground: #fbf7ef;
+  --color-success: #15803d;
+  --color-warning: #a16207;
+  --color-danger: #b91c1c;
+
+  --color-surface: #fbf7ef; /* тёплая бумага */
+  --color-surface-elevated: #ffffff;
+  --color-text: #1c1917;
+  --color-text-muted: #57534e;
+  --color-border: #e7e2d5;
+
+  --font-display: 'Cormorant Garamond', Georgia, serif;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+}
+
+/* shadcn-совместимые токены — отображаем на нашу палитру.
+   Это позволяет генерируемым shadcn-компонентам наследовать дизайн-систему. */
+@theme inline {
+  --color-background: var(--color-surface);
+  --color-foreground: var(--color-text);
+  --color-card: var(--color-surface-elevated);
+  --color-card-foreground: var(--color-text);
+  --color-popover: var(--color-surface-elevated);
+  --color-popover-foreground: var(--color-text);
+  --color-muted: #f0ead9;
+  --color-muted-foreground: var(--color-text-muted);
+  --color-accent: var(--color-primary);
+  --color-accent-foreground: var(--color-primary-foreground);
+  --color-destructive: var(--color-danger);
+  --color-input: var(--color-border);
+  --color-ring: var(--color-primary);
+  --radius: var(--radius-lg);
+}
+
+/* Базовые применения. */
+html,
+body {
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  *:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+}
