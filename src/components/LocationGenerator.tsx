@@ -1,5 +1,5 @@
 import { RefreshCw } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { LocationTable, LocationTableD20 } from '@/data/types';
 import { pick } from '@/lib/dice';
 import { Button } from '@/components/ui/button';
@@ -19,21 +19,31 @@ interface Props<Biome extends string> {
 export function LocationGenerator<Biome extends string>({ table }: Props<Biome>) {
   const firstBiome = table.biomes[0] as Biome;
   const [biome, setBiome] = useState<Biome>(firstBiome);
+  // На сервере (SSR) — null, чтобы избежать hydration mismatch с клиентским crypto.
+  // Первый бросок и броски при смене биома инициируются эффектом ниже.
   const [roll, setRoll] = useState<Roll<Biome> | null>(null);
+
+  const rollFor = (b: Biome): Roll<Biome> => {
+    const landmarkPick = pick(table.landmarks[b]);
+    const detailPick = pick(table.details);
+    return { biome: b, landmarkIndex: landmarkPick.index, detailIndex: detailPick.index };
+  };
+
+  useEffect(() => {
+    setRoll(rollFor(biome));
+    // table-объект стабилен в течение жизни компонента, его в зависимости не включаем
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [biome]);
 
   const handleBiomeChange = (next: string | number | null) => {
     if (next === null) return;
     const value = next as Biome;
     if (value === biome) return;
-    setBiome(value);
-    // Смена биома без переброса даёт landmark из старого биома → класс багов. Сбрасываем результат.
-    setRoll(null);
+    setBiome(value); // эффект выше тут же перебросит landmark под новый биом
   };
 
   const rollAll = () => {
-    const landmarkPick = pick(table.landmarks[biome]);
-    const detailPick = pick(table.details);
-    setRoll({ biome, landmarkIndex: landmarkPick.index, detailIndex: detailPick.index });
+    setRoll(rollFor(biome));
   };
 
   const rerollLandmark = () => {

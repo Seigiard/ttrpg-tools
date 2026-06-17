@@ -6,6 +6,9 @@ import { LocationGenerator } from './LocationGenerator';
 /**
  * Мокаем crypto.getRandomValues, чтобы тесты были детерминистичными.
  * Возвращаем заранее заданную последовательность Uint32 значений.
+ *
+ * Все тесты потребляют минимум 2 значения на mount (auto-roll в useEffect):
+ * первое для landmark, второе для detail.
  */
 function mockCrypto(sequence: number[]) {
   const original = crypto.getRandomValues.bind(crypto);
@@ -35,20 +38,9 @@ describe('LocationGenerator', () => {
     }
   });
 
-  test('начальное состояние: нет результата, есть кнопка «Бросить локацию»', () => {
-    render(<LocationGenerator table={mausritterLocations} />);
-    expect(screen.getByTestId('roll-button')).toBeDefined();
-    expect(screen.queryByTestId('result-card')).toBeNull();
-  });
-
-  test('клик «Бросить локацию» создаёт результат с обеими частями', () => {
-    // Для d20 limit = floor(2^32 / 20) * 20 = 4294967280.
-    // Любое value < limit принимается; result = value % 20.
-    // Хотим landmarkIndex = 0, detailIndex = 2 → value = 0 и value = 2.
+  test('сразу после монтирования показан результат (без клика)', () => {
     restoreCrypto = mockCrypto([0, 2]);
     render(<LocationGenerator table={mausritterLocations} />);
-
-    fireEvent.click(screen.getByTestId('roll-button'));
 
     expect(screen.getByTestId('result-card')).toBeDefined();
     const landmark = screen.getByTestId('result-landmark');
@@ -57,22 +49,37 @@ describe('LocationGenerator', () => {
     expect(detail.textContent).toContain(mausritterLocations.details[2].ru);
   });
 
-  test('reroll ориентира не меняет деталь', () => {
+  test('клик «Бросить локацию» перебрасывает обе части', () => {
     restoreCrypto = mockCrypto([
-      0, // первый roll: landmark idx 0
-      5, // первый roll: detail idx 5
-      7, // reroll landmark: idx 7
+      0,
+      2, // mount
+      4,
+      9, // reroll
     ]);
     render(<LocationGenerator table={mausritterLocations} />);
 
     fireEvent.click(screen.getByTestId('roll-button'));
+
+    expect(screen.getByTestId('result-landmark').textContent).toContain(
+      mausritterLocations.landmarks.countryside[4].ru,
+    );
+    expect(screen.getByTestId('result-detail').textContent).toContain(
+      mausritterLocations.details[9].ru,
+    );
+  });
+
+  test('reroll ориентира не меняет деталь', () => {
+    restoreCrypto = mockCrypto([
+      0,
+      5, // mount: landmark=0, detail=5
+      7, // reroll landmark: idx 7
+    ]);
+    render(<LocationGenerator table={mausritterLocations} />);
     const detailBefore = screen.getByTestId('result-detail').textContent;
 
     fireEvent.click(screen.getByRole('button', { name: /перебросить ориентир/i }));
-    const detailAfter = screen.getByTestId('result-detail').textContent;
 
-    expect(detailAfter).toBe(detailBefore);
-    // landmark должен поменяться (idx был 0, стал 7)
+    expect(screen.getByTestId('result-detail').textContent).toBe(detailBefore);
     expect(screen.getByTestId('result-landmark').textContent).toContain(
       mausritterLocations.landmarks.countryside[7].ru,
     );
@@ -80,56 +87,60 @@ describe('LocationGenerator', () => {
 
   test('reroll детали не меняет ориентир', () => {
     restoreCrypto = mockCrypto([
-      3, // landmark idx 3
-      10, // detail idx 10
+      3,
+      10, // mount: landmark=3, detail=10
       15, // reroll detail: idx 15
     ]);
     render(<LocationGenerator table={mausritterLocations} />);
-
-    fireEvent.click(screen.getByTestId('roll-button'));
     const landmarkBefore = screen.getByTestId('result-landmark').textContent;
 
     fireEvent.click(screen.getByRole('button', { name: /перебросить деталь/i }));
-    const landmarkAfter = screen.getByTestId('result-landmark').textContent;
 
-    expect(landmarkAfter).toBe(landmarkBefore);
+    expect(screen.getByTestId('result-landmark').textContent).toBe(landmarkBefore);
     expect(screen.getByTestId('result-detail').textContent).toContain(
       mausritterLocations.details[15].ru,
     );
   });
 
-  test('подсветка строки в справочной таблице соответствует выпавшему индексу', () => {
+  test('смена биома автоматически перебрасывает (а не сбрасывает в null)', () => {
     restoreCrypto = mockCrypto([
-      4, // landmark idx 4
-      11, // detail idx 11
+      0,
+      0, // mount: countryside, landmark=0, detail=0
+      11,
+      4, // смена биома на forest: landmark=11, detail=4
     ]);
-    const { container } = render(<LocationGenerator table={mausritterLocations} />);
-    fireEvent.click(screen.getByTestId('roll-button'));
+    render(<LocationGenerator table={mausritterLocations} />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Лес' }));
+
+    expect(screen.getByTestId('result-card')).toBeDefined();
+    expect(screen.getByTestId('result-landmark').textContent).toContain(
+      mausritterLocations.landmarks.forest[11].ru,
+    );
+  });
+
+  test('подсветка строки в справочной таблице соответствует выпавшему индексу', () => {
+    restoreCrypto = mockCrypto([4, 11]); // mount
+    render(<LocationGenerator table={mausritterLocations} />);
 
     const landmarkTable = screen.getByTestId('reference-landmarks');
     const hitLandmark = landmarkTable.querySelector('[data-hit="true"]');
-    expect(hitLandmark).not.toBeNull();
     expect(hitLandmark?.getAttribute('data-row-index')).toBe('4');
 
     const detailTable = screen.getByTestId('reference-details');
     const hitDetail = detailTable.querySelector('[data-hit="true"]');
     expect(hitDetail?.getAttribute('data-row-index')).toBe('11');
-
-    // Чтобы линтер не ругался на неиспользованный container.
-    expect(container).toBeDefined();
   });
 
   test('detail с question рендерит вопрос italic под основным текстом', () => {
     restoreCrypto = mockCrypto([
-      0, // landmark
-      0, // detail idx 0: «Древний храм культа летучих мышей» (Что было призвано?)
+      0,
+      0, // mount: detail idx 0 — «Древний храм культа летучих мышей» (Что было призвано?)
     ]);
     render(<LocationGenerator table={mausritterLocations} />);
-    fireEvent.click(screen.getByTestId('roll-button'));
 
     const detail = screen.getByTestId('result-detail');
     const em = detail.querySelector('em');
-    expect(em).not.toBeNull();
     expect(em?.textContent).toBe(mausritterLocations.details[0].question);
   });
 });
