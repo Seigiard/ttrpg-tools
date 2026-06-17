@@ -4,11 +4,12 @@ import { mausritterLocations } from '@/data/mausritter/locations';
 import { LocationGenerator } from './LocationGenerator';
 
 /**
- * Мокаем crypto.getRandomValues, чтобы тесты были детерминистичными.
- * Возвращаем заранее заданную последовательность Uint32 значений.
+ * Тесты компонента — только presentation-слой:
+ * рендер, доступность по data-testid и aria-label, маршрутизация кликов в store.
+ * Бизнес-логика state-машины бросков покрыта в src/stores/location-store.test.ts.
  *
- * Все тесты потребляют минимум 2 значения на mount (auto-roll в useEffect):
- * первое для landmark, второе для detail.
+ * Для детерминизма мокаем crypto.getRandomValues — value % sides + 1 даёт
+ * индекс на 1 больше mock-значения; используем mock=0 чтобы получить index=0.
  */
 function mockCrypto(sequence: number[]) {
   const original = crypto.getRandomValues.bind(crypto);
@@ -24,7 +25,7 @@ function mockCrypto(sequence: number[]) {
   };
 }
 
-describe('LocationGenerator', () => {
+describe('LocationGenerator (presentation)', () => {
   let restoreCrypto: (() => void) | null = null;
 
   beforeEach(() => {
@@ -38,109 +39,71 @@ describe('LocationGenerator', () => {
     }
   });
 
-  test('сразу после монтирования показан результат (без клика)', () => {
+  test('сразу после монтирования показан результат с обеими частями', () => {
     restoreCrypto = mockCrypto([0, 2]);
     render(<LocationGenerator table={mausritterLocations} />);
 
     expect(screen.getByTestId('result-card')).toBeDefined();
-    const landmark = screen.getByTestId('result-landmark');
-    const detail = screen.getByTestId('result-detail');
-    expect(landmark.textContent).toContain(mausritterLocations.landmarks.countryside[0].ru);
-    expect(detail.textContent).toContain(mausritterLocations.details[2].ru);
+    expect(screen.getByTestId('result-landmark').textContent).toContain(
+      mausritterLocations.landmarks.countryside[0].ru,
+    );
+    expect(screen.getByTestId('result-detail').textContent).toContain(
+      mausritterLocations.details[2].ru,
+    );
   });
 
-  test('клик «Бросить локацию» перебрасывает обе части', () => {
-    restoreCrypto = mockCrypto([
-      0,
-      2, // mount
-      4,
-      9, // reroll
-    ]);
+  test('кнопки переброса частей имеют доступные подписи', () => {
+    restoreCrypto = mockCrypto([0, 0]);
+    render(<LocationGenerator table={mausritterLocations} />);
+    expect(screen.getByRole('button', { name: /перебросить ориентир/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /перебросить деталь/i })).toBeDefined();
+  });
+
+  test('подсветка строки в справочной таблице соответствует индексу из стора', () => {
+    restoreCrypto = mockCrypto([4, 11]);
+    render(<LocationGenerator table={mausritterLocations} />);
+
+    const landmarkTable = screen.getByTestId('reference-landmarks');
+    expect(
+      landmarkTable.querySelector('[data-hit="true"]')?.getAttribute('data-row-index'),
+    ).toBe('4');
+
+    const detailTable = screen.getByTestId('reference-details');
+    expect(
+      detailTable.querySelector('[data-hit="true"]')?.getAttribute('data-row-index'),
+    ).toBe('11');
+  });
+
+  test('detail.question рендерится italic под основным значением', () => {
+    restoreCrypto = mockCrypto([0, 0]);
+    render(<LocationGenerator table={mausritterLocations} />);
+    const detail = screen.getByTestId('result-detail');
+    const em = detail.querySelector('em');
+    expect(em?.textContent).toBe(mausritterLocations.details[0].question);
+  });
+
+  test('клик «Бросить локацию» дёргает rollAll стора (UI обновляется)', () => {
+    restoreCrypto = mockCrypto([0, 0, 5, 7]);
     render(<LocationGenerator table={mausritterLocations} />);
 
     fireEvent.click(screen.getByTestId('roll-button'));
 
     expect(screen.getByTestId('result-landmark').textContent).toContain(
-      mausritterLocations.landmarks.countryside[4].ru,
+      mausritterLocations.landmarks.countryside[5].ru,
     );
     expect(screen.getByTestId('result-detail').textContent).toContain(
-      mausritterLocations.details[9].ru,
+      mausritterLocations.details[7].ru,
     );
   });
 
-  test('reroll ориентира не меняет деталь', () => {
-    restoreCrypto = mockCrypto([
-      0,
-      5, // mount: landmark=0, detail=5
-      7, // reroll landmark: idx 7
-    ]);
-    render(<LocationGenerator table={mausritterLocations} />);
-    const detailBefore = screen.getByTestId('result-detail').textContent;
-
-    fireEvent.click(screen.getByRole('button', { name: /перебросить ориентир/i }));
-
-    expect(screen.getByTestId('result-detail').textContent).toBe(detailBefore);
-    expect(screen.getByTestId('result-landmark').textContent).toContain(
-      mausritterLocations.landmarks.countryside[7].ru,
-    );
-  });
-
-  test('reroll детали не меняет ориентир', () => {
-    restoreCrypto = mockCrypto([
-      3,
-      10, // mount: landmark=3, detail=10
-      15, // reroll detail: idx 15
-    ]);
-    render(<LocationGenerator table={mausritterLocations} />);
-    const landmarkBefore = screen.getByTestId('result-landmark').textContent;
-
-    fireEvent.click(screen.getByRole('button', { name: /перебросить деталь/i }));
-
-    expect(screen.getByTestId('result-landmark').textContent).toBe(landmarkBefore);
-    expect(screen.getByTestId('result-detail').textContent).toContain(
-      mausritterLocations.details[15].ru,
-    );
-  });
-
-  test('смена биома автоматически перебрасывает (а не сбрасывает в null)', () => {
-    restoreCrypto = mockCrypto([
-      0,
-      0, // mount: countryside, landmark=0, detail=0
-      11,
-      4, // смена биома на forest: landmark=11, detail=4
-    ]);
+  test('смена биома в Tabs обновляет UI до результата нового биома', () => {
+    restoreCrypto = mockCrypto([0, 0, 11, 4]);
     render(<LocationGenerator table={mausritterLocations} />);
 
     fireEvent.click(screen.getByRole('tab', { name: 'Лес' }));
 
-    expect(screen.getByTestId('result-card')).toBeDefined();
     expect(screen.getByTestId('result-landmark').textContent).toContain(
       mausritterLocations.landmarks.forest[11].ru,
     );
-  });
-
-  test('подсветка строки в справочной таблице соответствует выпавшему индексу', () => {
-    restoreCrypto = mockCrypto([4, 11]); // mount
-    render(<LocationGenerator table={mausritterLocations} />);
-
-    const landmarkTable = screen.getByTestId('reference-landmarks');
-    const hitLandmark = landmarkTable.querySelector('[data-hit="true"]');
-    expect(hitLandmark?.getAttribute('data-row-index')).toBe('4');
-
-    const detailTable = screen.getByTestId('reference-details');
-    const hitDetail = detailTable.querySelector('[data-hit="true"]');
-    expect(hitDetail?.getAttribute('data-row-index')).toBe('11');
-  });
-
-  test('detail с question рендерит вопрос italic под основным текстом', () => {
-    restoreCrypto = mockCrypto([
-      0,
-      0, // mount: detail idx 0 — «Древний храм культа летучих мышей» (Что было призвано?)
-    ]);
-    render(<LocationGenerator table={mausritterLocations} />);
-
-    const detail = screen.getByTestId('result-detail');
-    const em = detail.querySelector('em');
-    expect(em?.textContent).toBe(mausritterLocations.details[0].question);
   });
 });

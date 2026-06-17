@@ -1,61 +1,34 @@
+import { useStore } from '@nanostores/react';
 import { RefreshCw } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import type { LocationTable, LocationTableD20 } from '@/data/types';
-import { pick } from '@/lib/dice';
+import { useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-
-interface Roll<Biome extends string> {
-  biome: Biome;
-  landmarkIndex: number;
-  detailIndex: number;
-}
+import type { LocationTable, LocationTableD20 } from '@/data/types';
+import { createLocationStore, type Roll } from '@/stores/location-store';
 
 interface Props<Biome extends string> {
   table: LocationTable<Biome>;
 }
 
 export function LocationGenerator<Biome extends string>({ table }: Props<Biome>) {
-  const firstBiome = table.biomes[0] as Biome;
-  const [biome, setBiome] = useState<Biome>(firstBiome);
-  // На сервере (SSR) — null, чтобы избежать hydration mismatch с клиентским crypto.
-  // Первый бросок и броски при смене биома инициируются эффектом ниже.
-  const [roll, setRoll] = useState<Roll<Biome> | null>(null);
+  // useMemo гарантирует, что стор создаётся один раз на жизнь компонента.
+  // Если когда-то таблица будет приходить «горячей» (live-обновление перевода) — поменять на key.
+  const store = useMemo(() => createLocationStore(table), [table]);
+  const biome = useStore(store.$biome);
+  const roll = useStore(store.$roll);
 
-  const rollFor = (b: Biome): Roll<Biome> => {
-    const landmarkPick = pick(table.landmarks[b]);
-    const detailPick = pick(table.details);
-    return { biome: b, landmarkIndex: landmarkPick.index, detailIndex: detailPick.index };
-  };
-
+  // Первый автоматический бросок на клиенте. Не в useState/store-init —
+  // иначе SSR-снепшот и клиент дадут разные значения и hydration сломается.
   useEffect(() => {
-    setRoll(rollFor(biome));
-    // table-объект стабилен в течение жизни компонента, его в зависимости не включаем
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [biome]);
+    if (store.$roll.get() === null) {
+      store.rollAll();
+    }
+  }, [store]);
 
   const handleBiomeChange = (next: string | number | null) => {
     if (next === null) return;
-    const value = next as Biome;
-    if (value === biome) return;
-    setBiome(value); // эффект выше тут же перебросит landmark под новый биом
-  };
-
-  const rollAll = () => {
-    setRoll(rollFor(biome));
-  };
-
-  const rerollLandmark = () => {
-    if (!roll) return;
-    const landmarkPick = pick(table.landmarks[roll.biome]);
-    setRoll({ ...roll, landmarkIndex: landmarkPick.index });
-  };
-
-  const rerollDetail = () => {
-    if (!roll) return;
-    const detailPick = pick(table.details);
-    setRoll({ ...roll, detailIndex: detailPick.index });
+    store.setBiome(next as Biome);
   };
 
   return (
@@ -73,7 +46,7 @@ export function LocationGenerator<Biome extends string>({ table }: Props<Biome>)
         </Tabs>
       </div>
 
-      <Button size="lg" onClick={rollAll} data-testid="roll-button">
+      <Button size="lg" onClick={store.rollAll} data-testid="roll-button">
         Бросить локацию
       </Button>
 
@@ -81,8 +54,8 @@ export function LocationGenerator<Biome extends string>({ table }: Props<Biome>)
         <ResultCard
           table={table}
           roll={roll}
-          onRerollLandmark={rerollLandmark}
-          onRerollDetail={rerollDetail}
+          onRerollLandmark={store.rerollLandmark}
+          onRerollDetail={store.rerollDetail}
         />
       ) : null}
 
