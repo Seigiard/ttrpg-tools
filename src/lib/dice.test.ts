@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { pick, roll } from './dice';
+import { pick, roll, rollDice } from './dice';
 
 describe('roll(sides)', () => {
   test('возвращает значения только в [1, sides]', () => {
@@ -91,6 +91,64 @@ describe('pick(table)', () => {
       seen.add(pick(table).value);
     }
     expect(seen.size).toBe(3);
+  });
+});
+
+describe('rollDice({ count, sides })', () => {
+  test('1d20 эквивалентен roll(20) по диапазону', () => {
+    for (let i = 0; i < 500; i++) {
+      const v = rollDice({ count: 1, sides: 20 });
+      expect(v).toBeGreaterThanOrEqual(1);
+      expect(v).toBeLessThanOrEqual(20);
+    }
+  });
+
+  test('2d6 даёт значения в [2, 12]', () => {
+    for (let i = 0; i < 1000; i++) {
+      const v = rollDice({ count: 2, sides: 6 });
+      expect(v).toBeGreaterThanOrEqual(2);
+      expect(v).toBeLessThanOrEqual(12);
+    }
+  });
+
+  test('2d6 распределение пиковое в 7 (среднее ≈ 7.0)', () => {
+    const N = 10_000;
+    let sum = 0;
+    const counts: number[] = Array.from({ length: 13 }, () => 0);
+    for (let i = 0; i < N; i++) {
+      const v = rollDice({ count: 2, sides: 6 });
+      sum += v;
+      counts[v] = (counts[v] ?? 0) + 1;
+    }
+    const mean = sum / N;
+    expect(mean).toBeGreaterThan(6.7);
+    expect(mean).toBeLessThan(7.3);
+    // 7 должно быть самым частым исходом
+    const max = Math.max(...counts);
+    expect(counts[7]).toBe(max);
+  });
+
+  test('3d4 даёт значения в [3, 12]', () => {
+    const seen = new Set<number>();
+    for (let i = 0; i < 5_000; i++) {
+      const v = rollDice({ count: 3, sides: 4 });
+      expect(v).toBeGreaterThanOrEqual(3);
+      expect(v).toBeLessThanOrEqual(12);
+      seen.add(v);
+    }
+    // За 5к бросков должны увидеть все 10 возможных сумм
+    expect(seen.size).toBe(10);
+  });
+
+  test('невалидный count бросает RangeError', () => {
+    expect(() => rollDice({ count: 0, sides: 6 })).toThrow(RangeError);
+    expect(() => rollDice({ count: -1, sides: 6 })).toThrow(RangeError);
+    expect(() => rollDice({ count: 1.5, sides: 6 })).toThrow(RangeError);
+  });
+
+  test('невалидный sides проксируется в roll() как RangeError', () => {
+    expect(() => rollDice({ count: 2, sides: 0 })).toThrow(RangeError);
+    expect(() => rollDice({ count: 1, sides: -3 })).toThrow(RangeError);
   });
 });
 

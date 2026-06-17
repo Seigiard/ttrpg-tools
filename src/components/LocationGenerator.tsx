@@ -4,7 +4,7 @@ import { useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import type { LocationTable, LocationTableD20 } from '@/data/types';
+import type { LocationRow, LocationTable } from '@/data/types';
 import { createLocationStore, type Roll } from '@/stores/location-store';
 
 interface Props<Biome extends string> {
@@ -77,10 +77,8 @@ function ResultCard<Biome extends string>({
   onRerollLandmark,
   onRerollDetail,
 }: ResultCardProps<Biome>) {
-  const landmark = table.landmarks[roll.biome][roll.landmarkIndex] as
-    | LocationTableD20[number]
-    | undefined;
-  const detail = table.details[roll.detailIndex] as LocationTableD20[number] | undefined;
+  const landmark = table.landmarks[roll.biome].rows[roll.landmarkIndex];
+  const detail = table.details.rows[roll.detailIndex];
   if (!landmark || !detail) return null;
 
   return (
@@ -181,13 +179,13 @@ function ReferenceTables<Biome extends string>({
     <div className="grid gap-8 md:grid-cols-2">
       <ReferenceTable
         title={`Ориентир · ${table.biomeLabels[biome]}`}
-        rows={table.landmarks[biome]}
+        rows={table.landmarks[biome].rows}
         highlightIndex={highlightLandmark}
         testId="reference-landmarks"
       />
       <ReferenceTable
         title="Деталь локации"
-        rows={table.details}
+        rows={table.details.rows}
         highlightIndex={highlightDetail}
         testId="reference-details"
       />
@@ -197,7 +195,7 @@ function ReferenceTables<Biome extends string>({
 
 interface ReferenceTableProps {
   title: string;
-  rows: LocationTableD20;
+  rows: readonly LocationRow[];
   highlightIndex: number | null;
   testId: string;
 }

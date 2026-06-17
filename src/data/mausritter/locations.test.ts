@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { validateTable } from '../random-table';
 import { mausritterLocations } from './locations';
 
 describe('mausritterLocations', () => {
@@ -7,14 +8,21 @@ describe('mausritterLocations', () => {
     expect(new Set(mausritterLocations.biomes).size).toBe(4);
   });
 
-  test('каждый биом landmarks содержит 20 строк', () => {
+  test('каждый landmark-таблица содержит 20 строк', () => {
     for (const biome of mausritterLocations.biomes) {
-      expect(mausritterLocations.landmarks[biome]).toHaveLength(20);
+      expect(mausritterLocations.landmarks[biome].rows).toHaveLength(20);
     }
   });
 
-  test('таблица details содержит 20 строк', () => {
-    expect(mausritterLocations.details).toHaveLength(20);
+  test('details таблица содержит 20 строк', () => {
+    expect(mausritterLocations.details.rows).toHaveLength(20);
+  });
+
+  test('все таблицы валидны по rollSpec (дефолт 1d20)', () => {
+    for (const biome of mausritterLocations.biomes) {
+      expect(() => validateTable(mausritterLocations.landmarks[biome])).not.toThrow();
+    }
+    expect(() => validateTable(mausritterLocations.details)).not.toThrow();
   });
 
   test('biomeLabels покрывает все биомы и значения непустые', () => {
@@ -27,17 +35,17 @@ describe('mausritterLocations', () => {
 
   test('каждый landmark и detail имеет непустое поле ru', () => {
     for (const biome of mausritterLocations.biomes) {
-      for (const row of mausritterLocations.landmarks[biome]) {
+      for (const row of mausritterLocations.landmarks[biome].rows) {
         expect(row.ru.length).toBeGreaterThan(0);
       }
     }
-    for (const row of mausritterLocations.details) {
+    for (const row of mausritterLocations.details.rows) {
       expect(row.ru.length).toBeGreaterThan(0);
     }
   });
 
-  test('details — поле question заполнено везде (это особенность исходной таблицы)', () => {
-    for (const row of mausritterLocations.details) {
+  test('details — поле question заполнено везде', () => {
+    for (const row of mausritterLocations.details.rows) {
       expect(row.question).toBeDefined();
       expect((row.question ?? '').length).toBeGreaterThan(0);
     }

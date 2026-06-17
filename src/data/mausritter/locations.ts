@@ -8,7 +8,7 @@
  * Шероховатость оригинала (открытые вопросы в скобках) сохранена.
  */
 
-import type { LocationTable, LocationTableD20 } from '../types';
+import type { LocationRow, LocationTable, RandomTable } from '../types';
 
 export type MausritterBiome = 'countryside' | 'forest' | 'river' | 'human-town';
 
@@ -21,7 +21,7 @@ const biomeLabels: Record<MausritterBiome, string> = {
   'human-town': 'Город людей',
 };
 
-const countryside: LocationTableD20 = [
+const countryside: readonly LocationRow[] = [
   { ru: 'Муравейник' },
   { ru: 'Бук, расщеплённый молнией' },
   { ru: 'Бело-костяное дерево' },
@@ -44,7 +44,7 @@ const countryside: LocationTableD20 = [
   { ru: 'Клубок фиговых корней' },
 ];
 
-const forest: LocationTableD20 = [
+const forest: readonly LocationRow[] = [
   { ru: 'Заброшенная хижина' },
   { ru: 'Яркая поляна' },
   { ru: 'Каскад водопадов' },
@@ -67,7 +67,7 @@ const forest: LocationTableD20 = [
   { ru: 'Изъеденное термитами дерево' },
 ];
 
-const river: LocationTableD20 = [
+const river: readonly LocationRow[] = [
   { ru: 'Шлюз канала' },
   { ru: 'Слияние притоков' },
   { ru: 'Свисающая ива' },
@@ -90,7 +90,7 @@ const river: LocationTableD20 = [
   { ru: 'Деревянный мост' },
 ];
 
-const humanTown: LocationTableD20 = [
+const humanTown: readonly LocationRow[] = [
   { ru: 'Брошенная машина' },
   { ru: 'Балкон квартиры' },
   { ru: 'Живая изгородь из ежевики' },
@@ -113,7 +113,7 @@ const humanTown: LocationTableD20 = [
   { ru: 'Дровяной сарай' },
 ];
 
-const details: LocationTableD20 = [
+const details: readonly LocationRow[] = [
   { ru: 'Древний храм культа летучих мышей', question: 'Что было призвано?' },
   { ru: 'Логово разбойников', question: 'На кого они охотятся?' },
   { ru: 'Башня мыши-волшебника', question: 'Какое творение почти закончено?' },
@@ -136,14 +136,16 @@ const details: LocationTableD20 = [
   { ru: 'Поселение…', question: '(Сгенерируй детали отдельно — генератор поселений Mausritter.)' },
 ];
 
+const tableOf = (rows: readonly LocationRow[]): RandomTable<LocationRow> => ({ rows });
+
 export const mausritterLocations: LocationTable<MausritterBiome> = {
   biomes,
   biomeLabels,
   landmarks: {
-    countryside,
-    forest,
-    river,
-    'human-town': humanTown,
+    countryside: tableOf(countryside),
+    forest: tableOf(forest),
+    river: tableOf(river),
+    'human-town': tableOf(humanTown),
   },
-  details,
+  details: tableOf(details),
 };

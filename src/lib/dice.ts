@@ -48,3 +48,34 @@ export function pick<T>(table: readonly T[]): { index: number; value: T } {
   const index = roll(table.length) - 1;
   return { index, value: table[index] as T };
 }
+
+/**
+ * Спецификация броска: сумма `count` независимых кубиков по `sides` граней (NdX-нотация).
+ * `1d20` → `{ count: 1, sides: 20 }`. `2d6` → `{ count: 2, sides: 6 }`.
+ *
+ * Распределение:
+ * - `count = 1` — равномерное `[1, sides]`.
+ * - `count > 1` — треугольное/колоколообразное `[count, count * sides]`.
+ *   Пик в `count * (sides + 1) / 2`. Размер диапазона: `count * sides - count + 1`.
+ */
+export interface RollSpec {
+  count: number;
+  sides: number;
+}
+
+/**
+ * Бросает `count` кубиков по `sides` граней и возвращает сумму.
+ * Каждый кубик независим (см. {@link roll}).
+ *
+ * @throws RangeError если `count` или `sides` не целое >= 1.
+ */
+export function rollDice(spec: RollSpec): number {
+  if (!Number.isInteger(spec.count) || spec.count < 1) {
+    throw new RangeError(`rollDice: count должно быть целым >= 1, получено ${spec.count}`);
+  }
+  let sum = 0;
+  for (let i = 0; i < spec.count; i++) {
+    sum += roll(spec.sides);
+  }
+  return sum;
+}

@@ -10,8 +10,8 @@
  */
 
 import { atom, type ReadableAtom } from 'nanostores';
+import { pickFromTable } from '@/data/random-table';
 import type { LocationTable } from '@/data/types';
-import { pick } from '@/lib/dice';
 
 export interface Roll<Biome extends string> {
   biome: Biome;
@@ -43,8 +43,8 @@ export function createLocationStore<Biome extends string>(
   const $roll = atom<Roll<Biome> | null>(null);
 
   const freshRoll = (biome: Biome): Roll<Biome> => {
-    const landmarkPick = pick(table.landmarks[biome]);
-    const detailPick = pick(table.details);
+    const landmarkPick = pickFromTable(table.landmarks[biome]);
+    const detailPick = pickFromTable(table.details);
     return { biome, landmarkIndex: landmarkPick.index, detailIndex: detailPick.index };
   };
 
@@ -55,14 +55,14 @@ export function createLocationStore<Biome extends string>(
   const rerollLandmark = () => {
     const current = $roll.get();
     if (!current) return;
-    const landmarkPick = pick(table.landmarks[current.biome]);
+    const landmarkPick = pickFromTable(table.landmarks[current.biome]);
     $roll.set({ ...current, landmarkIndex: landmarkPick.index });
   };
 
   const rerollDetail = () => {
     const current = $roll.get();
     if (!current) return;
-    const detailPick = pick(table.details);
+    const detailPick = pickFromTable(table.details);
     $roll.set({ ...current, detailIndex: detailPick.index });
   };
 

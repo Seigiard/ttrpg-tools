@@ -1,12 +1,20 @@
 /**
  * Общие типы для табличных генераторов TTRPG.
  *
- * Идея: каждая система кладёт свои данные в `src/data/<system>/`, реализуя
- * интерфейс `LocationTable`. Компонент-генератор работает с любой системой
- * через общий интерфейс — добавление новой системы не требует переписывать UI.
+ * `RandomTable<T>` — массив строк произвольной длины + опциональная
+ * формула броска `RollSpec`. По умолчанию формула — `1d{rows.length}`
+ * (равномерное распределение). Если задана своя `roll`, длина массива
+ * должна соответствовать диапазону формулы (см. `validateTable` в
+ * `data/random-table.ts`).
+ *
+ * Зачем переопределять формулу: чтобы получить колоколообразное
+ * распределение — крайние значения редкие, центральные частые
+ * (`2d6`: 11 значений, пик в индексе 5).
  */
 
-/** Одна строка таблицы d20: основной текст + опциональный «открытый вопрос» в скобках. */
+import type { RollSpec } from '@/lib/dice';
+
+/** Одна строка таблицы: основной текст + опциональный «открытый вопрос» в скобках. */
 export interface LocationRow {
   /** Основной текст (например «Деревенский колодец»). */
   ru: string;
@@ -14,41 +22,25 @@ export interface LocationRow {
   question?: string;
 }
 
-/** Кортеж из ровно 20 строк — гарантирует длину d20-таблицы на этапе компиляции. */
-export type LocationTableD20 = readonly [
-  LocationRow,
-  LocationRow,
-  LocationRow,
-  LocationRow,
-  LocationRow,
-  LocationRow,
-  LocationRow,
-  LocationRow,
-  LocationRow,
-  LocationRow,
-  LocationRow,
-  LocationRow,
-  LocationRow,
-  LocationRow,
-  LocationRow,
-  LocationRow,
-  LocationRow,
-  LocationRow,
-  LocationRow,
-  LocationRow,
-];
+/**
+ * Случайная таблица: строки + опциональная формула броска.
+ *
+ * Если `roll` не задан — равномерное `1d{rows.length}`.
+ * Если задан — `count d sides`; длина `rows` должна быть
+ * `count * (sides - 1) + 1` (количество возможных сумм).
+ */
+export interface RandomTable<T> {
+  readonly rows: readonly T[];
+  readonly roll?: RollSpec;
+}
 
 /**
  * Полный набор данных для генератора локаций в конкретной системе.
- * Параметризован union'ом ключей биомов (например `'countryside' | 'forest' | 'river' | 'human-town'`).
+ * Параметризован union'ом ключей биомов.
  */
 export interface LocationTable<Biome extends string> {
-  /** Все доступные биомы. */
   readonly biomes: readonly Biome[];
-  /** Русские названия биомов для UI. */
   readonly biomeLabels: Readonly<Record<Biome, string>>;
-  /** Landmarks по биомам: для каждого биома — d20-таблица. */
-  readonly landmarks: Readonly<Record<Biome, LocationTableD20>>;
-  /** Детали локации — единая d20-таблица. */
-  readonly details: LocationTableD20;
+  readonly landmarks: Readonly<Record<Biome, RandomTable<LocationRow>>>;
+  readonly details: RandomTable<LocationRow>;
 }

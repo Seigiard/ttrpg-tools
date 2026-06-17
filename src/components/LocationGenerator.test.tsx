@@ -45,10 +45,10 @@ describe('LocationGenerator (presentation)', () => {
 
     expect(screen.getByTestId('result-card')).toBeDefined();
     expect(screen.getByTestId('result-landmark').textContent).toContain(
-      mausritterLocations.landmarks.countryside[0].ru,
+      mausritterLocations.landmarks.countryside.rows[0].ru,
     );
     expect(screen.getByTestId('result-detail').textContent).toContain(
-      mausritterLocations.details[2].ru,
+      mausritterLocations.details.rows[2].ru,
     );
   });
 
@@ -79,7 +79,7 @@ describe('LocationGenerator (presentation)', () => {
     render(<LocationGenerator table={mausritterLocations} />);
     const detail = screen.getByTestId('result-detail');
     const em = detail.querySelector('em');
-    expect(em?.textContent).toBe(mausritterLocations.details[0].question);
+    expect(em?.textContent).toBe(mausritterLocations.details.rows[0].question);
   });
 
   test('клик «Бросить локацию» дёргает rollAll стора (UI обновляется)', () => {
@@ -89,10 +89,10 @@ describe('LocationGenerator (presentation)', () => {
     fireEvent.click(screen.getByTestId('roll-button'));
 
     expect(screen.getByTestId('result-landmark').textContent).toContain(
-      mausritterLocations.landmarks.countryside[5].ru,
+      mausritterLocations.landmarks.countryside.rows[5].ru,
     );
     expect(screen.getByTestId('result-detail').textContent).toContain(
-      mausritterLocations.details[7].ru,
+      mausritterLocations.details.rows[7].ru,
     );
   });
 
@@ -103,7 +103,7 @@ describe('LocationGenerator (presentation)', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Лес' }));
 
     expect(screen.getByTestId('result-landmark').textContent).toContain(
-      mausritterLocations.landmarks.forest[11].ru,
+      mausritterLocations.landmarks.forest.rows[11].ru,
     );
   });
 });
