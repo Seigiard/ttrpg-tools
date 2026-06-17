@@ -34,7 +34,25 @@ bun run typecheck  # astro check
 
 ## Деплой
 
-Cloudflare Pages, git-интеграция. Билд: `bun run build`, выход `dist/`. Подробнее — в плане `docs/plans/2026-06-17-001-feat-mausritter-locations-generator-plan.md`.
+Cloudflare Pages через git-интеграцию.
+
+**Первоначальная настройка (один раз):**
+
+1. Создать пустой репозиторий на GitHub `<user>/ttrpg-tools`, запушить `main`.
+2. В Cloudflare Dashboard → Workers & Pages → Create → Pages → **Connect to Git**.
+3. Выбрать репозиторий, ветка `main`.
+4. Параметры билда:
+   - Framework preset: **Astro**
+   - Build command: `bun run build`
+   - Build output: `dist`
+5. Environment variables:
+   - `BUN_VERSION` = `1.3.14` (или новее)
+
+После сохранения первый деплой запустится автоматически. Дальше — каждый push в `main` триггерит новую сборку; для PR создаются preview-деплои.
+
+**Если что-то отвалится:** проверь в Cloudflare → Project → Build logs. Чаще всего — несовместимость версий Node/Bun или забытые env vars.
+
+CI на GitHub Actions проверяет lint + test + build на PR (`.github/workflows/ci.yml`) — Cloudflare сам деплоит, GA только страхует от слома `main`.
 
 ## Документация
 
