@@ -28,9 +28,9 @@
   --color-text-muted: #57534e;
   --color-border: #e7e2d5;
 
-  --font-display: 'Cormorant Garamond', Georgia, serif;
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  --font-sans: Inter, Roboto, 'Helvetica Neue', 'Arial Nova', 'Nimbus Sans', Arial, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+  --font-display: 'Iowan Old Style', 'Palatino Linotype', 'URW Palladio L', P052, serif;
 
   --radius-sm: 4px;
   --radius-md: 8px;
@@ -68,7 +68,7 @@ h1,
 h2,
 h3 {
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: 400;
 }
 
 @layer base {

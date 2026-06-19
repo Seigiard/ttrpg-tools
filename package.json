@@ -23,7 +23,6 @@
     "@astrojs/mdx": "^6.0.3",
     "@astrojs/react": "^5.0.7",
     "@base-ui/react": "^1.5.0",
-    "@fontsource-variable/geist": "^5.2.9",
     "@nanostores/react": "^1.1.0",
     "@tailwindcss/vite": "^4.3.1",
     "@types/react": "^19.2.17",

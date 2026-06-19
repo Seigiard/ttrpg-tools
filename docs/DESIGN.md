@@ -81,13 +81,13 @@ spacing:
 
 ## Typography
 
-- **Display / H1:** Cormorant Garamond 600 — название инструмента, заголовки секций рулбука.
-- **H2-H3:** Cormorant Garamond 600, меньший размер — подзаголовки таблиц.
-- **Body:** Inter 400 — описания, текст MDX.
-- **Label / caps:** JetBrains Mono 500 uppercase letter-spaced 0.08em — «D20», «ОРИЕНТИР», «ДЕТАЛЬ», номера строк в таблицах.
-- **Результат броска:** Cormorant Garamond 600, увеличенный размер — выделяет выпавший текст из обычного потока.
+- **Display / H1:** системный serif-стек (`Iowan Old Style`, `Palatino Linotype`, `URW Palladio L`, `P052`, serif) 600 — название инструмента, заголовки секций рулбука.
+- **H2-H3:** тот же serif-стек 600, меньший размер — подзаголовки таблиц.
+- **Body:** системный sans-стек (`Inter`, `Roboto`, `Helvetica Neue`, …, sans-serif) 400 — описания, текст MDX.
+- **Label / caps:** системный mono-стек (`ui-monospace`, `Cascadia Code`, `Source Code Pro`, …, monospace) 500 uppercase letter-spaced 0.08em — «D20», «ОРИЕНТИР», «ДЕТАЛЬ», номера строк в таблицах.
+- **Результат броска:** serif-стек 600, увеличенный размер — выделяет выпавший текст из обычного потока.
 
-Шрифты подгружаются с Google Fonts через `<link>` в `Layout.astro` (subset cyrillic + latin для Cormorant и Inter, latin для JetBrains Mono).
+Используются только системные шрифты (font stacks в `--font-*` токенах `global.css`) — внешние веб-шрифты не подгружаются.
 
 ## Spacing & layout
 
