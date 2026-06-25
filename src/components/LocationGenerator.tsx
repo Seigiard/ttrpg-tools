@@ -3,6 +3,7 @@ import { RefreshCw } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { LocationRow, LocationTable } from '@/data/types';
 import { createLocationStore, type Roll } from '@/stores/location-store';
@@ -50,14 +51,13 @@ export function LocationGenerator<Biome extends string>({ table }: Props<Biome>)
         Бросить локацию
       </Button>
 
-      {roll ? (
-        <ResultCard
-          table={table}
-          roll={roll}
-          onRerollLandmark={store.rerollLandmark}
-          onRerollDetail={store.rerollDetail}
-        />
-      ) : null}
+      <ResultCard
+        table={table}
+        biome={biome}
+        roll={roll}
+        onRerollLandmark={store.rerollLandmark}
+        onRerollDetail={store.rerollDetail}
+      />
 
       <ReferenceTables table={table} biome={biome} roll={roll} />
     </div>
@@ -66,45 +66,49 @@ export function LocationGenerator<Biome extends string>({ table }: Props<Biome>)
 
 interface ResultCardProps<Biome extends string> {
   table: LocationTable<Biome>;
-  roll: Roll<Biome>;
+  biome: Biome;
+  roll: Roll<Biome> | null;
   onRerollLandmark: () => void;
   onRerollDetail: () => void;
 }
 
 function ResultCard<Biome extends string>({
   table,
+  biome,
   roll,
   onRerollLandmark,
   onRerollDetail,
 }: ResultCardProps<Biome>) {
-  const landmark = table.landmarks[roll.biome].rows[roll.landmarkIndex];
-  const detail = table.details.rows[roll.detailIndex];
-  if (!landmark || !detail) return null;
+  const landmark = roll ? table.landmarks[roll.biome].rows[roll.landmarkIndex] : null;
+  const detail = roll ? table.details.rows[roll.detailIndex] : null;
+  const loading = !roll || !landmark || !detail;
 
   return (
     <Card data-testid="result-card">
       <CardHeader>
         <div className="flex items-center justify-between">
           <span className="font-mono text-xs uppercase tracking-wider text-text-muted">
-            Локация · {table.biomeLabels[roll.biome]}
+            Локация · {table.biomeLabels[roll ? roll.biome : biome]}
           </span>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
         <ResultRow
           label="Ориентир"
-          rollLabel={`d20 = ${roll.landmarkIndex + 1}`}
-          ru={landmark.ru}
-          question={landmark.question}
+          loading={loading}
+          rollLabel={`d20 = ${roll ? roll.landmarkIndex + 1 : 0}`}
+          ru={landmark ? landmark.ru : 'Ориентир'}
+          question={landmark ? landmark.question : 'Что здесь привлекает внимание?'}
           onReroll={onRerollLandmark}
           rerollLabel="Перебросить ориентир"
           testId="result-landmark"
         />
         <ResultRow
           label="Деталь"
-          rollLabel={`d20 = ${roll.detailIndex + 1}`}
-          ru={detail.ru}
-          question={detail.question}
+          loading={loading}
+          rollLabel={`d20 = ${roll ? roll.detailIndex + 1 : 0}`}
+          ru={detail ? detail.ru : 'Деталь'}
+          question={detail ? detail.question : 'Чем эта локация необычна?'}
           onReroll={onRerollDetail}
           rerollLabel="Перебросить деталь"
           testId="result-detail"
@@ -116,6 +120,7 @@ function ResultCard<Biome extends string>({
 
 interface ResultRowProps {
   label: string;
+  loading: boolean;
   rollLabel: string;
   ru: string;
   question?: string;
@@ -126,6 +131,7 @@ interface ResultRowProps {
 
 function ResultRow({
   label,
+  loading,
   rollLabel,
   ru,
   question,
@@ -140,12 +146,18 @@ function ResultRow({
           <span className="font-mono text-xs uppercase tracking-wider text-text-muted">
             {label}
           </span>
-          <span className="font-mono text-xs text-text-muted">{rollLabel}</span>
+          <span className="font-mono text-xs text-text-muted">
+            <Skeleton loading={loading}>{rollLabel}</Skeleton>
+          </span>
         </div>
-        <p className="mt-2 font-display text-2xl">{ru}</p>
+        <p className="mt-2 font-display text-2xl">
+          <Skeleton loading={loading}>{ru}</Skeleton>
+        </p>
         {question ? (
           <p className="mt-1 italic text-sm text-text-muted">
-            <em>{question}</em>
+            <Skeleton loading={loading}>
+              <em>{question}</em>
+            </Skeleton>
           </p>
         ) : null}
       </div>
@@ -153,6 +165,7 @@ function ResultRow({
         variant="outline"
         size="icon"
         onClick={onReroll}
+        disabled={loading}
         aria-label={rerollLabel}
         title={rerollLabel}
       >

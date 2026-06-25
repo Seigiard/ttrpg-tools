@@ -76,6 +76,15 @@ describe('WeatherGenerator (presentation)', () => {
     );
   });
 
+  test('result-карточка обёрнута Skeleton и присутствует в DOM (защита от layout-shift)', () => {
+    restoreCrypto = mockCrypto([0, 0]);
+    render(<WeatherGenerator table={mausritterWeather} />);
+
+    const card = screen.getByTestId('result-card');
+    expect(card.querySelector('[data-slot="skeleton"]')).not.toBeNull();
+    expect(card.querySelector('[data-loading="true"]')).toBeNull();
+  });
+
   test('подсветка в справочной таблице соответствует строке и сезону', () => {
     // #given сумма 7 (4+3) → строка 2, весна
     restoreCrypto = mockCrypto([3, 2]);
