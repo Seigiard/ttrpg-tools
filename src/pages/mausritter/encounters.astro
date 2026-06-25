@@ -1,0 +1,47 @@
+---
+import ToolLayout from '@/layouts/ToolLayout.astro';
+import AttributionFooter from '@/components/AttributionFooter.astro';
+import { EncounterGenerator } from '@/components/EncounterGenerator';
+import { mausritterEncounters } from '@/data/mausritter/encounters';
+---
+
+<ToolLayout
+  title="Встречи Mausritter"
+  description="Проверка столкновений и реакция существ для Mausritter."
+>
+  <section class="mb-10 space-y-3 text-text-muted">
+    <p>
+      В подземелье проходи проверку столкновения каждые три хода либо когда мыши шумят. В дикой
+      местности — в начале каждой утренней и вечерней вахты; если столкновение произошло, брось d12,
+      чтобы определить час.
+    </p>
+    <p>
+      Бросок d6: <span class="text-text">1</span> — столкновение произошло,
+      <span class="text-text">2</span> — предзнаменование (сигнал о грядущей встрече).
+    </p>
+  </section>
+
+  <EncounterGenerator client:load table={mausritterEncounters} />
+
+  <section class="mt-12 space-y-3 text-text-muted">
+    <h2 class="font-display text-2xl text-text">Таблица столкновений</h2>
+    <p>
+      Для каждой крупной зоны мастер готовит свою таблицу столкновений (d6) под эту область. В
+      каждой строке — пометка, что существо делало в момент появления персонажей.
+    </p>
+    <ul class="list-disc space-y-1 pl-5">
+      <li>Строки 1—3 — обыденные столкновения.</li>
+      <li>Строки 4—5 — необычные, что-то слегка неожиданное.</li>
+      <li>Строка 6 — странное или опасное столкновение.</li>
+    </ul>
+  </section>
+
+  <AttributionFooter
+    slot="footer"
+    author="Айзека Уильямса"
+    source="Mausritter"
+    sourceUrl="https://losing.games/mausritter/"
+    license="Mausritter Third Party License"
+    licenseUrl="https://losing.games/mausritter/"
+  />
+</ToolLayout>

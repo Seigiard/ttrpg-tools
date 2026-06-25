@@ -84,3 +84,47 @@ export interface WeatherTable {
   readonly rows: readonly WeatherRangeRow[];
   readonly roll: RollSpec;
 }
+
+/** Исход проверки столкновения (бросок d6). */
+export type EncounterCheckOutcome = 'encounter' | 'omen' | 'clear';
+
+/** Строка таблицы проверки столкновения: диапазон d6 + исход. */
+export interface EncounterCheckRow {
+  /** Минимальное значение d6 для строки (включительно). */
+  readonly min: number;
+  /** Максимальное значение d6 (включительно). */
+  readonly max: number;
+  readonly outcome: EncounterCheckOutcome;
+  /** Краткая подпись исхода («Столкновение»). */
+  readonly ru: string;
+  /** Пояснение к исходу. */
+  readonly hint: string;
+}
+
+/** Строка таблицы реакций: диапазон 2d6 + отношение существа. */
+export interface ReactionRow {
+  /** Минимальная сумма 2d6 (включительно). */
+  readonly min: number;
+  /** Максимальная сумма 2d6 (включительно). */
+  readonly max: number;
+  /** Отношение («Враждебное»). */
+  readonly ru: string;
+  /** Открытый вопрос-зацепка («Чем мыши его разозлили?»). */
+  readonly question: string;
+}
+
+export interface EncounterCheckTable {
+  readonly rows: readonly EncounterCheckRow[];
+  readonly roll: RollSpec;
+}
+
+export interface ReactionTable {
+  readonly rows: readonly ReactionRow[];
+  readonly roll: RollSpec;
+}
+
+/** Полный набор данных для генератора встреч: проверка столкновения + реакции. */
+export interface EncounterTable {
+  readonly check: EncounterCheckTable;
+  readonly reactions: ReactionTable;
+}
