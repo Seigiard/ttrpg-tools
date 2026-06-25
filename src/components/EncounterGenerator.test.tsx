@@ -74,6 +74,19 @@ describe('EncounterGenerator (presentation)', () => {
     expect(screen.getByTestId('check-result').getAttribute('data-outcome')).toBe('clear');
   });
 
+  test('result-карточки обёрнуты Skeleton и присутствуют в DOM (защита от layout-shift)', () => {
+    restoreCrypto = mockCrypto([0, 0, 0]);
+    render(<EncounterGenerator table={mausritterEncounters} />);
+
+    for (const testId of ['check-result-card', 'reaction-result-card']) {
+      const card = screen.getByTestId(testId);
+      // Skeleton-обёртки вшиты в карточку — значит высоту держит контент в обоих состояниях.
+      expect(card.querySelector('[data-slot="skeleton"]')).not.toBeNull();
+      // После броска маска снята.
+      expect(card.querySelector('[data-loading="true"]')).toBeNull();
+    }
+  });
+
   test('подсветка в справочниках соответствует выпавшим строкам', () => {
     // #given check d6=2 → строка 1 (omen); reaction 2d6=2 → строка 0
     restoreCrypto = mockCrypto([1, 0, 0]);

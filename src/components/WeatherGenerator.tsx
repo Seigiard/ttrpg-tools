@@ -2,6 +2,7 @@ import { useStore } from '@nanostores/react';
 import { useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { Season, WeatherTable } from '@/data/types';
 import { createWeatherStore, type WeatherRoll } from '@/stores/weather-store';
@@ -48,7 +49,7 @@ export function WeatherGenerator({ table }: Props) {
         Бросить погоду
       </Button>
 
-      {roll ? <ResultCard table={table} season={season} roll={roll} /> : null}
+      <ResultCard table={table} season={season} roll={roll} />
 
       <ReferenceTable table={table} season={season} roll={roll} />
     </div>
@@ -58,13 +59,12 @@ export function WeatherGenerator({ table }: Props) {
 interface ResultCardProps {
   table: WeatherTable;
   season: Season;
-  roll: WeatherRoll;
+  roll: WeatherRoll | null;
 }
 
 function ResultCard({ table, season, roll }: ResultCardProps) {
-  const row = table.rows[roll.rowIndex];
-  const cell = row?.cells[season];
-  if (!cell) return null;
+  const cell = roll ? table.rows[roll.rowIndex]?.cells[season] : null;
+  const loading = !cell;
 
   return (
     <Card data-testid="result-card">
@@ -73,13 +73,17 @@ function ResultCard({ table, season, roll }: ResultCardProps) {
           <span className="font-mono text-xs uppercase tracking-wider text-text-muted">
             Погода · {table.seasonLabels[season]}
           </span>
-          <span className="font-mono text-xs text-text-muted">2d6 = {roll.sum}</span>
+          <span className="font-mono text-xs text-text-muted">
+            2d6 = <Skeleton loading={loading}>{roll ? roll.sum : 0}</Skeleton>
+          </span>
         </div>
       </CardHeader>
       <CardContent>
-        <div data-testid="result-weather" data-harsh={cell.harsh ? 'true' : undefined}>
-          <p className="font-display text-3xl">{cell.ru}</p>
-          {cell.harsh ? (
+        <div data-testid="result-weather" data-harsh={cell?.harsh ? 'true' : undefined}>
+          <p className="font-display text-3xl">
+            <Skeleton loading={loading}>{cell ? cell.ru : 'Погода'}</Skeleton>
+          </p>
+          {cell?.harsh ? (
             <p className="mt-3 text-sm text-warning">
               Не подходит для путешествия. За каждую вахту в пути каждая мышь проходит спасбросок
               силы или получает карточку состояния «Изнурён».

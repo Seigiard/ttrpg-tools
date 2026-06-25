@@ -81,6 +81,15 @@ describe('LocationGenerator (presentation)', () => {
     );
   });
 
+  test('result-карточка обёрнута Skeleton и присутствует в DOM (защита от layout-shift)', () => {
+    restoreCrypto = mockCrypto([0, 0]);
+    render(<LocationGenerator table={mausritterLocations} />);
+
+    const card = screen.getByTestId('result-card');
+    expect(card.querySelector('[data-slot="skeleton"]')).not.toBeNull();
+    expect(card.querySelector('[data-loading="true"]')).toBeNull();
+  });
+
   test('смена биома в Tabs обновляет UI до результата нового биома', () => {
     restoreCrypto = mockCrypto([0, 0, 11, 4]);
     render(<LocationGenerator table={mausritterLocations} />);

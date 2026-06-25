@@ -31,7 +31,7 @@ CI (`.github/workflows/ci.yml`) на каждый PR гоняет **lint + forma
    - суммы сгруппированы в диапазоны (`2d6 → 3–5`, `d6 → 3–6`) → `data/range-table.ts` (`pickRange` / `validateRanges` / `findRangeIndex`). `weather-table.ts` — тонкая доменная обёртка над ним; новые range-генераторы строятся на `range-table`.
    - честный RNG (crypto + rejection sampling против modulo-bias) живёт в `src/lib/dice.ts` — единственный источник случайности.
 3. **Стор** — `src/stores/<tool>-store.ts`: фабрика `create…Store(table)` возвращает nanostores-атомы (`$…`) + операции. Без React — логика state-машины тестируется здесь напрямую.
-4. **Компонент** — `src/components/<Tool>Generator.tsx`: только presentation. Стор создаётся через `useMemo(() => create…Store(table), [table])`, подписка — `useStore` из `@nanostores/react`.
+4. **Компонент** — `src/components/<Tool>Generator.tsx`: только presentation. Стор создаётся через `useMemo(() => create…Store(table), [table])`, подписка — `useStore` из `@nanostores/react`. Примитивы UI (`Button`, `Card`, `Tabs`) — в `src/components/ui/` (shadcn-стиль); переиспользуй их, не верстай сырыми элементами.
 5. **Страница** — `src/pages/<system>/<tool>.astro` (`ToolLayout` + `AttributionFooter`) и карточка-ссылка в `src/pages/index.astro`.
 
 ### SSR-гоча
