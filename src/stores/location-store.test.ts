@@ -1,25 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mausritterLocations } from '@/data/mausritter/locations';
+import { mockCrypto } from '@/test-utils/mock-crypto';
 import { createLocationStore } from './location-store';
 
-/**
- * Мокаем crypto.getRandomValues для детерминистичных значений.
- * Для d20 limit = 4_294_967_280; value < limit принимается; result = value % 20 + 1.
- * Значит mock-value === желаемый индекс (0-based).
- */
-function mockCrypto(sequence: number[]) {
-  const original = crypto.getRandomValues.bind(crypto);
-  let i = 0;
-  crypto.getRandomValues = ((buf: Uint32Array) => {
-    const value = sequence[i++];
-    if (value === undefined) throw new Error('тестовая последовательность исчерпана');
-    buf[0] = value;
-    return buf;
-  }) as typeof crypto.getRandomValues;
-  return () => {
-    crypto.getRandomValues = original;
-  };
-}
+// Для d20: result = value % 20 + 1, поэтому mock-value === желаемый индекс (0-based).
 
 describe('createLocationStore', () => {
   let restoreCrypto: (() => void) | null = null;

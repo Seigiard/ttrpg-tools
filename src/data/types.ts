@@ -44,3 +44,43 @@ export interface LocationTable<Biome extends string> {
   readonly landmarks: Readonly<Record<Biome, RandomTable<LocationRow>>>;
   readonly details: RandomTable<LocationRow>;
 }
+
+/** Сезон — колонка таблицы погоды. */
+export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
+
+/** Одна клетка таблицы погоды: текст погоды + флаг «суровая». */
+export interface WeatherCell {
+  /** Текст погоды (например «Пасмурно»). */
+  ru: string;
+  /**
+   * `true` → погода не подходит для путешествия (в оригинале выделена жирным).
+   * За каждую вахту в пути — спасбросок силы или карточка состояния «Изнурён».
+   */
+  harsh?: boolean;
+}
+
+/**
+ * Строка таблицы погоды: диапазон сумм 2d6 + клетки по сезонам.
+ * Диапазоны соседних строк должны быть смежными и без пропусков
+ * (см. `validateWeatherTable` в `data/weather-table.ts`).
+ */
+export interface WeatherRangeRow {
+  /** Минимальная сумма 2d6 для этой строки (включительно). */
+  readonly min: number;
+  /** Максимальная сумма 2d6 (включительно). */
+  readonly max: number;
+  readonly cells: Readonly<Record<Season, WeatherCell>>;
+}
+
+/**
+ * Полный набор данных для генератора погоды.
+ *
+ * `roll` — формула броска (`2d6` для Mausritter, колоколообразное распределение).
+ * Один бросок применяется ко всем сезонам — сезон выбирает лишь колонку.
+ */
+export interface WeatherTable {
+  readonly seasons: readonly Season[];
+  readonly seasonLabels: Readonly<Record<Season, string>>;
+  readonly rows: readonly WeatherRangeRow[];
+  readonly roll: RollSpec;
+}

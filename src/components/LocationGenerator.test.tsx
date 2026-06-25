@@ -1,29 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { mausritterLocations } from '@/data/mausritter/locations';
+import { mockCrypto } from '@/test-utils/mock-crypto';
 import { LocationGenerator } from './LocationGenerator';
 
 /**
  * Тесты компонента — только presentation-слой:
  * рендер, доступность по data-testid и aria-label, маршрутизация кликов в store.
  * Бизнес-логика state-машины бросков покрыта в src/stores/location-store.test.ts.
- *
- * Для детерминизма мокаем crypto.getRandomValues — value % sides + 1 даёт
- * индекс на 1 больше mock-значения; используем mock=0 чтобы получить index=0.
  */
-function mockCrypto(sequence: number[]) {
-  const original = crypto.getRandomValues.bind(crypto);
-  let i = 0;
-  crypto.getRandomValues = ((buf: Uint32Array) => {
-    const value = sequence[i++];
-    if (value === undefined) throw new Error('тестовая последовательность исчерпана');
-    buf[0] = value;
-    return buf;
-  }) as typeof crypto.getRandomValues;
-  return () => {
-    crypto.getRandomValues = original;
-  };
-}
 
 describe('LocationGenerator (presentation)', () => {
   let restoreCrypto: (() => void) | null = null;
