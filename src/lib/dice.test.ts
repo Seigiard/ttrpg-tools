@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { pick, roll, rollDice } from './dice';
+import { mockCrypto } from '@/test-utils/mock-crypto';
+import { pick, roll, rollDice, rollValues } from './dice';
 
 describe('roll(sides)', () => {
   test('возвращает значения только в [1, sides]', () => {
@@ -149,6 +150,43 @@ describe('rollDice({ count, sides })', () => {
   test('невалидный sides проксируется в roll() как RangeError', () => {
     expect(() => rollDice({ count: 2, sides: 0 })).toThrow(RangeError);
     expect(() => rollDice({ count: 1, sides: -3 })).toThrow(RangeError);
+  });
+});
+
+describe('rollValues({ count, sides })', () => {
+  let restoreCrypto: (() => void) | null = null;
+
+  afterEach(() => {
+    if (restoreCrypto) {
+      restoreCrypto();
+      restoreCrypto = null;
+    }
+  });
+
+  test('4d8 возвращает 4 значения, каждое в [1, 8]', () => {
+    const values = rollValues({ count: 4, sides: 8 });
+    expect(values).toHaveLength(4);
+    for (const v of values) {
+      expect(v).toBeGreaterThanOrEqual(1);
+      expect(v).toBeLessThanOrEqual(8);
+      expect(Number.isInteger(v)).toBe(true);
+    }
+  });
+
+  test('с mockCrypto значения соответствуют граням напрямую', () => {
+    restoreCrypto = mockCrypto([0, 7, 3, 5]);
+    expect(rollValues({ count: 4, sides: 8 })).toEqual([1, 8, 4, 6]);
+  });
+
+  test('невалидный count бросает RangeError', () => {
+    expect(() => rollValues({ count: 0, sides: 8 })).toThrow(RangeError);
+    expect(() => rollValues({ count: -1, sides: 8 })).toThrow(RangeError);
+    expect(() => rollValues({ count: 1.5, sides: 8 })).toThrow(RangeError);
+  });
+
+  test('невалидный sides проксируется в roll() как RangeError', () => {
+    expect(() => rollValues({ count: 2, sides: 0 })).toThrow(RangeError);
+    expect(() => rollValues({ count: 1, sides: -3 })).toThrow(RangeError);
   });
 });
 
