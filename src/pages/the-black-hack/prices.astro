@@ -1,0 +1,35 @@
+---
+import ToolLayout from '@/layouts/ToolLayout.astro';
+import AttributionFooter from '@/components/AttributionFooter.astro';
+import { BlackHackPricesGenerator } from '@/components/BlackHackPricesGenerator';
+import { blackHackPrices } from '@/data/the-black-hack/prices';
+---
+
+<ToolLayout
+  title="Цены The Black Hack"
+  description="Цены снаряжения по редкости для The Black Hack — с фиксацией на время пребывания в поселении."
+>
+  <section class="mb-10 text-text-muted">
+    <p>
+      Каждый предмет получает собственный бросок цены по формуле своей категории редкости: обычное —
+      1к8 монет, редкое — 2к8×5, экзотическое — 4к8×10. Тип поселения определяет, что вообще есть в
+      продаже: редкого не найти в сельской местности, экзотическое — только в больших городах.
+    </p>
+    <p class="mt-3">
+      Цены фиксируются на время пребывания: перезагрузка страницы их сохраняет, а ссылка
+      воспроизводит те же цены у любого, кто её откроет. «Перебросить всё» или смена типа поселения
+      — это прибытие в новое место: все цены бросаются заново.
+    </p>
+  </section>
+
+  <BlackHackPricesGenerator client:load table={blackHackPrices} />
+
+  <AttributionFooter
+    slot="footer"
+    author="Дэвида Блэка"
+    source="The Black Hack"
+    sourceUrl="https://www.drivethrurpg.com/product/198280/The-Black-Hack-Second-Edition"
+    license="Open Game License v1.0a"
+    licenseUrl="https://www.opengamingfoundation.org/ogl.html"
+  />
+</ToolLayout>
