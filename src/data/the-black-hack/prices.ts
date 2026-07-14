@@ -10,6 +10,7 @@
  * экзотическое — только в больших городах.
  */
 
+import { createSeededRng, nextFace, PRNG_VERSION } from '@/lib/seeded-rng';
 import type { PriceCategory, PriceTable } from '../types';
 
 const categories: readonly PriceCategory[] = [
@@ -95,14 +96,16 @@ const categories: readonly PriceCategory[] = [
 ];
 
 /**
- * Версия данных — FNV-1a-хеш состава таблицы в base36.
+ * Версия данных — FNV-1a-хеш состава таблицы и версии PRNG в base36.
  *
- * Учитывает порядок и ключи категорий, формулы, множители и названия предметов:
- * любое изменение автоматически инвалидирует сериализованный стейт (KTD1 плана).
+ * Учитывает порядок и ключи категорий, формулы, множители и названия предметов,
+ * плюс `PRNG_VERSION`: изменение таблицы инвалидирует ссылки автоматически,
+ * изменение поведения генератора — через ручной bump версии (см. `lib/seeded-rng.ts`).
  */
 export function computePricesVersion(cats: readonly PriceCategory[]): string {
-  const fingerprint = cats
-    .map((c) =>
+  const fingerprint = [
+    `prng${PRNG_VERSION}`,
+    ...cats.map((c) =>
       [
         c.key,
         c.roll.count,
@@ -110,8 +113,8 @@ export function computePricesVersion(cats: readonly PriceCategory[]): string {
         c.multiplier,
         c.items.map((i) => `${i.ru}×${i.multiplier ?? 1}`).join('|'),
       ].join(';'),
-    )
-    .join('\n');
+    ),
+  ].join('\n');
 
   let hash = 0x811c9dc5;
   for (let i = 0; i < fingerprint.length; i++) {
@@ -121,9 +124,24 @@ export function computePricesVersion(cats: readonly PriceCategory[]): string {
   return (hash >>> 0).toString(36);
 }
 
-/** Суммарное число кубиков на полный бросок таблицы — длина `r` в сериализованном стейте. */
+/** Суммарное число кубиков на полный бросок таблицы. */
 export function totalDiceCount(table: PriceTable): number {
   return table.categories.reduce((sum, c) => sum + c.items.length * c.roll.count, 0);
+}
+
+/** Грани всех предметов: категория → предмет → кубики, в каноническом порядке объявления. */
+export type PricesRolls = readonly (readonly (readonly number[])[])[];
+
+/**
+ * Детерминированно разворачивает seed в грани всех предметов таблицы.
+ * Порядок потребления PRNG — канонический (категории → предметы → кубики) и
+ * заморожен контрактом формата ссылок (см. `lib/seeded-rng.ts`).
+ */
+export function expandRolls(seed: number, table: PriceTable): PricesRolls {
+  const rng = createSeededRng(seed);
+  return table.categories.map((c) =>
+    c.items.map(() => Array.from({ length: c.roll.count }, () => nextFace(rng, c.roll.sides))),
+  );
 }
 
 export const blackHackPrices: PriceTable = {

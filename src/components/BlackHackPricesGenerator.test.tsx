@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { blackHackPrices, totalDiceCount } from '@/data/the-black-hack/prices';
+import { blackHackPrices, expandRolls } from '@/data/the-black-hack/prices';
 import { serialize, type PricesState } from '@/data/the-black-hack/prices-codec';
-import type { SettlementType } from '@/data/types';
 import { itemPrice } from '@/stores/the-black-hack-prices-store';
 import { mockCrypto } from '@/test-utils/mock-crypto';
 import { mockLocalStorage, type MockLocalStorageHandle } from '@/test-utils/mock-local-storage';
@@ -18,22 +17,6 @@ const PAGE_URL = 'http://localhost/the-black-hack/prices';
 
 function setPageUrl(url: string): void {
   (window as unknown as { happyDOM: { setURL(url: string): void } }).happyDOM.setURL(url);
-}
-
-/** Полный стейт с гранью (n + offset) % 8 + 1 у n-го кубика в каноническом порядке. */
-function makeState(settlement: SettlementType, offset = 0): PricesState {
-  let n = 0;
-  return {
-    settlement,
-    rolls: blackHackPrices.categories.map((c) =>
-      c.items.map(() => Array.from({ length: c.roll.count }, () => ((n++ + offset) % 8) + 1)),
-    ),
-  };
-}
-
-/** Мок-последовательность на один полный бросок таблицы. */
-function fullSequence(offset = 0): number[] {
-  return Array.from({ length: totalDiceCount(blackHackPrices) }, (_, n) => (n + offset) % 8);
 }
 
 function currentUrlParam(name: string): string | null {
@@ -58,26 +41,27 @@ describe('BlackHackPricesGenerator', () => {
     storage.restore();
   });
 
-  test('голый mount: цены выброшены, URL содержит s, v, r', () => {
-    restoreCrypto = mockCrypto(fullSequence());
+  test('голый mount: цены выброшены, URL содержит s и r с версией', () => {
+    // #given crypto отдаёт seed 12345
+    restoreCrypto = mockCrypto([12345]);
     render(<BlackHackPricesGenerator table={blackHackPrices} />);
 
     expect(document.querySelector('[data-loading="true"]')).toBeNull();
     expect(currentUrlParam('s')).toBe('rural');
-    expect(currentUrlParam('v')).toBe(blackHackPrices.version);
-    expect(currentUrlParam('r')).toMatch(/^[1-8]+$/);
+    expect(currentUrlParam('r')).toBe(`${(12345).toString(36)}.${blackHackPrices.version}`);
   });
 
-  test('mount с валидным URL-стейтом: RNG не вызывается, цены соответствуют граням', () => {
+  test('mount с валидным URL-стейтом: crypto не вызывается, цены соответствуют seed', () => {
     // #given пустой мок: любой бросок упал бы
     restoreCrypto = mockCrypto([]);
-    const state = makeState('city');
+    const state: PricesState = { settlement: 'city', seed: 777 };
     setPageUrl(`${PAGE_URL}?${serialize(state, blackHackPrices)}`);
 
     render(<BlackHackPricesGenerator table={blackHackPrices} />);
 
+    const rolls = expandRolls(777, blackHackPrices);
     const common = blackHackPrices.categories[0];
-    const expected = itemPrice(state.rolls[0][0], common, common.items[0]);
+    const expected = itemPrice(rolls[0][0], common, common.items[0]);
     const firstPrice = screen
       .getByTestId('category-common')
       .querySelector('[data-testid="item-price"]');
@@ -87,9 +71,11 @@ describe('BlackHackPricesGenerator', () => {
   test('URL-стейт приоритетнее localStorage, localStorage перезаписан стейтом из URL', () => {
     // #given AE2: в хранилище «город», в ссылке «большой город»
     restoreCrypto = mockCrypto([]);
-    storage.store.set(STORAGE_KEY, serialize(makeState('town', 2), blackHackPrices));
-    const urlState = makeState('city');
-    const urlQuery = serialize(urlState, blackHackPrices);
+    storage.store.set(
+      STORAGE_KEY,
+      serialize({ settlement: 'town', seed: 111 }, blackHackPrices),
+    );
+    const urlQuery = serialize({ settlement: 'city', seed: 222 }, blackHackPrices);
     setPageUrl(`${PAGE_URL}?${urlQuery}`);
 
     render(<BlackHackPricesGenerator table={blackHackPrices} />);
@@ -100,8 +86,7 @@ describe('BlackHackPricesGenerator', () => {
 
   test('mount без URL-стейта при валидном localStorage: стейт восстановлен, URL дополнен', () => {
     restoreCrypto = mockCrypto([]);
-    const stored = makeState('town', 4);
-    const storedQuery = serialize(stored, blackHackPrices);
+    const storedQuery = serialize({ settlement: 'town', seed: 333 }, blackHackPrices);
     storage.store.set(STORAGE_KEY, storedQuery);
 
     render(<BlackHackPricesGenerator table={blackHackPrices} />);
@@ -110,11 +95,10 @@ describe('BlackHackPricesGenerator', () => {
     expect(window.location.search).toBe(`?${storedQuery}`);
   });
 
-  test('битый URL-стейт (неверная длина r) при валидном localStorage: фолбэк на localStorage', () => {
+  test('битый URL-стейт (невалидный r) при валидном localStorage: фолбэк на localStorage', () => {
     restoreCrypto = mockCrypto([]);
-    const stored = makeState('town', 4);
-    storage.store.set(STORAGE_KEY, serialize(stored, blackHackPrices));
-    setPageUrl(`${PAGE_URL}?s=city&v=${blackHackPrices.version}&r=123`);
+    storage.store.set(STORAGE_KEY, serialize({ settlement: 'town', seed: 333 }, blackHackPrices));
+    setPageUrl(`${PAGE_URL}?s=city&r=!!!.${blackHackPrices.version}`);
 
     render(<BlackHackPricesGenerator table={blackHackPrices} />);
 
@@ -123,7 +107,7 @@ describe('BlackHackPricesGenerator', () => {
 
   test('эффект синхронизации не перезаписывает входящий URL-стейт промежуточным состоянием', () => {
     restoreCrypto = mockCrypto([]);
-    const urlQuery = serialize(makeState('town', 5), blackHackPrices);
+    const urlQuery = serialize({ settlement: 'town', seed: 555 }, blackHackPrices);
     setPageUrl(`${PAGE_URL}?${urlQuery}`);
 
     render(<BlackHackPricesGenerator table={blackHackPrices} />);
@@ -133,36 +117,34 @@ describe('BlackHackPricesGenerator', () => {
   });
 
   test('клик «Перебросить всё»: цены меняются, URL и localStorage обновлены', () => {
-    restoreCrypto = mockCrypto(fullSequence(1));
-    const initial = makeState('city');
-    setPageUrl(`${PAGE_URL}?${serialize(initial, blackHackPrices)}`);
+    restoreCrypto = mockCrypto([999]);
+    setPageUrl(`${PAGE_URL}?${serialize({ settlement: 'city', seed: 1 }, blackHackPrices)}`);
     render(<BlackHackPricesGenerator table={blackHackPrices} />);
-    const rBefore = currentUrlParam('r');
 
     fireEvent.click(screen.getByTestId('roll-button'));
 
-    const rAfter = currentUrlParam('r');
-    expect(rAfter).not.toBe(rBefore);
-    expect(storage.store.get(STORAGE_KEY)).toBe(`s=city&v=${blackHackPrices.version}&r=${rAfter}`);
+    expect(currentUrlParam('r')).toBe(`${(999).toString(36)}.${blackHackPrices.version}`);
+    expect(storage.store.get(STORAGE_KEY)).toBe(
+      serialize({ settlement: 'city', seed: 999 }, blackHackPrices),
+    );
   });
 
   test('клик по табу типа: цены переброшены, URL обновлён', () => {
     // #given AE4
-    restoreCrypto = mockCrypto(fullSequence(3));
-    setPageUrl(`${PAGE_URL}?${serialize(makeState('rural'), blackHackPrices)}`);
+    restoreCrypto = mockCrypto([888]);
+    setPageUrl(`${PAGE_URL}?${serialize({ settlement: 'rural', seed: 1 }, blackHackPrices)}`);
     render(<BlackHackPricesGenerator table={blackHackPrices} />);
-    const rBefore = currentUrlParam('r');
 
     fireEvent.click(screen.getByRole('tab', { name: 'Город' }));
 
     expect(currentUrlParam('s')).toBe('town');
-    expect(currentUrlParam('r')).not.toBe(rBefore);
+    expect(currentUrlParam('r')).toBe(`${(888).toString(36)}.${blackHackPrices.version}`);
   });
 
   test('тип «сельская местность»: секции редкого и экзотического отсутствуют в DOM', () => {
     // #given AE3
     restoreCrypto = mockCrypto([]);
-    setPageUrl(`${PAGE_URL}?${serialize(makeState('rural'), blackHackPrices)}`);
+    setPageUrl(`${PAGE_URL}?${serialize({ settlement: 'rural', seed: 42 }, blackHackPrices)}`);
 
     render(<BlackHackPricesGenerator table={blackHackPrices} />);
 
@@ -173,15 +155,16 @@ describe('BlackHackPricesGenerator', () => {
 
   test('строка брони показывает цену с множителем предмета', () => {
     restoreCrypto = mockCrypto([]);
-    const state = makeState('city');
+    const state: PricesState = { settlement: 'city', seed: 42 };
     setPageUrl(`${PAGE_URL}?${serialize(state, blackHackPrices)}`);
 
     render(<BlackHackPricesGenerator table={blackHackPrices} />);
 
+    const rolls = expandRolls(42, blackHackPrices);
     const rare = blackHackPrices.categories[1];
     const armorIndex = rare.items.findIndex((i) => i.multiplier !== undefined);
     const armor = rare.items[armorIndex];
-    const expected = itemPrice(state.rolls[1][armorIndex], rare, armor);
+    const expected = itemPrice(rolls[1][armorIndex], rare, armor);
     const row = screen.getByText(armor.ru).closest('tr');
     expect(row?.querySelector('[data-testid="item-price"]')?.textContent).toContain(
       String(expected),
@@ -191,11 +174,11 @@ describe('BlackHackPricesGenerator', () => {
   test('localStorage.setItem с исключением не ломает рендер и обновление URL', () => {
     storage.restore();
     storage = mockLocalStorage({ failSetItem: true });
-    restoreCrypto = mockCrypto(fullSequence());
+    restoreCrypto = mockCrypto([12345]);
 
     render(<BlackHackPricesGenerator table={blackHackPrices} />);
 
     expect(document.querySelector('[data-loading="true"]')).toBeNull();
-    expect(currentUrlParam('r')).toMatch(/^[1-8]+$/);
+    expect(currentUrlParam('r')).toBe(`${(12345).toString(36)}.${blackHackPrices.version}`);
   });
 });

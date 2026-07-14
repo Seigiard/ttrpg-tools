@@ -21,6 +21,7 @@ export function BlackHackPricesGenerator({ table }: Props) {
   // useMemo гарантирует, что стор создаётся один раз на жизнь компонента.
   const store = useMemo(() => createPricesStore(table), [table]);
   const settlement = useStore(store.$settlement);
+  const seed = useStore(store.$seed);
   const rolls = useStore(store.$rolls);
   // До инициализации эффект синхронизации молчит — иначе дефолтный стейт
   // перезатёр бы входящий из URL/localStorage.
@@ -29,7 +30,7 @@ export function BlackHackPricesGenerator({ table }: Props) {
   // Инициализация на клиенте (не в store-init — SSR-снепшот без цен, hydration не ломается).
   // Источник по приоритету: URL → localStorage → свежий бросок (KTD2 плана).
   useEffect(() => {
-    if (store.$rolls.get() === null) {
+    if (store.$seed.get() === null) {
       const state = parse(window.location.search, table) ?? readStorage(table);
       if (state) {
         store.hydrate(state);
@@ -43,8 +44,8 @@ export function BlackHackPricesGenerator({ table }: Props) {
   // Каждое изменение стейта — в оба синка (R10): URL через replaceState (KTD3),
   // localStorage той же canonical-строкой (KTD4).
   useEffect(() => {
-    if (!initialized || rolls === null) return;
-    const query = serialize({ settlement, rolls }, table);
+    if (!initialized || seed === null) return;
+    const query = serialize({ settlement, seed }, table);
 
     const params = new URLSearchParams(window.location.search);
     for (const [key, value] of new URLSearchParams(query)) {
@@ -57,7 +58,7 @@ export function BlackHackPricesGenerator({ table }: Props) {
     } catch {
       console.warn('localStorage недоступен — цены сохранятся только в URL');
     }
-  }, [initialized, settlement, rolls, table]);
+  }, [initialized, settlement, seed, table]);
 
   const handleSettlementChange = (next: string | number | null) => {
     if (next === null) return;

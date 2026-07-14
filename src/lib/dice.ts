@@ -79,20 +79,3 @@ export function rollDice(spec: RollSpec): number {
   }
   return sum;
 }
-
-/**
- * Бросает `count` кубиков по `sides` граней и возвращает отдельные грани
- * в порядке бросков — когда важна воспроизводимость по значениям, а не сумма.
- *
- * @throws RangeError если `count` или `sides` не целое >= 1.
- */
-export function rollValues(spec: RollSpec): number[] {
-  if (!Number.isInteger(spec.count) || spec.count < 1) {
-    throw new RangeError(`rollValues: count должно быть целым >= 1, получено ${spec.count}`);
-  }
-  const values: number[] = [];
-  for (let i = 0; i < spec.count; i++) {
-    values.push(roll(spec.sides));
-  }
-  return values;
-}
