@@ -128,3 +128,46 @@ export interface EncounterTable {
   readonly check: EncounterCheckTable;
   readonly reactions: ReactionTable;
 }
+
+/** Тип поселения The Black Hack — фильтрует доступные категории редкости, цены не модифицирует. */
+export type SettlementType = 'rural' | 'town' | 'city';
+
+/** Категория редкости снаряжения The Black Hack. */
+export type PriceCategoryKey = 'common' | 'rare' | 'exotic';
+
+/** Один товар: название + опциональная аннотация (КИ/ЗБ) + ценовой множитель (броня). */
+export interface PriceItem {
+  readonly ru: string;
+  /** Аннотация из правил: кость использования («КИ6») или защита брони («ЗБ2»). */
+  readonly note?: string;
+  /** Множитель итоговой цены предмета (кожаная броня ×2, кольчужная ×3, латная ×4). */
+  readonly multiplier?: number;
+}
+
+/**
+ * Категория редкости: формула броска цены + множитель формулы + товары.
+ * Цена предмета = сумма граней × `multiplier` категории × `multiplier` предмета (если задан).
+ */
+export interface PriceCategory {
+  readonly key: PriceCategoryKey;
+  readonly ru: string;
+  readonly roll: RollSpec;
+  /** Множитель формулы категории: 1к8×1, 2к8×5, 4к8×10. */
+  readonly multiplier: number;
+  readonly items: readonly PriceItem[];
+}
+
+/**
+ * Полный набор данных для страницы цен The Black Hack.
+ *
+ * `version` — короткий хеш состава таблицы: входит в сериализованный стейт (URL/localStorage),
+ * любое изменение состава или порядка предметов инвалидирует старые ссылки автоматически.
+ */
+export interface PriceTable {
+  readonly categories: readonly PriceCategory[];
+  readonly settlements: readonly SettlementType[];
+  readonly settlementLabels: Readonly<Record<SettlementType, string>>;
+  /** Тип поселения → видимые категории (правило редкости и доступности). */
+  readonly settlementCategories: Readonly<Record<SettlementType, readonly PriceCategoryKey[]>>;
+  readonly version: string;
+}
