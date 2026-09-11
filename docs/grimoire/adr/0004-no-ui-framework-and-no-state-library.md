@@ -14,18 +14,19 @@ the name of the selected theme, a flag for whether the preview refreshes by itse
 draft written to the browser's local storage.
 
 One string and one flag do not need a state manager. The chain from an edit to a refreshed
-Preview is a single function, called from the editor's own update listener.
+Preview is one workflow, called from the editor's own update listener.
 
 ## Amendment: refresh scheduling
 
 The chain above is no longer quite one function: a Preview refresh now waits for typing
 to pause, and a request made while one is already running is coalesced into whatever
-comes next rather than started alongside it, so `start-app.ts` also carries a debounce
+comes next rather than started alongside it, so the Preview workflow carries a debounce
 timer handle, an in-flight flag, and one pending source string. This is scheduling state,
 not model state: none of it is derived reactively from something else changing, none of
 it survives past the refresh it belongs to, and none of it is read from anywhere but the
-one closure that owns it. It is exactly the kind of wiring this ADR already anticipated
-writing by hand. A state library's one advantage here would still be automatic
+workflow that owns it. The editor session owns that workflow's lifetime together with its
+other timers and listeners. This is exactly the kind of wiring this ADR already
+anticipated writing by hand. A state library's one advantage here would still be automatic
 recomputation from a changing source, and nothing about scheduling a queue of one pending
 request calls for that.
 

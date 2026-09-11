@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { createStatus } from "./status";
 
-describe("Status", () => {
+describe("status", () => {
   test("starts hidden when every channel is clear", () => {
     const container = document.createElement("div");
 
@@ -16,7 +16,7 @@ describe("Status", () => {
     const container = document.createElement("div");
     const status = createStatus(container);
 
-    status.saveFailed();
+    status.draftSaveChanged(true);
     status.loadFailed({ kind: "unreadable-file", message: "the selected file is not a book" });
     status.printFailed({ kind: "print-engine-failure", message: "the print engine stopped" });
     status.previewSucceeded([{ line: 12, pages: 2 }]);
@@ -30,14 +30,6 @@ describe("Status", () => {
         "Loading file failed — the selected file is not a book " +
         "This book is not being saved — download it before closing this page.",
     );
-
-    status.previewSucceeded([]);
-    status.clearPrint();
-    status.savedFileValidated();
-    status.saveSucceeded();
-
-    expect(container.hidden).toBe(true);
-    expect(container.textContent).toBe("");
   });
 
   test("publishes Preview success and its complete overflow report as one update", () => {
@@ -70,7 +62,7 @@ describe("Status", () => {
     status.previewSucceeded([{ line: 6, pages: 2 }]);
     status.printFailed({ kind: "print-engine-failure", message: "print failed" });
     status.loadFailed({ kind: "load-failure", message: "bad file" });
-    status.saveFailed();
+    status.draftSaveChanged(true);
 
     status.previewFailed({ kind: "preview-engine-failure", message: "preview failed" });
     expect(container.textContent).toContain("line 6 took 2 pages");
@@ -87,11 +79,29 @@ describe("Status", () => {
     expect(container.textContent).toContain("Printing failed");
     expect(container.textContent).toContain("not being saved");
 
-    status.clearPrint();
+    status.printSucceeded();
     expect(container.textContent).not.toContain("Printing failed");
     expect(container.textContent).toContain("not being saved");
 
-    status.saveSucceeded();
+    status.draftSaveChanged(false);
     expect(container.hidden).toBe(true);
+  });
+
+  test("replacing a book clears only messages that belonged to the replaced book", () => {
+    const container = document.createElement("div");
+    const status = createStatus(container);
+
+    status.previewSucceeded([{ line: 8, pages: 2 }]);
+    status.previewFailed({ kind: "markup-error", message: "nested section", line: 3 });
+    status.printFailed({ kind: "print-engine-failure", message: "printer unavailable" });
+    status.loadFailed({ kind: "unreadable-file", message: "not a saved book" });
+    status.draftSaveChanged(true);
+    status.bookReplaced();
+
+    expect(container.textContent).toContain("Preview is out of date");
+    expect(container.textContent).toContain("line 8 took 2 pages");
+    expect(container.textContent).not.toContain("Printing failed");
+    expect(container.textContent).not.toContain("Loading file failed");
+    expect(container.textContent).toContain("not being saved");
   });
 });

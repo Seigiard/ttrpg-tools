@@ -35,7 +35,7 @@
       import { downloadBook, loadBookFile } from "/src/features/grimoire/adapters/file.ts";
       import { paginate } from "/src/features/grimoire/adapters/pagination.ts";
       import { printBook } from "/src/features/grimoire/adapters/printing.ts";
-      import { readDraft, createDebouncedPersist } from "/src/features/grimoire/adapters/persistence.ts";
+      import { createDraftPersistence } from "/src/features/grimoire/adapters/persistence.ts";
 
       // Initialize the app with persistence
       const editorContainer = document.getElementById("editor");
@@ -47,7 +47,7 @@
       const downloadControl = document.getElementById("download");
       const loadControl = document.getElementById("load");
 
-      const editor = startApp(
+      const app = startApp(
         {
           editorContainer,
           previewContainer,
@@ -58,15 +58,16 @@
           downloadControl,
           loadControl,
         },
-        createEditor,
-        paginate,
-        printBook,
-        { read: readDraft, write: createDebouncedPersist() },
-        downloadBook,
-        loadBookFile,
+        {
+          editor: { create: createEditor },
+          preview: { paginate },
+          printing: { printBook },
+          draft: createDraftPersistence(),
+          savedFile: { downloadBook, loadBookFile },
+        },
       );
 
-      window.__editor = editor;
+      window.__editor = app.editor;
     </script>
   </body>
 </html>

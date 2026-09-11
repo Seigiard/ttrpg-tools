@@ -8,41 +8,36 @@ import {
   type SavedFileLoadError,
 } from "./operation-error";
 
-/** Typed workflow transitions for the single author-visible status surface. */
-export interface Status {
+export interface AppStatus {
   previewFailed(error: PreviewRefreshError): void;
-  previewSucceeded(overflowingPages: readonly OverflowingPage[]): void;
+  previewSucceeded(pages: readonly OverflowingPage[]): void;
   printFailed(error: BookPrintError): void;
-  clearPrint(): void;
+  printSucceeded(): void;
   loadFailed(error: SavedFileLoadError): void;
   savedFileValidated(): void;
-  saveFailed(): void;
-  saveSucceeded(): void;
+  draftSaveChanged(failed: boolean): void;
+  bookReplaced(): void;
 }
 
-export function createStatus(container: HTMLElement): Status {
+export function createStatus(container: HTMLElement): AppStatus {
   let previewError: PreviewRefreshError | undefined;
-  let overflowingPages: readonly OverflowingPage[] = [];
   let printError: BookPrintError | undefined;
   let loadError: SavedFileLoadError | undefined;
   let saveFailed = false;
+  let overflowingPages: readonly OverflowingPage[] = [];
 
   const render = (): void => {
-    const messages: string[] = [];
-    if (previewError !== undefined) {
-      messages.push(`Preview is out of date — ${describePreviewRefreshError(previewError)}`);
-    }
-    if (overflowingPages.length > 0) messages.push(describeOverflowingPages(overflowingPages));
-    if (printError !== undefined) {
-      messages.push(`Printing failed — ${describeBookPrintError(printError)}`);
-    }
-    if (loadError !== undefined) {
-      messages.push(`Loading file failed — ${describeSavedFileLoadError(loadError)}`);
-    }
-    if (saveFailed) messages.push("This book is not being saved — download it before closing this page.");
-
-    container.textContent = messages.join(" ");
-    container.hidden = messages.length === 0;
+    const parts: string[] = [];
+    if (previewError !== undefined)
+      parts.push(`Preview is out of date — ${describePreviewRefreshError(previewError)}`);
+    if (overflowingPages.length > 0) parts.push(describeOverflowingPages(overflowingPages));
+    if (printError !== undefined)
+      parts.push(`Printing failed — ${describeBookPrintError(printError)}`);
+    if (loadError !== undefined)
+      parts.push(`Loading file failed — ${describeSavedFileLoadError(loadError)}`);
+    if (saveFailed) parts.push("This book is not being saved — download it before closing this page.");
+    container.textContent = parts.join(" ");
+    container.hidden = parts.length === 0;
   };
 
   render();
@@ -61,7 +56,7 @@ export function createStatus(container: HTMLElement): Status {
       printError = error;
       render();
     },
-    clearPrint() {
+    printSucceeded() {
       printError = undefined;
       render();
     },
@@ -73,12 +68,13 @@ export function createStatus(container: HTMLElement): Status {
       loadError = undefined;
       render();
     },
-    saveFailed() {
-      saveFailed = true;
+    draftSaveChanged(failed) {
+      saveFailed = failed;
       render();
     },
-    saveSucceeded() {
-      saveFailed = false;
+    bookReplaced() {
+      printError = undefined;
+      loadError = undefined;
       render();
     },
   };
