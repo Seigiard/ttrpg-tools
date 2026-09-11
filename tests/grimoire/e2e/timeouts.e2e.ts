@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
 
 const HARNESS = "/tests/grimoire/fixtures/timeout-harness.html";
+const ISOLATED_HARNESS = `${HARNESS}?isolated`;
+const ALL_PREVIEW_FRAMES = "#preview iframe[data-grimoire-preview-document]";
+const PREVIEW_FRAME = `${ALL_PREVIEW_FRAMES}:not([aria-hidden="true"])`;
 
 const GOOD_SOURCE = ['<Book size="A5">', '<Section columns="1">', "A good paragraph appears here.", "</Section>", "</Book>"].join(
   "\n",
@@ -197,6 +200,57 @@ test.describe("a repaint the engine never answers", () => {
     expect(preview).not.toContain("A good paragraph appears here.");
     await expect(page.locator("#status")).toBeHidden();
   });
+});
+
+test("an isolated resize keeps its published book through a timeout and late engine response", async ({ page }) => {
+  await page.goto(ISOLATED_HARNESS);
+  const preview = page.frameLocator(PREVIEW_FRAME);
+  await expect(preview.locator("body")).toContainText("Start writing your book here.");
+
+  await replaceSource(page, GOOD_SOURCE);
+  await expect(preview.locator("body")).toContainText("A good paragraph appears here.");
+  const lastGood = await preview.locator("body").textContent();
+
+  // The editor may be ahead of the published preview while auto-refresh is off.
+  // A resize must refit what is actually visible, not reveal that draft.
+  await page.locator("#auto-refresh").uncheck();
+  await replaceSource(page, OTHER_GOOD_SOURCE);
+  await page.waitForTimeout(500);
+  await expect(preview.locator("body")).toContainText("A good paragraph appears here.");
+
+  await page.evaluate(() => window.__stallEngine());
+  await page.evaluate(() => {
+    const previewContainer = document.getElementById("preview")!;
+    previewContainer.style.width = "500px";
+    previewContainer.style.height = "420px";
+  });
+  await expect.poll(() => withheldRuns(page)).toBe(1);
+  await expect(page.locator("#preview iframe")).toHaveCount(2);
+  const committedFrame = PREVIEW_FRAME;
+  const stagingFrame = `${ALL_PREVIEW_FRAMES}[aria-hidden="true"]`;
+  await expect(page.locator(committedFrame)).toHaveCount(1);
+  await expect(page.frameLocator(committedFrame).locator("body")).toContainText(
+    "A good paragraph appears here.",
+  );
+  await expect(page.locator(stagingFrame)).toHaveCount(1);
+  await expect(page.locator(stagingFrame)).toBeHidden();
+  const stagedDocument = await page.evaluate(() => window.__oldestStalledEngineDocument());
+  expect(stagedDocument).toContain("A good paragraph appears here.");
+  expect(stagedDocument).not.toContain("A second paragraph appears here.");
+
+  await page.evaluate(() => window.__advanceEngineClock(30_000));
+  await expect(page.locator("#status")).toBeVisible();
+  await expect(page.locator("#preview iframe")).toHaveCount(1);
+  expect(await preview.locator("body").textContent()).toBe(lastGood);
+
+  await page.evaluate(() => window.__unstallEngine());
+  await page.locator("#auto-refresh").check();
+  await expect(preview.locator("body")).toContainText("A second paragraph appears here.");
+  await replaceSource(page, THIRD_GOOD_SOURCE);
+  await expect(preview.locator("body")).toContainText("A third paragraph appears here.");
+  expect(await page.evaluate(() => window.__resumeOldestStalledEngineRunUntilLoaded())).toBe(true);
+  await expect(page.locator("#preview iframe")).toHaveCount(1);
+  await expect(preview.locator("body")).toContainText("A third paragraph appears here.");
 });
 
 /**

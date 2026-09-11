@@ -184,6 +184,11 @@ export function startApp(
   let running = false;
   let pendingSource: string | undefined;
   let pendingAutomatic = false;
+  let resizePending = false;
+  // Unlike the current editor draft, this is publication state: the source of the
+  // frame that actually committed. Resize may reproduce it even when auto-refresh
+  // is off, without exposing edits the author has not published.
+  let displayedSource: string | undefined;
 
   function afterRun(): void {
     running = false;
@@ -192,7 +197,17 @@ export function startApp(
       const automatic = pendingAutomatic;
       pendingSource = undefined;
       pendingAutomatic = false;
-      if (!automatic || autoRefreshControl.checked) run(next);
+      if (!automatic || autoRefreshControl.checked) {
+        // This run starts after the resize and therefore measures the current
+        // container. It supersedes a separate repaint of the visible source.
+        resizePending = false;
+        run(next);
+        return;
+      }
+    }
+    if (resizePending && displayedSource !== undefined) {
+      resizePending = false;
+      run(displayedSource);
     }
   }
 
@@ -215,14 +230,16 @@ export function startApp(
     }
     void paginateAdapter(previewContainer, html)
       .then((result) => {
+        displayedSource = source;
         setPreviewStatus(undefined);
         setPageOverflowStatus(result.overflowingPages);
       })
-      // A refresh that failed leaves the Preview showing the last Book that
-      // paginated (ADR-0005), so any overflow standing against that book is
-      // still true of what the author is looking at and is left alone. Only a
-      // refresh that produced a Book has anything to say about which of its
-      // pages fit.
+      // A refresh that failed leaves the production Preview showing the last
+      // book that paginated (ADR-0008); direct adapter fixtures provide the same
+      // visible guarantee by restoration (ADR-0005). Any overflow standing
+      // against that book is still true of what the author is looking at and is
+      // left alone. Only a refresh that produced a book has anything to say
+      // about which of its pages fit.
       .catch((error: unknown) => setPreviewStatus(toPreviewRefreshError(error)))
       .finally(afterRun);
   }
@@ -253,10 +270,10 @@ export function startApp(
 
   const initialSource = persistenceAdapter.read() ?? INITIAL_SOURCE;
 
-  // No separate copy of the source is kept: CodeMirror's own buffer is the one
-  // copy, read back through `editor.getSource()` wherever the latest text is
-  // needed (ADR-0004 -- nothing derivable from the editor's own state is stored
-  // a second time).
+  // CodeMirror's buffer remains the only copy of the current draft, read back
+  // through `editor.getSource()` wherever the latest text is needed. The committed
+  // source above is intentionally different state: it can lag behind this draft
+  // while auto-refresh is off (ADR-0004, ADR-0008).
   const onChange = (source: string): void => {
     persistenceAdapter.write(source, (error) => setSaveStatus(error !== undefined));
     if (autoRefreshControl.checked) {
@@ -265,6 +282,24 @@ export function startApp(
   };
 
   const editor = createEditorAdapter(editorContainer, initialSource, onChange);
+
+  if (previewContainer.hasAttribute("data-isolated")) {
+    let width = previewContainer.clientWidth;
+    let height = previewContainer.clientHeight;
+    new ResizeObserver(() => {
+      const nextWidth = previewContainer.clientWidth;
+      const nextHeight = previewContainer.clientHeight;
+      if (nextWidth === width && nextHeight === height) return;
+      width = nextWidth;
+      height = nextHeight;
+
+      if (running) {
+        resizePending = true;
+      } else if (displayedSource !== undefined) {
+        requestRefresh(displayedSource);
+      }
+    }).observe(previewContainer);
+  }
 
   refreshControl.addEventListener("click", () => {
     // A manual refresh acts on the latest source immediately -- a pending
