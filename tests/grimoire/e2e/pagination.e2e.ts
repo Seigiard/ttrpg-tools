@@ -1,5 +1,18 @@
 import { expect, test } from "@playwright/test";
 
+import { openBookDriver } from "../support/book";
+
+test("the Book driver surfaces the original host mount error", async ({ page: browserPage }) => {
+  await browserPage.route("**/tests/grimoire/support/book.browser.ts*", (route) =>
+    route.fulfill({
+      contentType: "application/javascript",
+      body: 'throw new Error("deliberate Book mount failure")',
+    }),
+  );
+
+  await expect(openBookDriver(browserPage)).rejects.toThrow("deliberate Book mount failure");
+});
+
 const SHORT_PROSE = "# A cheat sheet\n\nOne short paragraph of prose fits easily on a single page.\n";
 
 const PARAGRAPH =
@@ -18,19 +31,19 @@ const LONG_PROSE =
  * Vivliostyle's own pagination correctness, which has no valid local oracle.
  */
 test.describe("pagination", () => {
-  test("a short book fits on a single page", async ({ page }) => {
-    await page.goto("/tests/grimoire/fixtures/harness.html");
+  test("a short book fits on a single page", async ({ page: browserPage }) => {
+    const book = await openBookDriver(browserPage);
 
-    const pageCount = await page.evaluate((source) => window.__paginateBook(source), SHORT_PROSE);
+    const pageCount = await book.pageCount(SHORT_PROSE);
 
     expect(pageCount).toBe(1);
   });
 
-  test("a longer book paginates across more pages than a short one", async ({ page }) => {
-    await page.goto("/tests/grimoire/fixtures/harness.html");
+  test("a longer book paginates across more pages than a short one", async ({ page: browserPage }) => {
+    const book = await openBookDriver(browserPage);
 
-    const shortCount = await page.evaluate((source) => window.__paginateBook(source), SHORT_PROSE);
-    const longCount = await page.evaluate((source) => window.__paginateBook(source), LONG_PROSE);
+    const shortCount = await book.pageCount(SHORT_PROSE);
+    const longCount = await book.pageCount(LONG_PROSE);
 
     expect(longCount).toBeGreaterThan(shortCount);
   });
@@ -89,19 +102,19 @@ const pageBreakSource = [
  * pagination correctness, and never a comparison against an expected markup string.
  */
 test.describe("book markup", () => {
-  test("a book's declared page size sizes the printed page", async ({ page }) => {
-    await page.goto("/tests/grimoire/fixtures/harness.html");
+  test("a book's declared page size sizes the printed page", async ({ page: browserPage }) => {
+    const book = await openBookDriver(browserPage);
 
-    const a5 = await page.evaluate((source) => window.__paginateAndInspect(source), shortSection("A5"));
-    const a4 = await page.evaluate((source) => window.__paginateAndInspect(source), shortSection("A4"));
+    const a5 = await book.layout(shortSection("A5"));
+    const a4 = await book.layout(shortSection("A4"));
 
     expect(a4.pageSizes[0]!.height).toBeGreaterThan(a5.pageSizes[0]!.height);
   });
 
-  test("a two-column section lays its text out in two columns", async ({ page }) => {
-    await page.goto("/tests/grimoire/fixtures/harness.html");
+  test("a two-column section lays its text out in two columns", async ({ page: browserPage }) => {
+    const book = await openBookDriver(browserPage);
 
-    const { positions } = await page.evaluate((source) => window.__paginateAndInspect(source), overflowSource(2, 6));
+    const { positions } = await book.layout(overflowSource(2, 6));
 
     const distinctColumnXPositions = new Set(
       Object.values(positions)
@@ -111,10 +124,10 @@ test.describe("book markup", () => {
     expect(distinctColumnXPositions.size).toBe(2);
   });
 
-  test("a three-column section lays its text out in three columns", async ({ page }) => {
-    await page.goto("/tests/grimoire/fixtures/harness.html");
+  test("a three-column section lays its text out in three columns", async ({ page: browserPage }) => {
+    const book = await openBookDriver(browserPage);
 
-    const { positions } = await page.evaluate((source) => window.__paginateAndInspect(source), overflowSource(3, 7));
+    const { positions } = await book.layout(overflowSource(3, 7));
 
     const distinctColumnXPositions = new Set(
       Object.values(positions)
@@ -124,10 +137,10 @@ test.describe("book markup", () => {
     expect(distinctColumnXPositions.size).toBe(3);
   });
 
-  test("a forced page break ends the current page and starts the next", async ({ page }) => {
-    await page.goto("/tests/grimoire/fixtures/harness.html");
+  test("a forced page break ends the current page and starts the next", async ({ page: browserPage }) => {
+    const book = await openBookDriver(browserPage);
 
-    const { positions } = await page.evaluate((source) => window.__paginateAndInspect(source), pageBreakSource);
+    const { positions } = await book.layout(pageBreakSource);
 
     // Line 3 is the paragraph immediately before the break, line 7 the one
     // immediately after it -- proof the break landed exactly between them, not
@@ -135,11 +148,11 @@ test.describe("book markup", () => {
     expect(positions["7"]!.pageIndex!).toBeGreaterThan(positions["3"]!.pageIndex!);
   });
 
-  test("a forced column break ends the current column and starts the next", async ({ page }) => {
-    await page.goto("/tests/grimoire/fixtures/harness.html");
+  test("a forced column break ends the current column and starts the next", async ({ page: browserPage }) => {
+    const book = await openBookDriver(browserPage);
 
-    const without = await page.evaluate((source) => window.__paginateAndInspect(source), columnBreakSource(false));
-    const withBreak = await page.evaluate((source) => window.__paginateAndInspect(source), columnBreakSource(true));
+    const without = await book.layout(columnBreakSource(false));
+    const withBreak = await book.layout(columnBreakSource(true));
 
     // Line 5 (paragraph 2) sits in the same column as paragraph 1 when nothing
     // forces it onward, and in the next column over once a break is forced between
