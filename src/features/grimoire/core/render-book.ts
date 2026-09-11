@@ -1,7 +1,12 @@
 import type { Book } from "./book";
+import { MarkupError } from "./markup-error";
 import { parseBook } from "./parse-book";
-import type { BookBlock, Page, PageOrientation, Section, SectionContent } from "./parse-book";
+import type { BookBlock, Page, PageOrientation, Section, SectionContent, ThemeDeclaration } from "./parse-book";
 import { renderProse } from "./prose-renderer";
+import { defaultRuTheme } from "./themes/default-ru/theme";
+import type { Theme } from "./themes/theme";
+
+const FALLBACK_LANG = "en";
 
 /**
  * A `Page` is rendered as a named CSS page (ADR-0007): `page: <name>` on the page's
@@ -41,6 +46,7 @@ const PAGE_NAME_PREFIX = "grimoire-page-";
  */
 export function renderBook(book: Book): string {
   const parsed = parseBook(book.source);
+  const theme = resolveTheme(parsed.theme);
   // One name per top-level block, so the body and the page rules below always
   // agree about which name belongs to which block.
   const named = parsed.blocks.map((block, index) => ({ block, pageName: `${PAGE_NAME_PREFIX}${index + 1}` }));
@@ -51,7 +57,7 @@ export function renderBook(book: Book): string {
     .join("\n  ");
 
   return `<!doctype html>
-<html lang="${parsed.lang}">
+<html lang="${theme?.lang ?? FALLBACK_LANG}">
 <head>
 <meta charset="utf-8" />
 <meta http-equiv="Content-Security-Policy" content="script-src 'none'" />
@@ -107,7 +113,7 @@ export function renderBook(book: Book): string {
   html[lang="ru"] { hyphens: auto; -webkit-hyphens: auto; }
   body { font-family: serif; line-height: 1.5; }
   section { column-gap: 8mm; }
-  ${parsed.theme?.css ?? ""}
+  ${theme?.css ?? ""}
   }
   @layer grimoire-book {
   /* A Book owns its sheet size (CONTEXT.md). Important within the first layer so
@@ -125,6 +131,15 @@ ${bodyHtml}
 </body>
 </html>
 `;
+}
+
+function resolveTheme(declaration: ThemeDeclaration | undefined): Theme | undefined {
+  if (declaration === undefined) return undefined;
+  if (declaration.name === defaultRuTheme.name) return defaultRuTheme;
+  throw new MarkupError(
+    `<Book theme="${declaration.name}"> on line ${declaration.line} names an unknown theme`,
+    declaration.line,
+  );
 }
 
 /** One top-level block's markup. Switching on `kind` here, in the one place that
