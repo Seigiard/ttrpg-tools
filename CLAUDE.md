@@ -4,6 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Проектные конвенции TTRPG Tools. Только неочевидное — остальное читается в коде, `README.md` и `docs/DESIGN.md`.
 
+## Agent skills
+
+### Issue tracker
+
+Issues live as GitHub issues in `Seigiard/ttrpg-tools`, managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five triage state roles use the default label strings. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Multi-context: `CONTEXT-MAP.md` points to each context, with system-wide decisions in `docs/adr/` and context-specific decisions beside that context. See `docs/agents/domain.md`.
+
 ## Команды
 
 ```sh
