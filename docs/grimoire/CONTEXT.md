@@ -18,6 +18,16 @@ author can return to their unfinished work.
 The portable copy an author downloads or opens. A saved file carries a book together
 with its theme.
 
+## Draft
+
+The automatically saved working copy of one book's source in browser storage. A draft
+belongs to the current browser and is not a saved file chosen and kept by the author.
+
+## Editor session
+
+One open instance of the editor, from opening it until it is closed. A session works on
+one book at a time and may restore that book from a draft or replace it from a saved file.
+
 ## Section
 
 A run of pages that share one layout, above all a column count. The author declares a

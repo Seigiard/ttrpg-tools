@@ -5,12 +5,19 @@
 const STORAGE_KEY = "grimoire:draft";
 const DEBOUNCE_MS = 1000;
 
+export interface DraftPersistence {
+  read(): string | undefined;
+  write(source: string, onResult?: (error?: unknown) => void): void;
+  flush(): void;
+  destroy(): void;
+}
+
 /**
  * Reads the stored draft from localStorage.
  * Returns undefined if no draft is stored, or if the value is corrupt/unreadable.
  * Gracefully handles localStorage being unavailable (private browsing, full storage).
  */
-export function readDraft(): string | undefined {
+function readDraft(): string | undefined {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (typeof stored === "string") {
@@ -32,12 +39,13 @@ export function readDraft(): string | undefined {
  * forward cache, which `unload` does not cover. Without the flush, closing the tab
  * within the debounce window loses up to a second of writing.
  */
-export function createDebouncedPersist(): (source: string, onResult?: (error?: unknown) => void) => void {
+export function createDraftPersistence(): DraftPersistence {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
   let pending: string | undefined;
   let pendingResult: ((error?: unknown) => void) | undefined;
+  let active = true;
 
-  const write = (source: string, onResult?: (error?: unknown) => void): void => {
+  const persist = (source: string, onResult?: (error?: unknown) => void): void => {
     try {
       localStorage.setItem(STORAGE_KEY, source);
       onResult?.();
@@ -55,7 +63,7 @@ export function createDebouncedPersist(): (source: string, onResult?: (error?: u
     clearTimeout(timeoutId);
     timeoutId = null;
     if (pending !== undefined) {
-      write(pending, pendingResult);
+      persist(pending, pendingResult);
       pending = undefined;
       pendingResult = undefined;
     }
@@ -63,20 +71,29 @@ export function createDebouncedPersist(): (source: string, onResult?: (error?: u
 
   window.addEventListener("pagehide", flush);
 
-  return (source: string, onResult?: (error?: unknown) => void): void => {
-    pending = source;
-    pendingResult = onResult;
-    if (timeoutId !== null) {
-      clearTimeout(timeoutId);
-    }
+  return {
+    read: readDraft,
+    write(source, onResult) {
+      if (!active) return;
+      pending = source;
+      pendingResult = onResult;
+      if (timeoutId !== null) clearTimeout(timeoutId);
 
-    timeoutId = setTimeout(() => {
-      timeoutId = null;
-      const next = pending;
-      const result = pendingResult;
-      pending = undefined;
-      pendingResult = undefined;
-      if (next !== undefined) write(next, result);
-    }, DEBOUNCE_MS);
+      timeoutId = setTimeout(() => {
+        timeoutId = null;
+        const next = pending;
+        const result = pendingResult;
+        pending = undefined;
+        pendingResult = undefined;
+        if (next !== undefined) persist(next, result);
+      }, DEBOUNCE_MS);
+    },
+    flush,
+    destroy() {
+      if (!active) return;
+      flush();
+      active = false;
+      window.removeEventListener("pagehide", flush);
+    },
   };
 }

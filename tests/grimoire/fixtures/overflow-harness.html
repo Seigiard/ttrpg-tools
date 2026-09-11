@@ -46,15 +46,20 @@
       // cheapest of the three existing conditions to produce on demand: the real
       // print engine has no failure a test can trigger without stubbing the
       // engine itself (see print-error-harness.html), and the
-      // print adapter is a plain argument exactly so it can be substituted.
+      // print adapter is an explicit seam exactly so it can be substituted.
       const failingPrint = () => Promise.reject(new Error("Vivliostyle failed to prepare the book for printing: boom"));
 
       // No draft is read or written: each test types the book it is about, and a
       // draft left over from the previous test would be what the preview opened
       // on instead.
-      const noPersistence = { read: () => undefined, write: () => {} };
+      const noPersistence = {
+        read: () => undefined,
+        write: () => {},
+        flush: () => {},
+        destroy: () => {},
+      };
 
-      const editor = startApp(
+      const app = startApp(
         {
           editorContainer: document.getElementById("editor"),
           previewContainer: document.getElementById("preview"),
@@ -65,15 +70,16 @@
           downloadControl: document.getElementById("download"),
           loadControl: document.getElementById("load"),
         },
-        createEditor,
-        paginate,
-        failingPrint,
-        noPersistence,
-        downloadBook,
-        loadBookFile,
+        {
+          editor: { create: createEditor },
+          preview: { paginate },
+          printing: { printBook: failingPrint },
+          draft: noPersistence,
+          savedFile: { downloadBook, loadBookFile },
+        },
       );
 
-      window.__editor = editor;
+      window.__editor = app.editor;
     </script>
   </body>
 </html>
