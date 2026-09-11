@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { openBookDriver } from "../support/book";
+
 // A repeated sentence, long enough that a handful of these paragraphs push a
 // heading's own page onto more than one physical page before the next heading
 // arrives -- real overflow spanning pages, not a book short enough that both
@@ -76,11 +78,11 @@ const pageHeadingBeforeUnheadedProse = (heading: string): string =>
  */
 test.describe("running headers and page numbers", () => {
   test("a page's running header carries the heading that precedes it, and changes once a later heading appears", async ({
-    page,
+    page: browserPage,
   }) => {
-    await page.goto("/tests/grimoire/fixtures/harness.html");
+    const book = await openBookDriver(browserPage);
 
-    const pages = await page.evaluate((source) => window.__paginateAndInspectHeaders(source), TWO_HEADINGS_BOOK);
+    const pages = await book.flowingHeaders(TWO_HEADINGS_BOOK);
 
     // More than one page under each heading is what proves this follows real
     // pagination rather than merely mirroring markup structure -- the first
@@ -92,13 +94,10 @@ test.describe("running headers and page numbers", () => {
     expect(pages[pages.length - 1]!.header).toBe("Second Section");
   });
 
-  test("a raw HTML heading inside a section does not replace its structural Markdown heading", async ({ page }) => {
-    await page.goto("/tests/grimoire/fixtures/harness.html");
+  test("a raw HTML heading inside a section does not replace its structural Markdown heading", async ({ page: browserPage }) => {
+    const book = await openBookDriver(browserPage);
 
-    const pages = await page.evaluate(
-      (source) => window.__paginateAndInspectHeaders(source),
-      RAW_HEADING_IN_A_SECTION,
-    );
+    const pages = await book.flowingHeaders(RAW_HEADING_IN_A_SECTION);
 
     expect(pages.map((p) => p.header)).toEqual(["The chapter", "The chapter", "The chapter"]);
   });
@@ -107,24 +106,21 @@ test.describe("running headers and page numbers", () => {
     ["h1", "# Character sheet"],
     ["h2", "## Character sheet"],
   ] as const) {
-    test(`Markdown ${level} headings inside a raw section in a page do not leak into later prose`, async ({ page }) => {
-      await page.goto("/tests/grimoire/fixtures/harness.html");
+    test(`Markdown ${level} headings inside a raw section in a page do not leak into later prose`, async ({ page: browserPage }) => {
+      const book = await openBookDriver(browserPage);
 
-      const pages = await page.evaluate(
-        (source) => window.__paginateAndInspectHeaders(source),
-        pageHeadingBeforeUnheadedProse(heading),
-      );
+      const pages = await book.flowingHeaders(pageHeadingBeforeUnheadedProse(heading));
 
       expect(pages.map((p) => p.header)).toEqual(["The preceding chapter", undefined, "The preceding chapter"]);
     });
   }
 
   test("each page's printed page number matches its real position among the pages Vivliostyle produced", async ({
-    page,
+    page: browserPage,
   }) => {
-    await page.goto("/tests/grimoire/fixtures/harness.html");
+    const book = await openBookDriver(browserPage);
 
-    const pages = await page.evaluate((source) => window.__paginateAndInspectHeaders(source), TWO_HEADINGS_BOOK);
+    const pages = await book.flowingHeaders(TWO_HEADINGS_BOOK);
 
     for (const p of pages) {
       expect(p.pageNumber).toBe(String(p.pageIndex + 1));
