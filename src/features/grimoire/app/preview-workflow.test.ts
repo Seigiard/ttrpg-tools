@@ -105,6 +105,31 @@ describe("preview workflow", () => {
     expect(htmlCalls[1]).not.toContain("SECOND MARKER");
   });
 
+  test("a resize refreshes the displayed source rather than an unpublished draft", async () => {
+    const htmlCalls: string[] = [];
+    const preview = createPreviewWorkflow({
+      container: document.createElement("div"),
+      paginate: (_container, html) => {
+        htmlCalls.push(html);
+        return Promise.resolve(RESULT);
+      },
+      status: statusRecorder(),
+      automaticRefresh: false,
+    });
+
+    preview.refreshRequested("PUBLISHED BOOK");
+    await Promise.resolve();
+    await Promise.resolve();
+    preview.sourceChanged("UNPUBLISHED DRAFT");
+    preview.sizeChanged();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(htmlCalls).toHaveLength(2);
+    expect(htmlCalls[1]).toContain("PUBLISHED BOOK");
+    expect(htmlCalls[1]).not.toContain("UNPUBLISHED DRAFT");
+  });
+
   test("turning automatic refresh off discards one queued behind a running repaint", async () => {
     const timers = controlledTimers();
     const first = deferred<PaginationResult>();

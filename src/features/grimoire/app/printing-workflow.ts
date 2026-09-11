@@ -1,9 +1,9 @@
 import type { printBook } from "../adapters/printing";
 import { renderBook } from "../core/render-book";
-import { toPreviewError, type PreviewError } from "./preview-error";
+import { toBookMarkupError, toBookPrintError, type BookPrintError } from "./operation-error";
 
 export interface PrintingStatus {
-  printFailed(error: PreviewError): void;
+  printFailed(error: BookPrintError): void;
   printSucceeded(): void;
 }
 
@@ -31,7 +31,7 @@ export function createPrintingWorkflow({ printBook, status }: PrintingWorkflowOp
       try {
         html = renderBook({ source });
       } catch (error) {
-        if (token === requestToken) status.printFailed(toPreviewError(error));
+        if (token === requestToken) status.printFailed(toBookMarkupError(error));
         return;
       }
 
@@ -40,7 +40,7 @@ export function createPrintingWorkflow({ printBook, status }: PrintingWorkflowOp
           if (active && token === requestToken) status.printSucceeded();
         })
         .catch((error: unknown) => {
-          if (active && token === requestToken) status.printFailed(toPreviewError(error));
+          if (active && token === requestToken) status.printFailed(toBookPrintError(error));
         });
     },
     bookReplaced() {

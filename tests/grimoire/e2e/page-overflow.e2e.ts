@@ -139,6 +139,22 @@ test.describe("the pagination adapter reports the pages that did not fit", () =>
       { line: 16, pages: 2 },
     ]);
   });
+
+  test("an isolated preview reports overflow and commits the book inside its frame", async ({ page }) => {
+    await page.goto("/tests/grimoire/fixtures/harness.html");
+
+    const reported = await page.evaluate(
+      (source) => window.__paginateAndReportIsolatedOverflow(source),
+      A_PAGE_THAT_DOES_NOT_FIT,
+    );
+
+    expect(reported.overflowingPages).toEqual([{ line: 5, pages: 2 }]);
+    expect(reported.renderedPages).toBe(3);
+    const previewFrame = page.locator("#preview iframe[data-grimoire-preview-document]");
+    await expect(previewFrame).toHaveCount(1);
+    await expect(previewFrame).not.toHaveAttribute("aria-hidden", "true");
+    await expect(previewFrame.contentFrame().locator("body")).toContainText("Paragraph 1.");
+  });
 });
 
 // The overflowing book with its closing </Page> taken away: a markup error, so the

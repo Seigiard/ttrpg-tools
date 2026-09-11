@@ -3,6 +3,12 @@
   <head>
     <meta charset="utf-8" />
     <title>engine timeout test harness</title>
+    <style>
+      #preview {
+        width: 600px;
+        height: 500px;
+      }
+    </style>
   </head>
   <body>
     <div id="editor"></div>
@@ -88,10 +94,26 @@
       const nativeLoadDocument = CoreViewer.prototype.loadDocument;
       let stalling = false;
       const stalled = [];
+      const isolated = new URLSearchParams(location.search).has("isolated");
+      const nativeRevokeObjectURL = URL.revokeObjectURL.bind(URL);
+
+      // A timed-out adapter has correctly released its blob URL, but this fixture
+      // deliberately resumes that abandoned run to observe the engine's late
+      // completion. Retain only URLs revoked while an isolated run is stalled so
+      // the resumed viewer still has a real document to load.
+      if (isolated) {
+        URL.revokeObjectURL = (url) => {
+          if (!stalling) nativeRevokeObjectURL(url);
+        };
+      }
 
       CoreViewer.prototype.loadDocument = function (...args) {
         if (stalling) {
-          stalled.push({ viewer: this, args });
+          const document =
+            typeof args[0] === "string"
+              ? fetch(args[0]).then((response) => response.text())
+              : Promise.resolve(undefined);
+          stalled.push({ viewer: this, args, document });
           return undefined;
         }
         return nativeLoadDocument.apply(this, args);
@@ -104,6 +126,8 @@
         stalling = false;
       };
       window.__stalledEngineRuns = () => stalled.length;
+      window.__oldestStalledEngineDocument = () =>
+        stalled[0]?.document ?? Promise.resolve(undefined);
 
       // Lets the oldest withheld run finally reach the engine, unchanged: the book
       // loads for real and the run answers for real, only later than it should have.
@@ -114,6 +138,37 @@
         const run = stalled.shift();
         if (run) nativeLoadDocument.apply(run.viewer, run.args);
         return run !== undefined;
+      };
+
+      // Unlike the synchronous resume helper, this resolves only when the real
+      // viewer reports that the abandoned document loaded successfully.
+      window.__resumeOldestStalledEngineRunUntilLoaded = () => {
+        const run = stalled.shift();
+        if (!run) return Promise.resolve(false);
+
+        return new Promise((resolve, reject) => {
+          const cleanup = () => {
+            run.viewer.removeListener("loaded", onLoaded);
+            run.viewer.removeListener("error", onError);
+          };
+          const onLoaded = () => {
+            cleanup();
+            resolve(true);
+          };
+          const onError = (payload) => {
+            cleanup();
+            reject(new Error(`Late isolated load failed: ${JSON.stringify(payload.content)}`));
+          };
+
+          run.viewer.addListener("loaded", onLoaded);
+          run.viewer.addListener("error", onError);
+          try {
+            nativeLoadDocument.apply(run.viewer, run.args);
+          } catch (error) {
+            cleanup();
+            reject(error);
+          }
+        });
       };
 
       // The same, but answering with a failure: `loadDocument` with no URL is
@@ -155,12 +210,16 @@
 
       const editorContainer = document.getElementById("editor");
       const previewContainer = document.getElementById("preview");
+      if (isolated) previewContainer.setAttribute("data-isolated", "");
       const printControl = document.getElementById("print");
       const refreshControl = document.getElementById("refresh");
       const autoRefreshControl = document.getElementById("auto-refresh");
       const statusContainer = document.getElementById("status");
       const downloadControl = document.getElementById("download");
       const loadControl = document.getElementById("load");
+      const paginateAdapter = isolated
+        ? (container, html) => paginate(container, html, { mode: "isolated" })
+        : paginate;
 
       // The real pagination and printing adapters, at the seam issue #1's
       // architecture built for substitution -- not substituted here. Both bounds
@@ -181,7 +240,7 @@
         },
         {
           editor: { create: createEditor },
-          preview: { paginate },
+          preview: { paginate: paginateAdapter },
           printing: { printBook },
           draft: { read: () => undefined, write: () => {}, flush: () => {}, destroy: () => {} },
           savedFile: { downloadBook, loadBookFile },

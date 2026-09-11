@@ -7,6 +7,8 @@ import { printBook } from "./adapters/printing";
 import { createDraftPersistence } from "./adapters/persistence";
 import { startApp } from "./app/start-app";
 
+const paginateIsolated: typeof paginate = (container, html) => paginate(container, html, { mode: "isolated" });
+
 const editorContainer = document.getElementById("editor");
 const previewContainer = document.getElementById("preview");
 const printControl = document.getElementById("print");
@@ -44,7 +46,7 @@ startApp(
   },
   {
     editor: { create: createEditor },
-    preview: { paginate },
+    preview: { paginate: paginateIsolated },
     printing: { printBook },
     draft: createDraftPersistence(),
     savedFile: { downloadBook, loadBookFile },

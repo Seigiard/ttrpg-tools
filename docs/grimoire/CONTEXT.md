@@ -8,8 +8,15 @@ RPG rulebook on the left and sees the paginated result on the right.
 The whole work an author is editing: one rulebook, from first page to last. A book
 declares its page size and its theme. It is the root of a document.
 
-Not to be confused with the **saved file**, which is what the author downloads. A saved
-file carries a book together with its theme.
+## Draft
+
+The current editable copy of a book. A draft may change continuously and is kept so the
+author can return to their unfinished work.
+
+## Saved file
+
+The portable copy an author downloads or opens. A saved file carries a book together
+with its theme.
 
 ## Draft
 
@@ -90,3 +97,8 @@ may change them.
 The right-hand side of the editor: the book already divided into pages, shown as it will
 be printed. The preview and the PDF are produced from the same marked-up book, so what
 the author sees is what is printed.
+
+## Preview refresh
+
+The operation that replaces the Preview with a newly paginated version of the current
+Book. "Refresh" is the author-facing term; avoid "repaint" for this operation.

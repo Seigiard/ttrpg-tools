@@ -88,6 +88,21 @@ export function startApp(elements: AppElements, adapters: AppAdapters): AppHandl
     status,
   });
 
+  let previewResizeObserver: ResizeObserver | undefined;
+  if (elements.previewContainer.hasAttribute("data-isolated")) {
+    let width = elements.previewContainer.clientWidth;
+    let height = elements.previewContainer.clientHeight;
+    previewResizeObserver = new ResizeObserver(() => {
+      const nextWidth = elements.previewContainer.clientWidth;
+      const nextHeight = elements.previewContainer.clientHeight;
+      if (nextWidth === width && nextHeight === height) return;
+      width = nextWidth;
+      height = nextHeight;
+      preview.sizeChanged();
+    });
+    previewResizeObserver.observe(elements.previewContainer);
+  }
+
   const onRefresh = (): void => preview.refreshRequested(editor.getSource());
   const onAutomaticRefreshChange = (): void =>
     preview.automaticRefreshChanged(elements.autoRefreshControl.checked, editor.getSource());
@@ -118,6 +133,7 @@ export function startApp(elements: AppElements, adapters: AppAdapters): AppHandl
       elements.printControl.removeEventListener("click", onPrint);
       elements.downloadControl.removeEventListener("click", onDownload);
       elements.loadControl.removeEventListener("change", onLoad);
+      previewResizeObserver?.disconnect();
 
       savedFile.destroy();
       printing.destroy();

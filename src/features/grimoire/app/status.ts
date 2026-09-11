@@ -1,29 +1,39 @@
 import type { OverflowingPage } from "../adapters/pagination";
-import { describePreviewError, describePrintError, type PreviewError } from "./preview-error";
+import {
+  describeBookPrintError,
+  describePreviewRefreshError,
+  describeSavedFileLoadError,
+  type BookPrintError,
+  type PreviewRefreshError,
+  type SavedFileLoadError,
+} from "./operation-error";
 
 export interface AppStatus {
-  previewFailed(error: PreviewError): void;
+  previewFailed(error: PreviewRefreshError): void;
   previewSucceeded(pages: readonly OverflowingPage[]): void;
-  printFailed(error: PreviewError): void;
+  printFailed(error: BookPrintError): void;
   printSucceeded(): void;
-  loadFailed(error: PreviewError): void;
+  loadFailed(error: SavedFileLoadError): void;
   draftSaveChanged(failed: boolean): void;
   bookReplaced(): void;
 }
 
 export function createStatus(container: HTMLElement): AppStatus {
-  let previewError: PreviewError | undefined;
-  let printError: PreviewError | undefined;
-  let loadError: PreviewError | undefined;
+  let previewError: PreviewRefreshError | undefined;
+  let printError: BookPrintError | undefined;
+  let loadError: SavedFileLoadError | undefined;
   let saveFailed = false;
   let overflowingPages: readonly OverflowingPage[] = [];
 
   const render = (): void => {
     const parts: string[] = [];
-    if (previewError !== undefined) parts.push(`Preview is out of date — ${describePreviewError(previewError)}`);
+    if (previewError !== undefined)
+      parts.push(`Preview is out of date — ${describePreviewRefreshError(previewError)}`);
     if (overflowingPages.length > 0) parts.push(describeOverflowingPages(overflowingPages));
-    if (printError !== undefined) parts.push(`Printing failed — ${describePrintError(printError)}`);
-    if (loadError !== undefined) parts.push(`Loading file failed — ${describePreviewError(loadError)}`);
+    if (printError !== undefined)
+      parts.push(`Printing failed — ${describeBookPrintError(printError)}`);
+    if (loadError !== undefined)
+      parts.push(`Loading file failed — ${describeSavedFileLoadError(loadError)}`);
     if (saveFailed) parts.push("This book is not being saved — download it before closing this page.");
     container.textContent = parts.join(" ");
     container.hidden = parts.length === 0;

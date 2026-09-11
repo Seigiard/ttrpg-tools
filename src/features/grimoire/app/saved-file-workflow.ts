@@ -1,8 +1,8 @@
 import type { downloadBook, loadBookFile } from "../adapters/file";
-import { toPreviewError, type PreviewError } from "./preview-error";
+import { toSavedFileLoadError, type SavedFileLoadError } from "./operation-error";
 
 export interface SavedFileStatus {
-  loadFailed(error: PreviewError): void;
+  loadFailed(error: SavedFileLoadError): void;
 }
 
 export interface SavedFileWorkflow {
@@ -37,14 +37,15 @@ export function createSavedFileWorkflow({
       if (!active) return;
       const token = ++loadToken;
 
-      void loadBookFile(file)
-        .then((source) => {
+      void loadBookFile(file).then(
+        (source) => {
           if (!active || token !== loadToken || !confirmReplacement()) return;
           replaceBook(source);
-        })
-        .catch((error: unknown) => {
-          if (active && token === loadToken) status.loadFailed(toPreviewError(error));
-        });
+        },
+        (error: unknown) => {
+          if (active && token === loadToken) status.loadFailed(toSavedFileLoadError(error));
+        },
+      );
     },
     destroy() {
       if (!active) return;

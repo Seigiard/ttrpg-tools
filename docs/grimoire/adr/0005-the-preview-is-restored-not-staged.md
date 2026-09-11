@@ -1,4 +1,8 @@
-# A failed repaint restores the preview rather than staging into a detached container
+# A failed Preview refresh restores the Preview rather than staging into a detached container
+
+Superseded for the production preview by ADR-0008. Pagination's default direct mode is
+still used by focused fixtures and retains this container-restoration path; isolation is
+selected explicitly in the adapter API rather than inferred from container markup.
 
 When the pagination engine fails, the author must keep seeing the last book that
 paginated successfully. Broken markup already behaves that way, because parsing throws
@@ -8,7 +12,7 @@ handed the document over.
 
 The attractive fix was to lay the next book out in a staging container held outside the
 document and swap it into the preview only once pagination resolved. That never empties
-the preview at all, so it would also remove the flash of empty space a slow repaint shows
+the Preview at all, so it would also remove the flash of empty space a slow refresh shows
 on the way to succeeding. We measured whether the engine can work that way, and it
 cannot.
 
@@ -89,7 +93,7 @@ then be writing into an element the preview never shows. That remains deferred.
 
 ## Consequences
 
-The failure case is fixed and the flash is not. A slow repaint still blanks the preview
+The failure case is fixed and the flash is not. A slow refresh still blanks the Preview
 while the engine works, so the author keeps the one signal they currently have that the
 editor is doing something. If the flash is ever removed, that signal has to arrive with
 it.
@@ -97,5 +101,5 @@ it.
 A staging container attached to the document but positioned out of sight does paginate
 correctly: the same three books produced 1, 2 and 19 pages there, page for page identical
 to the visible preview. That is the route to reopen if the flash becomes worth removing.
-It costs a second full copy of the book in the document for the duration of every repaint,
+It costs a second full copy of the book in the document for the duration of every refresh,
 which is why it was not taken on the strength of a flash alone.

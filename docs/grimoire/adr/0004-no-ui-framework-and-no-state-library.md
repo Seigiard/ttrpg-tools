@@ -13,22 +13,22 @@ preview markup are derived from it rather than stored. Outside those, the whole 
 the name of the selected theme, a flag for whether the preview refreshes by itself, and a
 draft written to the browser's local storage.
 
-One string and one flag do not need a state manager. The chain from an edit to a repainted
-preview is one workflow, called from the editor's own update listener.
+One string and one flag do not need a state manager. The chain from an edit to a refreshed
+Preview is one workflow, called from the editor's own update listener.
 
 ## Amendment: refresh scheduling
 
-The chain above is no longer quite one function: a repaint now waits for typing to pause,
-and a request made while one is already running is coalesced into whatever comes next
-rather than started alongside it, so the Preview workflow carries a debounce timer handle,
-an in-flight flag, and one pending source string. This is scheduling state, not model
-state: none of it is derived reactively from something else changing, none of it survives
-past the repaint it belongs to, and none of it is read from anywhere but the workflow that
-owns it. The editor session owns that workflow's lifetime together with its other timers
-and listeners. This is exactly the kind of wiring this ADR already anticipated writing by
-hand. A state library's one advantage here would still be automatic recomputation from a
-changing source, and nothing about scheduling a queue of one pending request calls for
-that.
+The chain above is no longer quite one function: a Preview refresh now waits for typing
+to pause, and a request made while one is already running is coalesced into whatever
+comes next rather than started alongside it, so the Preview workflow carries a debounce
+timer handle, an in-flight flag, and one pending source string. This is scheduling state,
+not model state: none of it is derived reactively from something else changing, none of
+it survives past the refresh it belongs to, and none of it is read from anywhere but the
+workflow that owns it. The editor session owns that workflow's lifetime together with its
+other timers and listeners. This is exactly the kind of wiring this ADR already
+anticipated writing by hand. A state library's one advantage here would still be automatic
+recomputation from a changing source, and nothing about scheduling a queue of one pending
+request calls for that.
 
 ## Considered options
 
@@ -55,10 +55,12 @@ markup into the page. Grimoire has no application backend, and the preview is co
 the browser from the editor's buffer rather than fetched. There is nothing for it to
 request.
 
-**A Result library.** The error surface is three closed cases: markup that does not parse,
-an unknown component tag, and an import that fails. A discriminated union covers that in
-a few lines, matched exhaustively where errors reach the interface. The `better-result`
-package is well maintained and would work; three cases simply do not need it.
+**A Result library.** Each author operation has its own small closed error surface:
+refreshing the Preview, printing the Book, and loading a saved file. Preview refresh and
+printing share the Book markup cases, while engine and file failures stay with the
+operation that can produce them. Discriminated unions cover these cases in a few lines
+and are matched exhaustively where errors reach the interface. The `better-result`
+package is well maintained and would work; these small unions do not need it.
 
 **An effect system.** Effect targets structured concurrency, resource lifetimes and typed
 error channels through asynchronous pipelines. This application has no backend, no

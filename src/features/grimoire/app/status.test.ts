@@ -8,7 +8,7 @@ describe("status", () => {
     const status = createStatus(container);
 
     status.previewFailed({ kind: "markup-error", message: "nested section", line: 3 });
-    status.printFailed({ kind: "pagination-failure", message: "printer unavailable" });
+    status.printFailed({ kind: "print-engine-failure", message: "printer unavailable" });
     status.draftSaveChanged(true);
     status.previewSucceeded([]);
 
@@ -24,7 +24,7 @@ describe("status", () => {
 
     status.previewSucceeded([{ line: 8, pages: 2 }]);
     status.previewFailed({ kind: "markup-error", message: "nested section", line: 3 });
-    status.printFailed({ kind: "pagination-failure", message: "printer unavailable" });
+    status.printFailed({ kind: "print-engine-failure", message: "printer unavailable" });
     status.loadFailed({ kind: "unreadable-file", message: "not a saved book" });
     status.draftSaveChanged(true);
     status.bookReplaced();

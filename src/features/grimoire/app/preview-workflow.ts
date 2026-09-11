@@ -1,11 +1,15 @@
 import type { OverflowingPage, paginate } from "../adapters/pagination";
 import { renderBook } from "../core/render-book";
-import { toPreviewError, type PreviewError } from "./preview-error";
+import {
+  toBookMarkupError,
+  toPreviewRefreshError,
+  type PreviewRefreshError,
+} from "./operation-error";
 
 const REFRESH_DEBOUNCE_MS = 400;
 
 export interface PreviewStatus {
-  previewFailed(error: PreviewError): void;
+  previewFailed(error: PreviewRefreshError): void;
   previewSucceeded(pages: readonly OverflowingPage[]): void;
 }
 
@@ -13,6 +17,7 @@ export interface PreviewWorkflow {
   sourceChanged(source: string): void;
   refreshRequested(source: string): void;
   automaticRefreshChanged(enabled: boolean, source: string): void;
+  sizeChanged(): void;
   destroy(): void;
 }
 
@@ -34,6 +39,8 @@ export function createPreviewWorkflow({
   let running = false;
   let pendingSource: string | undefined;
   let pendingAutomatic = false;
+  let resizePending = false;
+  let displayedSource: string | undefined;
   let debounceId: ReturnType<typeof setTimeout> | undefined;
 
   const clearScheduledRepaint = (): void => {
@@ -44,13 +51,22 @@ export function createPreviewWorkflow({
 
   const afterRun = (): void => {
     running = false;
-    if (!active || pendingSource === undefined) return;
-
-    const next = pendingSource;
-    const automatic = pendingAutomatic;
-    pendingSource = undefined;
-    pendingAutomatic = false;
-    if (!automatic || automaticRefreshEnabled) run(next);
+    if (!active) return;
+    if (pendingSource !== undefined) {
+      const next = pendingSource;
+      const automatic = pendingAutomatic;
+      pendingSource = undefined;
+      pendingAutomatic = false;
+      if (!automatic || automaticRefreshEnabled) {
+        resizePending = false;
+        run(next);
+        return;
+      }
+    }
+    if (resizePending && displayedSource !== undefined) {
+      resizePending = false;
+      run(displayedSource);
+    }
   };
 
   const run = (source: string): void => {
@@ -61,18 +77,22 @@ export function createPreviewWorkflow({
     try {
       html = renderBook({ source });
     } catch (error) {
-      status.previewFailed(toPreviewError(error));
-      afterRun();
+      try {
+        status.previewFailed(toBookMarkupError(error));
+      } finally {
+        afterRun();
+      }
       return;
     }
 
     void paginate(container, html)
       .then((result) => {
         if (!active) return;
+        displayedSource = source;
         status.previewSucceeded(result.overflowingPages);
       })
       .catch((error: unknown) => {
-        if (active) status.previewFailed(toPreviewError(error));
+        if (active) status.previewFailed(toPreviewRefreshError(error));
       })
       .finally(afterRun);
   };
@@ -117,12 +137,18 @@ export function createPreviewWorkflow({
         pendingAutomatic = false;
       }
     },
+    sizeChanged() {
+      if (!active || displayedSource === undefined) return;
+      if (running) resizePending = true;
+      else requestRepaint(displayedSource);
+    },
     destroy() {
       if (!active) return;
       active = false;
       clearScheduledRepaint();
       pendingSource = undefined;
       pendingAutomatic = false;
+      resizePending = false;
     },
   };
 }

@@ -314,20 +314,26 @@
       // does not reject over one.
       //
       // `renderedPages` is how many physical pages the engine actually left in the
-      // preview container, so a test can see that the book is still on screen
-      // while the overflow is reported rather than withheld over it. It is the
-      // engine's own per-page containers that are counted, never anything
-      // render-book.ts wrote.
-      window.__paginateAndReportOverflow = async (source) => {
+      // direct preview container or isolated preview document, so a test can see
+      // that the book is still on screen while the overflow is reported rather
+      // than withheld over it. It is the engine's own per-page containers that are
+      // counted, never anything render-book.ts wrote.
+      const paginateAndReportOverflow = async (source, options) => {
         const html = renderBook({ source });
         const container = document.getElementById("preview");
-        const { pageCount, overflowingPages } = await paginate(container, html);
+        const { pageCount, overflowingPages } = await paginate(container, html, options);
+        const renderedBook = options?.mode === "isolated"
+          ? container.querySelector("iframe[data-grimoire-preview-document]")?.contentDocument
+          : container;
         return {
           pageCount,
           overflowingPages,
-          renderedPages: container.querySelectorAll("[data-vivliostyle-page-index]").length,
+          renderedPages: renderedBook?.querySelectorAll("[data-vivliostyle-page-index]").length ?? 0,
         };
       };
+      window.__paginateAndReportOverflow = paginateAndReportOverflow;
+      window.__paginateAndReportIsolatedOverflow = (source) =>
+        paginateAndReportOverflow(source, { mode: "isolated" });
     </script>
   </body>
 </html>
