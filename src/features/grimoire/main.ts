@@ -4,7 +4,7 @@ import { createEditor } from "./adapters/editor";
 import { downloadBook, loadBookFile } from "./adapters/file";
 import { paginate } from "./adapters/pagination";
 import { printBook } from "./adapters/printing";
-import { readDraft, createDebouncedPersist } from "./adapters/persistence";
+import { createDraftPersistence } from "./adapters/persistence";
 import { startApp } from "./app/start-app";
 
 const editorContainer = document.getElementById("editor");
@@ -42,10 +42,11 @@ startApp(
     downloadControl,
     loadControl,
   },
-  createEditor,
-  paginate,
-  printBook,
-  { read: readDraft, write: createDebouncedPersist() },
-  downloadBook,
-  loadBookFile,
+  {
+    editor: { create: createEditor },
+    preview: { paginate },
+    printing: { printBook },
+    draft: createDraftPersistence(),
+    savedFile: { downloadBook, loadBookFile },
+  },
 );

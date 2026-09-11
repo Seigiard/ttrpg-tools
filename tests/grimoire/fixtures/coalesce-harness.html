@@ -20,8 +20,7 @@
       import { printBook } from "/src/features/grimoire/adapters/printing.ts";
 
       // A stand-in for the real pagination adapter, substituted at the exact seam
-      // issue #1's architecture designed for this (the three adapters are passed
-      // in as plain arguments). It still does real, observable DOM work -- the
+      // issue #1's architecture designed for this. It still does real, observable DOM work -- the
       // container's final content is what the test reads -- but the test controls
       // when a slow run finishes instead of depending on real layout timing,
       // which is what proving issue #6's coalescing defect needs: a controllable
@@ -52,7 +51,7 @@
       const downloadControl = document.getElementById("download");
       const loadControl = document.getElementById("load");
 
-      const editor = startApp(
+      const app = startApp(
         {
           editorContainer,
           previewContainer,
@@ -63,15 +62,16 @@
           downloadControl,
           loadControl,
         },
-        createEditor,
-        fakePaginate,
-        printBook,
-        { read: () => undefined, write: () => {} },
-        downloadBook,
-        loadBookFile,
+        {
+          editor: { create: createEditor },
+          preview: { paginate: fakePaginate },
+          printing: { printBook },
+          draft: { read: () => undefined, write: () => {}, flush: () => {}, destroy: () => {} },
+          savedFile: { downloadBook, loadBookFile },
+        },
       );
 
-      window.__editor = editor;
+      window.__editor = app.editor;
     </script>
   </body>
 </html>

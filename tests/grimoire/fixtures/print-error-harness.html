@@ -33,7 +33,7 @@
       // Vivliostyle print-engine failure. Forcing the real engine to fail has no
       // oracle independent of the engine itself (the same reasoning issue #2's
       // review left as advisory for pagination's own reject path), so this
-      // seam -- the print adapter is a plain argument, exactly as issue #1's
+      // seam -- the print adapter is explicit, exactly as issue #1's
       // architecture designed for substitution -- is what makes the print
       // button's own error handling provable at all.
       const failingPrint = () => Promise.reject(new Error("Vivliostyle failed to prepare the book for printing: boom"));
@@ -47,7 +47,7 @@
       const downloadControl = document.getElementById("download");
       const loadControl = document.getElementById("load");
 
-      const editor = startApp(
+      const app = startApp(
         {
           editorContainer,
           previewContainer,
@@ -58,15 +58,16 @@
           downloadControl,
           loadControl,
         },
-        createEditor,
-        fakePaginate,
-        failingPrint,
-        { read: () => undefined, write: () => {} },
-        downloadBook,
-        loadBookFile,
+        {
+          editor: { create: createEditor },
+          preview: { paginate: fakePaginate },
+          printing: { printBook: failingPrint },
+          draft: { read: () => undefined, write: () => {}, flush: () => {}, destroy: () => {} },
+          savedFile: { downloadBook, loadBookFile },
+        },
       );
 
-      window.__editor = editor;
+      window.__editor = app.editor;
     </script>
   </body>
 </html>

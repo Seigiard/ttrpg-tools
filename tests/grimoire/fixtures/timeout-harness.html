@@ -168,7 +168,7 @@
       // above them can release printing's module-level single-flight guard, and
       // nothing above them knows what the preview held before the engine emptied
       // it. So these tests drive the real ones.
-      const editor = startApp(
+      const app = startApp(
         {
           editorContainer,
           previewContainer,
@@ -179,15 +179,16 @@
           downloadControl,
           loadControl,
         },
-        createEditor,
-        paginate,
-        printBook,
-        { read: () => undefined, write: () => {} },
-        downloadBook,
-        loadBookFile,
+        {
+          editor: { create: createEditor },
+          preview: { paginate },
+          printing: { printBook },
+          draft: { read: () => undefined, write: () => {}, flush: () => {}, destroy: () => {} },
+          savedFile: { downloadBook, loadBookFile },
+        },
       );
 
-      window.__editor = editor;
+      window.__editor = app.editor;
     </script>
   </body>
 </html>
