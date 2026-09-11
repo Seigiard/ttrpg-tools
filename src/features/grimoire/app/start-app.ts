@@ -1,20 +1,15 @@
 import { renderBook } from "../core/render-book";
 import type { createEditor, EditorHandle } from "../adapters/editor";
 import type { downloadBook, loadBookFile } from "../adapters/file";
-import type { OverflowingPage, paginate } from "../adapters/pagination";
+import type { paginate } from "../adapters/pagination";
 import type { printBook } from "../adapters/printing";
 import {
-  describeBookPrintError,
-  describePreviewRefreshError,
-  describeSavedFileLoadError,
   toBookMarkupError,
   toBookPrintError,
   toPreviewRefreshError,
   toSavedFileLoadError,
-  type BookPrintError,
-  type PreviewRefreshError,
-  type SavedFileLoadError,
 } from "./operation-error";
+import { createStatus } from "./status";
 
 const INITIAL_SOURCE = [
   '<Book theme="default-ru">',
@@ -118,68 +113,7 @@ export function startApp(
     loadControl,
   } = elements;
 
-  // The preview's staleness, a print failure, a failed file load and an
-  // overflowing page are four independent things an author can be told about at
-  // once (issue #6's third handed-over defect: a shared status sink let a refresh
-  // that succeeded silently erase a print error nobody had acknowledged yet).
-  // Each is tracked and rendered on its own, so clearing one never touches the
-  // others.
-  //
-  // An overflowing page is not a `PreviewRefreshError` and is deliberately held
-  // as its own thing rather than folded into `previewError` (issue #23): that
-  // union is the closed set of ways to fail to produce a book, and an overflowing page
-  // means a book *was* produced -- it just no longer matches what its author
-  // declared. Folding it in would also make the two erase each other, since the
-  // refresh that reports an overflow is the same refresh that clears the Preview
-  // error.
-  let previewError: PreviewRefreshError | undefined;
-  let printError: BookPrintError | undefined;
-  let loadError: SavedFileLoadError | undefined;
-  let saveFailed = false;
-  let overflowingPages: readonly OverflowingPage[] = [];
-
-  const renderStatus = (): void => {
-    const parts: string[] = [];
-    if (previewError !== undefined)
-      parts.push(`Preview is out of date — ${describePreviewRefreshError(previewError)}`);
-    if (overflowingPages.length > 0) parts.push(describeOverflowingPages(overflowingPages));
-    if (printError !== undefined)
-      parts.push(`Printing failed — ${describeBookPrintError(printError)}`);
-    if (loadError !== undefined)
-      parts.push(`Loading file failed — ${describeSavedFileLoadError(loadError)}`);
-    if (saveFailed) parts.push("This book is not being saved — download it before closing this page.");
-    statusContainer.textContent = parts.join(" ");
-    statusContainer.hidden = parts.length === 0;
-  };
-
-  const setPreviewStatus = (error: PreviewRefreshError | undefined): void => {
-    previewError = error;
-    renderStatus();
-  };
-
-  const setPrintStatus = (error: BookPrintError | undefined): void => {
-    printError = error;
-    renderStatus();
-  };
-
-  const setLoadStatus = (error: SavedFileLoadError | undefined): void => {
-    loadError = error;
-    renderStatus();
-  };
-
-  const setSaveStatus = (failed: boolean): void => {
-    saveFailed = failed;
-    renderStatus();
-  };
-
-  // Replaced wholesale by every refresh that produced a Book, never added to, so
-  // a page the author has since cut down stops being reported the moment it fits
-  // again -- a report that only ever accumulated would pass for correct until the
-  // first time an author fixed something.
-  const setPageOverflowStatus = (pages: readonly OverflowingPage[]): void => {
-    overflowingPages = pages;
-    renderStatus();
-  };
+  const status = createStatus(statusContainer);
 
   let running = false;
   let pendingSource: string | undefined;
@@ -220,7 +154,7 @@ export function startApp(
       // Thrown before the pagination adapter is ever called, so the container --
       // and whatever it last showed -- is never touched.
       try {
-        setPreviewStatus(toBookMarkupError(error));
+        status.previewFailed(toBookMarkupError(error));
       } finally {
         // An unexpected core exception is rethrown, but must not leave the
         // refresh scheduler permanently claiming that a run is still active.
@@ -231,8 +165,7 @@ export function startApp(
     void paginateAdapter(previewContainer, html)
       .then((result) => {
         displayedSource = source;
-        setPreviewStatus(undefined);
-        setPageOverflowStatus(result.overflowingPages);
+        status.previewSucceeded(result.overflowingPages);
       })
       // A refresh that failed leaves the production Preview showing the last
       // book that paginated (ADR-0008); direct adapter fixtures provide the same
@@ -240,7 +173,7 @@ export function startApp(
       // against that book is still true of what the author is looking at and is
       // left alone. Only a refresh that produced a book has anything to say
       // about which of its pages fit.
-      .catch((error: unknown) => setPreviewStatus(toPreviewRefreshError(error)))
+      .catch((error: unknown) => status.previewFailed(toPreviewRefreshError(error)))
       .finally(afterRun);
   }
 
@@ -275,7 +208,10 @@ export function startApp(
   // source above is intentionally different state: it can lag behind this draft
   // while auto-refresh is off (ADR-0004, ADR-0008).
   const onChange = (source: string): void => {
-    persistenceAdapter.write(source, (error) => setSaveStatus(error !== undefined));
+    persistenceAdapter.write(source, (error) => {
+      if (error === undefined) status.saveSucceeded();
+      else status.saveFailed();
+    });
     if (autoRefreshControl.checked) {
       scheduleRefresh(source);
     }
@@ -331,15 +267,15 @@ export function startApp(
     try {
       html = renderBook({ source: editor.getSource() });
     } catch (error) {
-      if (token === printToken) setPrintStatus(toBookMarkupError(error));
+      if (token === printToken) status.printFailed(toBookMarkupError(error));
       return;
     }
     printBookAdapter(html)
       .then(() => {
-        if (token === printToken) setPrintStatus(undefined);
+        if (token === printToken) status.clearPrint();
       })
       .catch((error: unknown) => {
-        if (token === printToken) setPrintStatus(toBookPrintError(error));
+        if (token === printToken) status.printFailed(toBookPrintError(error));
       });
   });
 
@@ -371,6 +307,8 @@ export function startApp(
       (source) => {
         if (token !== loadToken) return; // superseded by a later selection
 
+        status.savedFileValidated();
+
         // Asked only now that the file is known to be a genuine book: an author
         // who picks the wrong file entirely is told so without first being asked
         // whether to discard their current work over it.
@@ -387,12 +325,11 @@ export function startApp(
         requestRefresh(source);
         // Both belonged to the book this load just replaced.
         printToken += 1;
-        setPrintStatus(undefined);
-        setLoadStatus(undefined);
+        status.clearPrint();
       },
       (error: unknown) => {
         if (token !== loadToken) return; // superseded by a later selection
-        setLoadStatus(toSavedFileLoadError(error));
+        status.loadFailed(toSavedFileLoadError(error));
       },
     );
   });
@@ -400,20 +337,4 @@ export function startApp(
   requestRefresh(initialSource);
 
   return editor;
-}
-
-/**
- * What an author reads when a page took more than the one physical page it claims
- * (issue #23). Names the line the page was declared on, so the author can go
- * straight to it, and how many pages it actually took, so they know how much there
- * is to cut. Every overflowing page in the book is named: a book with two character
- * sheets that both spilled has two problems, not one.
- *
- * Worded here rather than in `operation-error.ts` because this is not one of that
- * file's error cases and must not become one -- the book paginated.
- */
-function describeOverflowingPages(pages: readonly OverflowingPage[]): string {
-  const heading = pages.length === 1 ? "A page did not fit" : "Some pages did not fit";
-  const detail = pages.map((page) => `line ${page.line} took ${page.pages} pages`).join("; ");
-  return `${heading} — ${detail}.`;
 }
