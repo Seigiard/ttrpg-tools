@@ -27,8 +27,8 @@ interface SavedBookFile {
 
 /** Thrown by `loadBookFile` for anything that isn't a Grimoire Press save --
  * unparsable JSON, valid JSON of the wrong shape, or a missing/mismatched
- * `format` marker. Classified into `PreviewError`'s `unreadable-file` case by
- * `app/preview-error.ts`, never surfaced to the author as a raw exception. */
+ * `format` marker. Classified into `SavedFileLoadError`'s `unreadable-file` case
+ * by `app/operation-error.ts`, never surfaced to the author as a raw exception. */
 export class UnreadableBookFileError extends Error {
   constructor(message: string) {
     super(message);

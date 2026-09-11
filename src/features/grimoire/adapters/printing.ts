@@ -6,7 +6,7 @@ import { EngineTimeoutError } from "./engine-timeout";
 // More generous than pagination's bound for two reasons: printing lays the whole
 // book out again from scratch, and the author is deliberately standing by for the
 // dialogue, so cutting a long book off early costs them the print they asked for
-// rather than a preview that will repaint again on the next keystroke anyway.
+// rather than a Preview that will refresh again on the next keystroke anyway.
 export const PRINT_TIMEOUT_SECONDS = 60;
 
 /**
