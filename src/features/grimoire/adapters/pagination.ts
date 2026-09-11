@@ -13,7 +13,7 @@ export const PAGINATION_TIMEOUT_SECONDS = 30;
  * content actually took. Never fewer than two -- a page that fits is not reported
  * at all.
  *
- * Not an error, and deliberately not one of the app's `PreviewError` cases: that
+ * Not an error, and deliberately not one of the app's `PreviewRefreshError` cases: that
  * union is the closed set of ways to fail to produce a book, and a book that
  * overflows was produced. It is only a book that no longer matches what its author
  * declared, which is something to tell them about while still showing it.
@@ -79,7 +79,7 @@ export function paginate(container: HTMLElement, html: string): Promise<Paginati
     //
     // Laying the next book out in a detached staging container and swapping it in on
     // success would keep the preview intact without any of this, and would remove the
-    // empty flash of a slow repaint too -- but the engine cannot fragment a book it
+    // empty flash of a slow refresh too -- but the engine cannot fragment a book it
     // cannot measure, and a detached container collapses every page onto one. See
     // ADR-0005.
     const lastGoodRender = Array.from(container.childNodes);
@@ -173,7 +173,7 @@ export function paginate(container: HTMLElement, html: string): Promise<Paginati
       // so a stale render from the previous call must be cleared first: CoreViewer
       // appends to the viewport element rather than replacing prior output.
       container.replaceChildren();
-      // autoResize would leak a window listener per repaint. Book scripts are also
+      // autoResize would leak a window listener per refresh. Book scripts are also
       // disabled: raw HTML and CSS remain supported, but an imported document cannot
       // execute code in the shared ttrpg-tools origin.
       viewer = new CoreViewer({ viewportElement: container }, { autoResize: false, allowScripts: false });

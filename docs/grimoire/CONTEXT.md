@@ -80,3 +80,8 @@ may change them.
 The right-hand side of the editor: the book already divided into pages, shown as it will
 be printed. The preview and the PDF are produced from the same marked-up book, so what
 the author sees is what is printed.
+
+## Preview refresh
+
+The operation that replaces the Preview with a newly paginated version of the current
+Book. "Refresh" is the author-facing term; avoid "repaint" for this operation.
