@@ -20,6 +20,12 @@ jobs:
       - name: Install
         run: bun install --frozen-lockfile
 
+      - name: Install Chromium
+        run: bunx playwright install --with-deps chromium
+
+      - name: Install Poppler
+        run: sudo apt-get update && sudo apt-get install -y poppler-utils
+
       - name: Lint
         run: bun run lint
 
@@ -29,8 +35,14 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
-      - name: Test
+      - name: Unit tests
         run: bun test
+
+      - name: Chromium end-to-end tests
+        run: bun run test:e2e
 
       - name: Build
         run: bun run build
+
+      - name: Printed PDF check
+        run: bun run check:pdf
