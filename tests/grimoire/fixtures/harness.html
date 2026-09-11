@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>pagination test harness</title>
+  </head>
+  <body>
+    <div id="preview"></div>
+    <script type="module">
+      import { renderBook } from "/src/features/grimoire/core/render-book.ts";
+      import { paginate } from "/src/features/grimoire/adapters/pagination.ts";
+      import { printBook } from "/src/features/grimoire/adapters/printing.ts";
+      import { defaultRuTheme } from "/src/features/grimoire/core/themes/default-ru/theme.ts";
+
+      // Issue #6's print seam: two print requests made back-to-back, with no
+      // await between them, so the second lands while the first is still in
+      // flight -- exactly the rapid-double-click case that used to repoint
+      // Vivliostyle's single shared print instance. Returns whether both calls
+      // returned the very same promise, which they do if and only if the second
+      // call joined the first instead of starting an independent one.
+      window.__printTwiceSharesOneAttempt = (source) => {
+        const html = renderBook({ source });
+        const first = printBook(html);
+        const second = printBook(html);
+        return first === second;
+      };
+
+      // Issue #6 review finding: the module-level `inFlight` guard that makes the
+      // above possible must also be cleared once an attempt settles, or every
+      // print after the very first one in a session would keep returning that
+      // first (already-settled) promise -- no fresh dialog would ever open again.
+      // Awaiting the first call in full, then making a second, is what proves the
+      // guard was actually released rather than merely set once.
+      window.__printSequentiallyStartsFreshAttempts = async (source) => {
+        const html = renderBook({ source });
+        const first = printBook(html);
+        await first;
+        const second = printBook(html);
+        return first !== second;
+      };
+
+      // Exposes the exact core+adapter seam issue #2 asks the test to exercise:
+      // a book's source in, a real-engine page count out. Nothing here asserts
+      // anything about markup shape or about Vivliostyle's own correctness.
+      window.__paginateBook = async (source) => {
+        const html = renderBook({ source });
+        const container = document.getElementById("preview");
+        const { pageCount } = await paginate(container, html);
+        return pageCount;
+      };
+
+      // Issue #11's seam: `paginate` is all-or-nothing about the container it is
+      // given, so a failed run has to be watched at the container itself.
+      //
+      // Forcing a genuine engine failure has no document-level trigger: an empty
+      // string, plain text, a missing stylesheet link, a missing `@import`, a missing
+      // image, unclosed XHTML, a nonsense `@page size` and a broken `@media` query
+      // were all tried during this ticket and Vivliostyle paginated every one of them
+      // into a page without complaint. The failure is forced one level down instead,
+      // where the engine actually reads: the adapter loads the book from a blob URL
+      // (it is a string built in memory, not a resource that lives anywhere), so
+      // handing it a blob URL that resolves to nothing makes Vivliostyle's own 'error'
+      // event fire on a load it genuinely could not complete -- the real engine, its
+      // real failure path, not a stub standing in for it. Patching a native browser
+      // API from the test is what preview.e2e.ts already does to
+      // `Element.prototype.replaceChildren` and persistence.e2e.ts to
+      // `Storage.prototype.setItem`.
+      // The engine writes bookkeeping onto the container as well as into it, so
+      // "the container ends up exactly as it was" is only checkable by reading both.
+      // innerHTML alone cannot see an attribute on the container itself.
+      const readAttributes = (element) =>
+        [...element.attributes].map((a) => `${a.name}=${a.value}`).sort().join("\n");
+
+      const renderWithExtraThemeCss = (source, extraThemeCss) => {
+        const html = renderBook({ source });
+        if (extraThemeCss === undefined) return html;
+
+        const themeStart = html.indexOf(defaultRuTheme.css);
+        if (themeStart === -1) throw new Error("the rendered book does not contain the default-ru Theme");
+        const themeEnd = themeStart + defaultRuTheme.css.length;
+        return `${html.slice(0, themeEnd)}\n${extraThemeCss}${html.slice(themeEnd)}`;
+      };
+
+      const withUnloadableDocument = async (run) => {
+        const native = URL.createObjectURL;
+        URL.createObjectURL = () => `blob:${location.origin}/a-blob-url-that-resolves-to-nothing`;
+        try {
+          return await run();
+        } finally {
+          URL.createObjectURL = native;
+        }
+      };
+
+      // Real Vivliostyle lays a real book out into the container first, so what the
+      // failed run has to preserve is an actual paginated book rather than a stand-in
+      // the test put there itself.
+      window.__previewAfterEngineFailure = async (goodSource, nextSource) => {
+        const container = document.getElementById("preview");
+        container.replaceChildren();
+        await paginate(container, renderBook({ source: goodSource }));
+        const before = container.innerHTML;
+        const attributesBefore = readAttributes(container);
+
+        let rejection;
+        await withUnloadableDocument(async () => {
+          try {
+            await paginate(container, renderBook({ source: nextSource }));
+          } catch (error) {
+            rejection = error.message;
+          }
+        });
+
+        // Layout the engine had already scheduled before it gave up would land after
+        // the restore, not before it, so a version that puts the book back and is
+        // then clobbered a moment later has to be given the chance to show itself.
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        return { rejection, before, after: container.innerHTML, attributesBefore, attributesAfter: readAttributes(container) };
+      };
+
+      // The very first repaint of a session failing: there is no last good render to
+      // keep, so the container must simply end up empty rather than throwing over
+      // having nothing to restore.
+      window.__previewAfterFirstEverEngineFailure = async (source) => {
+        const container = document.getElementById("preview");
+        container.replaceChildren();
+
+        let rejection;
+        await withUnloadableDocument(async () => {
+          try {
+            await paginate(container, renderBook({ source }));
+          } catch (error) {
+            rejection = error.message;
+          }
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        return { rejection, after: container.innerHTML, attributesAfter: readAttributes(container) };
+      };
+
+      // Issue #3's seam: a book's source in, each rendered element's real on-page
+      // position and page index out (keyed by the source line render-book.ts tagged
+      // it with), plus the page count and each page's real rendered size. Tests read
+      // these to assert column placement and forced breaks through actual
+      // Vivliostyle layout, never by comparing against an expected markup string.
+      window.__paginateAndInspect = async (source, extraThemeCss) => {
+        const html = renderWithExtraThemeCss(source, extraThemeCss);
+        const container = document.getElementById("preview");
+        const { pageCount, pageSizes } = await paginate(container, html);
+
+        // Vivliostyle pre-renders every page's content into the container, hiding
+        // the pages not currently shown; those hidden copies report empty client
+        // rects, so x/y is read from the one visible occurrence of each source
+        // line. Page identity has no such visibility gap: `closest` finds the
+        // nearest ancestor Vivliostyle marks with the page it belongs to (an
+        // internal attribute, not public API, but the only way to ask "which page
+        // is this on" without reimplementing Vivliostyle's own pagination) even
+        // while that page is hidden, so a forced page break is provable directly --
+        // the paragraph after it lands on a later page index -- not inferred from
+        // a page count that only shows a break happened somewhere.
+        const positions = {};
+        for (const el of container.querySelectorAll("[data-line]")) {
+          const line = el.getAttribute("data-line");
+          if (!(line in positions)) {
+            const pageEl = el.closest("[data-vivliostyle-page-index]");
+            const pageIndex = pageEl ? Number(pageEl.getAttribute("data-vivliostyle-page-index")) : null;
+            positions[line] = { pageIndex };
+          }
+
+          if (positions[line].x === undefined) {
+            const rects = el.getClientRects();
+            if (rects.length > 0) {
+              positions[line].x = rects[0].x;
+              positions[line].y = rects[0].y;
+            }
+          }
+        }
+
+        return { pageCount, pageSizes, positions };
+      };
+
+      // Issue #5's seam: a book's source in, each real page's running-header
+      // text and page-number text out, read from the actual margin-box
+      // elements Vivliostyle renders per page (`data-vivliostyle-page-margin-box`,
+      // an internal attribute, not public API, but the only way to read what a
+      // margin box actually resolved to without reimplementing Vivliostyle's own
+      // string-set/counter resolution). Unlike the `[data-line]` content nodes
+      // `__paginateAndInspect` reads, Vivliostyle gives each page exactly one
+      // `[data-vivliostyle-page-index]` ancestor, so no de-duplication is needed
+      // here.
+      window.__paginateAndInspectHeaders = async (source, extraThemeCss) => {
+        const html = renderWithExtraThemeCss(source, extraThemeCss);
+        const container = document.getElementById("preview");
+        await paginate(container, html);
+
+        const pages = [];
+        for (const pageEl of container.querySelectorAll("[data-vivliostyle-page-index]")) {
+          const pageIndex = Number(pageEl.getAttribute("data-vivliostyle-page-index"));
+          const header = pageEl.querySelector('[data-vivliostyle-page-margin-box="top-center"]');
+          const pageNumber = pageEl.querySelector('[data-vivliostyle-page-margin-box="bottom-center"]');
+          pages.push({
+            pageIndex,
+            header: header ? header.textContent.trim() : undefined,
+            pageNumber: pageNumber ? pageNumber.textContent.trim() : undefined,
+          });
+        }
+        pages.sort((a, b) => a.pageIndex - b.pageIndex);
+        return pages;
+      };
+
+      // Issue #5's own theme claim: the running header and page number are
+      // theme-owned typography (see default-ru/theme.ts's MARGIN_BOX_CSS), the
+      // same claim issue #4's __inspectFonts below already proves for headings
+      // and body text. That helper reads a plain srcdoc iframe because font
+      // cascade for ordinary elements needs no real layout; a margin box only
+      // exists once Vivliostyle has actually paginated the document (it is not
+      // present in render-book.ts's own markup), so this reads computed style
+      // directly off the real per-page margin-box elements the pagination
+      // container above produces, in the same document -- no iframe needed,
+      // since the container already lives in this page.
+      window.__inspectMarginBoxFonts = async (source) => {
+        const html = renderBook({ source });
+        const container = document.getElementById("preview");
+        await paginate(container, html);
+
+        const topCenter = container.querySelector('[data-vivliostyle-page-margin-box="top-center"]');
+        const bottomCenter = container.querySelector('[data-vivliostyle-page-margin-box="bottom-center"]');
+        return {
+          topCenter: topCenter ? getComputedStyle(topCenter).fontFamily : undefined,
+          bottomCenter: bottomCenter ? getComputedStyle(bottomCenter).fontFamily : undefined,
+        };
+      };
+
+      // Issue #4's seam: a book's source in, real computed `font-family` values
+      // out, keyed by CSS selector. Loaded into an iframe (not the pagination
+      // container above) because font resolution and cascade order are a plain
+      // CSS/DOM concern, independent of Vivliostyle -- the iframe just needs a
+      // real browser to parse render-book.ts's exact `<style>` output and
+      // resolve the cascade, which is the actual thing under test.
+      window.__inspectFonts = async (source, selectors) => {
+        const html = renderBook({ source });
+        const iframe = document.createElement("iframe");
+        iframe.style.display = "none";
+        document.body.appendChild(iframe);
+        await new Promise((resolve) => {
+          iframe.onload = resolve;
+          iframe.srcdoc = html;
+        });
+        const doc = iframe.contentDocument;
+        const result = {};
+        for (const selector of selectors) {
+          const el = doc.querySelector(selector);
+          result[selector] = el ? iframe.contentWindow.getComputedStyle(el).fontFamily : undefined;
+        }
+        iframe.remove();
+        return result;
+      };
+
+      // Issue #20's seam: a book's source in, real geometry out, measured against
+      // the page each element actually landed on rather than against the preview
+      // pane. A page's whole claim is that it is a frame of reference, so a
+      // coordinate only means something once it is expressed relative to its own
+      // page -- and `__paginateAndInspect` above reports viewport coordinates,
+      // in which every page sits somewhere different.
+      //
+      // Vivliostyle lays out every page but shows only the one being viewed,
+      // hiding the rest behind `display: none` on their page container; a hidden
+      // page's elements report empty client rects, so without this a book of more
+      // than one page could only ever be measured on its first. Showing them again
+      // reads back geometry the engine has already computed -- it asks the engine
+      // for nothing new and changes nothing about how the book was laid out.
+      //
+      // Keyed by the `data-line` render-book.ts tags every rendered block with, and
+      // by `data-probe`, which a test's own book source puts on an element it wants
+      // to find again -- raw HTML an author may write by ADR-0006, and the only way
+      // to ask where a positioned box the author placed actually landed.
+      window.__paginateAndMeasure = async (source) => {
+        const html = renderBook({ source });
+        const container = document.getElementById("preview");
+        const { pageCount } = await paginate(container, html);
+
+        for (const pageContainer of container.querySelectorAll("[data-vivliostyle-page-container]")) {
+          pageContainer.style.display = "block";
+        }
+
+        const boxes = {};
+        // A block that spills across a page boundary is rendered once per page it
+        // occupies; the first is where it starts, which is the one a break point or
+        // an offset is about.
+        const record = (key, el) => {
+          if (key in boxes) return;
+          const rects = el.getClientRects();
+          const pageEl = el.closest("[data-vivliostyle-page-index]");
+          if (rects.length === 0 || pageEl === null) return;
+          const page = pageEl.getBoundingClientRect();
+          boxes[key] = {
+            pageIndex: Number(pageEl.getAttribute("data-vivliostyle-page-index")),
+            x: rects[0].x - page.x,
+            y: rects[0].y - page.y,
+            height: rects[0].height,
+            // The whole sheet, margins included. A box anchored to the foot of the
+            // page area is only measurable against this.
+            pageHeight: page.height,
+          };
+        };
+        for (const el of container.querySelectorAll("[data-line]")) record(`line-${el.getAttribute("data-line")}`, el);
+        for (const el of container.querySelectorAll("[data-probe]")) record(`probe-${el.getAttribute("data-probe")}`, el);
+
+        return { pageCount, boxes };
+      };
+
+      // Issue #23's seam: a book's source in, the pagination adapter's own report
+      // of which pages did not fit out -- beside the page count it already
+      // returns, because an overflowing page is not a failure and the adapter
+      // does not reject over one.
+      //
+      // `renderedPages` is how many physical pages the engine actually left in the
+      // preview container, so a test can see that the book is still on screen
+      // while the overflow is reported rather than withheld over it. It is the
+      // engine's own per-page containers that are counted, never anything
+      // render-book.ts wrote.
+      window.__paginateAndReportOverflow = async (source) => {
+        const html = renderBook({ source });
+        const container = document.getElementById("preview");
+        const { pageCount, overflowingPages } = await paginate(container, html);
+        return {
+          pageCount,
+          overflowingPages,
+          renderedPages: container.querySelectorAll("[data-vivliostyle-page-index]").length,
+        };
+      };
+    </script>
+  </body>
+</html>
