@@ -1,6 +1,13 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 const HARNESS = "/tests/grimoire/fixtures/persistence-harness.html";
+
+async function moveBeforeBookClose(page: Page): Promise<void> {
+  await page.locator(".cm-editor").click();
+  await page.keyboard.press("ControlOrMeta+End");
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("Home");
+}
 
 /**
  * The oracle for every test here is the browser's own storage, observed through the
@@ -16,8 +23,7 @@ test.describe("persistence", () => {
 
   test("a draft written before the tab closes comes back when it reopens", async ({ page }) => {
     // #when: the author writes, then the tab is closed and reopened
-    await page.locator(".cm-editor").click();
-    await page.keyboard.press("ControlOrMeta+End");
+    await moveBeforeBookClose(page);
     await page.keyboard.type("\n\nThe referee rolls two dice.\n");
 
     await expect
@@ -36,8 +42,7 @@ test.describe("persistence", () => {
 
   test("closing the tab straight after typing does not lose the last edits", async ({ page }) => {
     // #given: the author writes and closes the tab before the debounce has elapsed
-    await page.locator(".cm-editor").click();
-    await page.keyboard.press("ControlOrMeta+End");
+    await moveBeforeBookClose(page);
     await page.keyboard.type("\n\nDamage is dealt before movement.\n");
 
     // #when: the page goes away immediately, with no pause to let the timer fire
@@ -77,9 +82,8 @@ test.describe("persistence", () => {
 
     // #when: the author types a run of characters with no pause between them
     const burst = "Roll under your ability score to succeed.";
-    await page.locator(".cm-editor").click();
-    await page.keyboard.press("ControlOrMeta+End");
-    await page.keyboard.type(burst, { delay: 0 });
+    await moveBeforeBookClose(page);
+    await page.keyboard.type(`${burst}\n`, { delay: 0 });
 
     await expect
       .poll(() => page.evaluate(() => localStorage.getItem("grimoire:draft")))
@@ -99,8 +103,7 @@ test.describe("persistence", () => {
       };
     });
 
-    await page.locator(".cm-editor").click();
-    await page.keyboard.press("ControlOrMeta+End");
+    await moveBeforeBookClose(page);
     await page.keyboard.type("\n\nThis edit cannot be persisted.\n");
 
     await expect.poll(() => page.locator("#status").textContent()).toContain("This book is not being saved");

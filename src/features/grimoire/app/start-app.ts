@@ -5,7 +5,14 @@ import type { OverflowingPage, paginate } from "../adapters/pagination";
 import type { printBook } from "../adapters/printing";
 import { describePreviewError, describePrintError, toPreviewError, type PreviewError } from "./preview-error";
 
-const INITIAL_SOURCE = "# Untitled book\n\nStart writing your book here.\n";
+const INITIAL_SOURCE = [
+  '<Book theme="default-ru">',
+  "# Untitled book",
+  "",
+  "Start writing your book here.",
+  "</Book>",
+  "",
+].join("\n");
 
 // How long the preview waits after the last keystroke before it repaints. Long
 // enough that a normal typing cadence never triggers a repaint mid-word, short

@@ -194,7 +194,9 @@ test.describe("preview refresh and error surface", () => {
     const burst = "A burst of characters typed with no pause between them at all.";
     await page.locator(".cm-editor").click();
     await page.keyboard.press("ControlOrMeta+End");
-    await page.keyboard.type(burst, { delay: 0 });
+    await page.keyboard.press("ArrowUp");
+    await page.keyboard.press("Home");
+    await page.keyboard.type(`${burst}\n`, { delay: 0 });
 
     await expect.poll(() => page.locator("#preview").textContent()).toContain(burst);
 
