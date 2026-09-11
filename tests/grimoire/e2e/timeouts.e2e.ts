@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 
 const HARNESS = "/tests/grimoire/fixtures/timeout-harness.html";
+const ISOLATED_HARNESS = `${HARNESS}?isolated`;
+const PREVIEW_FRAME = "#preview iframe[data-grimoire-preview-document]";
 
 const GOOD_SOURCE = ['<Book size="A5">', '<Section columns="1">', "A good paragraph appears here.", "</Section>", "</Book>"].join(
   "\n",
@@ -197,6 +199,34 @@ test.describe("a repaint the engine never answers", () => {
     expect(preview).not.toContain("A good paragraph appears here.");
     await expect(page.locator("#status")).toBeHidden();
   });
+});
+
+test("an isolated preview keeps its last book through a timeout and late engine response", async ({ page }) => {
+  await page.goto(ISOLATED_HARNESS);
+  const preview = page.frameLocator(PREVIEW_FRAME);
+  await expect(preview.locator("body")).toContainText("Start writing your book here.");
+
+  await replaceSource(page, GOOD_SOURCE);
+  await expect(preview.locator("body")).toContainText("A good paragraph appears here.");
+  const lastGood = await preview.locator("body").textContent();
+
+  await page.evaluate(() => window.__stallEngine());
+  await replaceSource(page, OTHER_GOOD_SOURCE);
+  await expect.poll(() => withheldRuns(page)).toBe(1);
+  await expect(page.locator("#preview iframe")).toHaveCount(2);
+
+  await page.evaluate(() => window.__advanceEngineClock(30_000));
+  await expect(page.locator("#status")).toBeVisible();
+  await expect(page.locator("#preview iframe")).toHaveCount(1);
+  expect(await preview.locator("body").textContent()).toBe(lastGood);
+
+  await page.evaluate(() => window.__unstallEngine());
+  await replaceSource(page, THIRD_GOOD_SOURCE);
+  await expect(preview.locator("body")).toContainText("A third paragraph appears here.");
+  expect(await page.evaluate(() => window.__resumeOldestStalledEngineRun())).toBe(true);
+  await page.waitForTimeout(500);
+  await expect(page.locator("#preview iframe")).toHaveCount(1);
+  await expect(preview.locator("body")).toContainText("A third paragraph appears here.");
 });
 
 /**

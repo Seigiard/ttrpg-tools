@@ -1,5 +1,8 @@
 # A failed repaint restores the preview rather than staging into a detached container
 
+Superseded for the production preview by ADR-0008. Unmarked pagination fixtures still
+use this direct-container restoration path.
+
 When the pagination engine fails, the author must keep seeing the last book that
 paginated successfully. Broken markup already behaves that way, because parsing throws
 before the engine is ever asked to lay anything out; the engine's own failure did not,

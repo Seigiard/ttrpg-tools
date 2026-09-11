@@ -155,6 +155,7 @@
 
       const editorContainer = document.getElementById("editor");
       const previewContainer = document.getElementById("preview");
+      if (new URLSearchParams(location.search).has("isolated")) previewContainer.setAttribute("data-isolated", "");
       const printControl = document.getElementById("print");
       const refreshControl = document.getElementById("refresh");
       const autoRefreshControl = document.getElementById("auto-refresh");
