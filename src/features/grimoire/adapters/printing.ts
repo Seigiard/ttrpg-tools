@@ -1,13 +1,7 @@
-import { printHTML } from "@vivliostyle/core";
+import { createPrinting } from './private/create-printing';
+import { browserScheduler } from './private/scheduler';
 
-import { EngineTimeoutError } from "./engine-timeout";
-
-// How long one print call may go unanswered before it is given up on (issue #10).
-// More generous than pagination's bound for two reasons: printing lays the whole
-// book out again from scratch, and the author is deliberately standing by for the
-// dialogue, so cutting a long book off early costs them the print they asked for
-// rather than a Preview that will refresh again on the next keystroke anyway.
-export const PRINT_TIMEOUT_SECONDS = 60;
+const printWithBrowserScheduler = createPrinting(browserScheduler);
 
 /**
  * Prints an HTML document (the same string the preview pane paginated) through the
@@ -30,10 +24,10 @@ export const PRINT_TIMEOUT_SECONDS = 60;
  * call's cleanup already ran. A call made while one is in flight joins that one
  * instead of starting a second, which is what makes this single-flight.
  *
- * A hung attempt rejects after `PRINT_TIMEOUT_SECONDS`, but the hidden iframe cannot
- * be canceled. New attempts stay blocked until that iframe eventually answers; if it
- * never does, the timeout message tells the author to reload. Starting a replacement
- * sooner would put two attempts onto Vivliostyle's one global print instance.
+ * A hung attempt rejects after 60 seconds, but the hidden iframe cannot be canceled.
+ * New attempts stay blocked until that iframe eventually answers; if it never does,
+ * the timeout message tells the author to reload. Starting a replacement sooner would
+ * put two attempts onto Vivliostyle's one global print instance.
  *
  * The hidden iframe cannot be called off and may still call back for an attempt
  * already given up on. Settling a promise twice is a no-op, but `printCallback`
@@ -45,54 +39,6 @@ export const PRINT_TIMEOUT_SECONDS = 60;
  * that before doing anything at all. A late callback only releases the separate
  * abandoned-attempt block after Vivliostyle has finished with its global instance.
  */
-let inFlight: Promise<void> | undefined;
-let abandonedAttemptPending = false;
-
 export function printBook(html: string): Promise<void> {
-  if (inFlight !== undefined) return inFlight;
-  if (abandonedAttemptPending) return Promise.reject(new EngineTimeoutError(PRINT_TIMEOUT_SECONDS));
-
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-
-  const attempt = new Promise<void>((resolve, reject) => {
-    // Set by the bound below and read by both callbacks: the hidden iframe keeps
-    // working after this attempt has been given up on, and neither of its answers
-    // may act on a print nobody is waiting for any more.
-    let abandoned = false;
-
-    timeoutId = setTimeout(() => {
-      abandoned = true;
-      abandonedAttemptPending = true;
-      reject(new EngineTimeoutError(PRINT_TIMEOUT_SECONDS));
-    }, PRINT_TIMEOUT_SECONDS * 1000);
-
-    printHTML(html, {
-      title: "Grimoire Press",
-      printCallback: (iframeWindow) => {
-        if (abandoned) {
-          abandonedAttemptPending = false;
-          return;
-        }
-        iframeWindow.print();
-        resolve();
-      },
-      errorCallback: (message) => {
-        if (abandoned) {
-          abandonedAttemptPending = false;
-          return;
-        }
-        reject(new Error(`Vivliostyle failed to prepare the book for printing: ${message}`));
-      },
-      hideIframe: true,
-      removeIframe: true,
-    });
-  }).finally(() => {
-    // An attempt that answered in time leaves no timer behind to fire into an
-    // empty session a minute later.
-    if (timeoutId !== undefined) clearTimeout(timeoutId);
-    inFlight = undefined;
-  });
-
-  inFlight = attempt;
-  return attempt;
+  return printWithBrowserScheduler(html);
 }
