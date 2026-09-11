@@ -13,7 +13,7 @@ export const PAGINATION_TIMEOUT_SECONDS = 30;
  * content actually took. Never fewer than two -- a page that fits is not reported
  * at all.
  *
- * Not an error, and deliberately not one of the app's `PreviewError` cases: that
+ * Not an error, and deliberately not one of the app's `PreviewRefreshError` cases: that
  * union is the closed set of ways to fail to produce a book, and a book that
  * overflows was produced. It is only a book that no longer matches what its author
  * declared, which is something to tell them about while still showing it.

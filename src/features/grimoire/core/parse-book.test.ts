@@ -7,7 +7,6 @@ describe('Grimoire book parser characterization', () => {
   test('keeps bare Markdown as an A5 single-column book', () => {
     expect(parseBook('# Title\n\nText')).toMatchObject({
       size: 'A5',
-      lang: 'en',
       theme: undefined,
       blocks: [{ kind: 'section', columns: 1, line: 1 }],
     });
@@ -41,11 +40,11 @@ describe('Grimoire book parser characterization', () => {
     ]);
   });
 
-  test('resolves the bundled Russian theme and language', () => {
+  test('keeps the authored theme declaration without materializing it', () => {
     const parsed = parseBook('<Book theme="default-ru">\nText.\n</Book>');
 
-    expect(parsed.lang).toBe('ru');
-    expect(parsed.theme?.name).toBe('default-ru');
+    expect(parsed.theme).toEqual({ name: 'default-ru', line: 1 });
+    expect(parsed).not.toHaveProperty('lang');
   });
 
   test('reports malformed markup at its source line', () => {

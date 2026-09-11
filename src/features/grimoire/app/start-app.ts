@@ -3,7 +3,18 @@ import type { createEditor, EditorHandle } from "../adapters/editor";
 import type { downloadBook, loadBookFile } from "../adapters/file";
 import type { OverflowingPage, paginate } from "../adapters/pagination";
 import type { printBook } from "../adapters/printing";
-import { describePreviewError, describePrintError, toPreviewError, type PreviewError } from "./preview-error";
+import {
+  describeBookPrintError,
+  describePreviewRefreshError,
+  describeSavedFileLoadError,
+  toBookMarkupError,
+  toBookPrintError,
+  toPreviewRefreshError,
+  toSavedFileLoadError,
+  type BookPrintError,
+  type PreviewRefreshError,
+  type SavedFileLoadError,
+} from "./operation-error";
 
 const INITIAL_SOURCE = [
   '<Book theme="default-ru">',
@@ -14,8 +25,8 @@ const INITIAL_SOURCE = [
   "",
 ].join("\n");
 
-// How long the preview waits after the last keystroke before it repaints. Long
-// enough that a normal typing cadence never triggers a repaint mid-word, short
+// How long the Preview waits after the last keystroke before it refreshes. Long
+// enough that a normal typing cadence never triggers a refresh mid-word, short
 // enough that a pause reads as "done for now" rather than a stall.
 const REFRESH_DEBOUNCE_MS = 400;
 
@@ -62,18 +73,18 @@ export interface PersistenceAdapter {
  * Persistence is delegated to a `read`/`write` adapter pair that reads and writes
  * the draft to browser storage. `write` is responsible for debouncing.
  *
- * The preview markup is derived whenever it is needed, to repaint and to print
+ * The Preview markup is derived whenever it is needed, to refresh and to print
  * alike, rather than stored -- ADR-0004's derived-state model, amended to record
  * the scheduling state this ticket adds (see the ADR itself for why the
  * conclusion still holds).
  *
- * The preview's own refresh is a second, independent debounce (issue #6): typing
+ * The Preview's own refresh is a second, independent debounce (issue #6): typing
  * always updates the persisted draft on its own schedule, but only schedules a
- * repaint when automatic refreshing is on. A repaint request while one is already
+ * refresh when automatic refreshing is on. A refresh request while one is already
  * running never starts a second one -- it replaces whatever request was already
- * waiting and is picked up the moment the running one settles, so two repaints are
+ * waiting and is picked up the moment the running one settles, so two refreshes are
  * never in flight together and the last request made is always the last one that
- * reaches the container (issue #6's first handed-over defect: overlapping repaints
+ * reaches the container (issue #6's first handed-over defect: overlapping refreshes
  * had no cancellation, so a slow one could finish after, and clobber, a faster
  * newer one).
  *
@@ -109,46 +120,49 @@ export function startApp(
 
   // The preview's staleness, a print failure, a failed file load and an
   // overflowing page are four independent things an author can be told about at
-  // once (issue #6's third handed-over defect: a shared status sink let a repaint
+  // once (issue #6's third handed-over defect: a shared status sink let a refresh
   // that succeeded silently erase a print error nobody had acknowledged yet).
   // Each is tracked and rendered on its own, so clearing one never touches the
   // others.
   //
-  // An overflowing page is not a `PreviewError` and is deliberately held as its
-  // own thing rather than folded into `previewError` (issue #23): that union is
-  // the closed set of ways to fail to produce a book, and an overflowing page
+  // An overflowing page is not a `PreviewRefreshError` and is deliberately held
+  // as its own thing rather than folded into `previewError` (issue #23): that
+  // union is the closed set of ways to fail to produce a book, and an overflowing page
   // means a book *was* produced -- it just no longer matches what its author
   // declared. Folding it in would also make the two erase each other, since the
-  // repaint that reports an overflow is the same repaint that clears the preview
+  // refresh that reports an overflow is the same refresh that clears the Preview
   // error.
-  let previewError: PreviewError | undefined;
-  let printError: PreviewError | undefined;
-  let loadError: PreviewError | undefined;
+  let previewError: PreviewRefreshError | undefined;
+  let printError: BookPrintError | undefined;
+  let loadError: SavedFileLoadError | undefined;
   let saveFailed = false;
   let overflowingPages: readonly OverflowingPage[] = [];
 
   const renderStatus = (): void => {
     const parts: string[] = [];
-    if (previewError !== undefined) parts.push(`Preview is out of date — ${describePreviewError(previewError)}`);
+    if (previewError !== undefined)
+      parts.push(`Preview is out of date — ${describePreviewRefreshError(previewError)}`);
     if (overflowingPages.length > 0) parts.push(describeOverflowingPages(overflowingPages));
-    if (printError !== undefined) parts.push(`Printing failed — ${describePrintError(printError)}`);
-    if (loadError !== undefined) parts.push(`Loading file failed — ${describePreviewError(loadError)}`);
+    if (printError !== undefined)
+      parts.push(`Printing failed — ${describeBookPrintError(printError)}`);
+    if (loadError !== undefined)
+      parts.push(`Loading file failed — ${describeSavedFileLoadError(loadError)}`);
     if (saveFailed) parts.push("This book is not being saved — download it before closing this page.");
     statusContainer.textContent = parts.join(" ");
     statusContainer.hidden = parts.length === 0;
   };
 
-  const setPreviewStatus = (error: PreviewError | undefined): void => {
+  const setPreviewStatus = (error: PreviewRefreshError | undefined): void => {
     previewError = error;
     renderStatus();
   };
 
-  const setPrintStatus = (error: PreviewError | undefined): void => {
+  const setPrintStatus = (error: BookPrintError | undefined): void => {
     printError = error;
     renderStatus();
   };
 
-  const setLoadStatus = (error: PreviewError | undefined): void => {
+  const setLoadStatus = (error: SavedFileLoadError | undefined): void => {
     loadError = error;
     renderStatus();
   };
@@ -158,7 +172,7 @@ export function startApp(
     renderStatus();
   };
 
-  // Replaced wholesale by every repaint that produced a book, never added to, so
+  // Replaced wholesale by every refresh that produced a Book, never added to, so
   // a page the author has since cut down stops being reported the moment it fits
   // again -- a report that only ever accumulated would pass for correct until the
   // first time an author fixed something.
@@ -205,8 +219,13 @@ export function startApp(
     } catch (error) {
       // Thrown before the pagination adapter is ever called, so the container --
       // and whatever it last showed -- is never touched.
-      setPreviewStatus(toPreviewError(error));
-      afterRun();
+      try {
+        setPreviewStatus(toBookMarkupError(error));
+      } finally {
+        // An unexpected core exception is rethrown, but must not leave the
+        // refresh scheduler permanently claiming that a run is still active.
+        afterRun();
+      }
       return;
     }
     void paginateAdapter(previewContainer, html)
@@ -215,17 +234,17 @@ export function startApp(
         setPreviewStatus(undefined);
         setPageOverflowStatus(result.overflowingPages);
       })
-      // A repaint that failed leaves the production preview showing the last
+      // A refresh that failed leaves the production Preview showing the last
       // book that paginated (ADR-0008); direct adapter fixtures provide the same
       // visible guarantee by restoration (ADR-0005). Any overflow standing
       // against that book is still true of what the author is looking at and is
-      // left alone. Only a repaint that produced a book has anything to say
+      // left alone. Only a refresh that produced a book has anything to say
       // about which of its pages fit.
-      .catch((error: unknown) => setPreviewStatus(toPreviewError(error)))
+      .catch((error: unknown) => setPreviewStatus(toPreviewRefreshError(error)))
       .finally(afterRun);
   }
 
-  const requestRepaint = (source: string, automatic = false): void => {
+  const requestRefresh = (source: string, automatic = false): void => {
     if (running) {
       pendingSource = source;
       pendingAutomatic = automatic;
@@ -235,17 +254,17 @@ export function startApp(
   };
 
   let debounceId: ReturnType<typeof setTimeout> | undefined;
-  const clearScheduledRepaint = (): void => {
+  const clearScheduledRefresh = (): void => {
     if (debounceId !== undefined) {
       clearTimeout(debounceId);
       debounceId = undefined;
     }
   };
-  const scheduleRepaint = (source: string): void => {
-    clearScheduledRepaint();
+  const scheduleRefresh = (source: string): void => {
+    clearScheduledRefresh();
     debounceId = setTimeout(() => {
       debounceId = undefined;
-      requestRepaint(source, true);
+      requestRefresh(source, true);
     }, REFRESH_DEBOUNCE_MS);
   };
 
@@ -258,7 +277,7 @@ export function startApp(
   const onChange = (source: string): void => {
     persistenceAdapter.write(source, (error) => setSaveStatus(error !== undefined));
     if (autoRefreshControl.checked) {
-      scheduleRepaint(source);
+      scheduleRefresh(source);
     }
   };
 
@@ -277,7 +296,7 @@ export function startApp(
       if (running) {
         resizePending = true;
       } else if (displayedSource !== undefined) {
-        requestRepaint(displayedSource);
+        requestRefresh(displayedSource);
       }
     }).observe(previewContainer);
   }
@@ -285,18 +304,18 @@ export function startApp(
   refreshControl.addEventListener("click", () => {
     // A manual refresh acts on the latest source immediately -- a pending
     // automatic one would otherwise still fire moments later on the same source.
-    clearScheduledRepaint();
-    requestRepaint(editor.getSource());
+    clearScheduledRefresh();
+    requestRefresh(editor.getSource());
   });
 
   autoRefreshControl.addEventListener("change", () => {
     if (autoRefreshControl.checked) {
-      requestRepaint(editor.getSource());
+      requestRefresh(editor.getSource());
     } else {
       // Otherwise a debounce armed the moment before the author switched
-      // automatic refreshing off would still fire afterwards, repainting once
+      // automatic refreshing off would still fire afterwards, refreshing once
       // more despite being told not to.
-      clearScheduledRepaint();
+      clearScheduledRefresh();
       if (pendingAutomatic) {
         pendingSource = undefined;
         pendingAutomatic = false;
@@ -312,7 +331,7 @@ export function startApp(
     try {
       html = renderBook({ source: editor.getSource() });
     } catch (error) {
-      if (token === printToken) setPrintStatus(toPreviewError(error));
+      if (token === printToken) setPrintStatus(toBookMarkupError(error));
       return;
     }
     printBookAdapter(html)
@@ -320,7 +339,7 @@ export function startApp(
         if (token === printToken) setPrintStatus(undefined);
       })
       .catch((error: unknown) => {
-        if (token === printToken) setPrintStatus(toPreviewError(error));
+        if (token === printToken) setPrintStatus(toBookPrintError(error));
       });
   });
 
@@ -330,9 +349,9 @@ export function startApp(
 
   // Picking a second file before the first has finished reading must never let
   // the first's result land after the second's and overwrite it -- the same
-  // overlapping-async hazard issue #6 solved for repaints, reapplied here: each
+  // overlapping-async hazard issue #6 solved for refreshes, reapplied here: each
   // selection gets its own token, and a result is only ever applied if its token
-  // is still the most recent one requested. Unlike the repaint queue, a stale
+  // is still the most recent one requested. Unlike the refresh queue, a stale
   // result needs no replay -- there is nothing to coalesce into, since the
   // newer selection is already what the author meant to load -- so it is simply
   // discarded.
@@ -348,8 +367,8 @@ export function startApp(
 
     const token = ++loadToken;
 
-    loadBookFileAdapter(file)
-      .then((source) => {
+    loadBookFileAdapter(file).then(
+      (source) => {
         if (token !== loadToken) return; // superseded by a later selection
 
         // Asked only now that the file is known to be a genuine book: an author
@@ -359,25 +378,26 @@ export function startApp(
         if (!proceed) return;
 
         // `setSource` fires the same update listener a keystroke would, which
-        // arms a debounced repaint of its own when auto-refresh is on -- cleared
-        // here, after the fact, so the immediate repaint below is the only one
+        // arms a debounced refresh of its own when auto-refresh is on -- cleared
+        // here, after the fact, so the immediate refresh below is the only one
         // that runs. Clearing before `setSource` would not help: the debounce it
         // is meant to cancel is armed by `setSource` itself, one line later.
         editor.setSource(source);
-        clearScheduledRepaint();
-        requestRepaint(source);
+        clearScheduledRefresh();
+        requestRefresh(source);
         // Both belonged to the book this load just replaced.
         printToken += 1;
         setPrintStatus(undefined);
         setLoadStatus(undefined);
-      })
-      .catch((error: unknown) => {
+      },
+      (error: unknown) => {
         if (token !== loadToken) return; // superseded by a later selection
-        setLoadStatus(toPreviewError(error));
-      });
+        setLoadStatus(toSavedFileLoadError(error));
+      },
+    );
   });
 
-  requestRepaint(initialSource);
+  requestRefresh(initialSource);
 
   return editor;
 }
@@ -389,7 +409,7 @@ export function startApp(
  * is to cut. Every overflowing page in the book is named: a book with two character
  * sheets that both spilled has two problems, not one.
  *
- * Worded here rather than in `preview-error.ts` because this is not one of that
+ * Worded here rather than in `operation-error.ts` because this is not one of that
  * file's error cases and must not become one -- the book paginated.
  */
 function describeOverflowingPages(pages: readonly OverflowingPage[]): string {
