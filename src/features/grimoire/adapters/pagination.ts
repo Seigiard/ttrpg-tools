@@ -35,10 +35,14 @@ export interface PaginationResult {
   readonly overflowingPages: readonly OverflowingPage[];
 }
 
+export interface PaginationOptions {
+  /** Direct is the compatibility default used by focused engine fixtures. */
+  readonly mode?: "direct" | "isolated";
+}
+
 interface PaginationTarget {
   readonly viewportElement: HTMLElement;
   readonly viewerWindow?: Window;
-  readonly autoResize: boolean;
   readonly fitToScreen: boolean;
   commit(): void;
   restore(): void;
@@ -69,15 +73,15 @@ function restoreContainer(element: HTMLElement, snapshot: ContainerSnapshot): vo
  *
  * All-or-nothing about `container`'s contents (issue #11): when it settles, the
  * container either holds a newly paginated book or exactly what it held on the way
- * in. The production preview marks itself `data-isolated`; its next book is laid out
- * in an attached, off-screen iframe, then swapped in only on success. Besides keeping
- * the previous book visible during layout, that frame prevents editor-shell CSS from
- * entering the book and gives fit-to-screen resize handling a window whose lifetime
- * matches one viewer (ADR-0008).
+ * in. In explicit isolated mode, the next book is laid out in an attached, off-screen
+ * iframe, then swapped in only on success. Besides keeping the previous book visible
+ * during layout, that frame prevents editor-shell CSS from entering the book. Container
+ * resize handling belongs to the application and requests a fresh isolated render;
+ * CoreViewer's own auto-resize lifecycle is disabled (ADR-0008).
  *
- * Unmarked containers remain a direct engine viewport for focused adapter fixtures.
- * They are restored after failure rather than staged, preserving ADR-0005's measured
- * test seam without making the production book share the shell document.
+ * Direct mode remains the default for focused adapter fixtures. Those containers are
+ * restored after failure rather than staged, preserving ADR-0005's measured test seam
+ * without making the production book share the shell document.
  *
  * Rejects if the engine makes no progress for `PAGINATION_TIMEOUT_SECONDS`, so the
  * caller's own guards are released and the next edit starts a fresh attempt (issue
@@ -86,7 +90,7 @@ function restoreContainer(element: HTMLElement, snapshot: ContainerSnapshot): vo
  * gives up, which is what keeps the late answer from putting a stale book back over
  * whatever the preview has moved on to.
  *
- * For an unmarked container, the guarantee is about children and only against this
+ * For a direct-mode container, the guarantee is about children and only against this
  * adapter's own handlers.
  * `removeListener` detaches from the viewer's event target; the object that writes to
  * `container` is the viewer's internal one, and nothing detaches that. Measured, on
@@ -100,8 +104,13 @@ function restoreContainer(element: HTMLElement, snapshot: ContainerSnapshot): vo
  * off them, so today this is residue rather than a visible defect, and it is as far
  * as a bound can go without a staging container. Issue #15 carries that.
  */
-export function paginate(container: HTMLElement, html: string): Promise<PaginationResult> {
+export function paginate(
+  container: HTMLElement,
+  html: string,
+  options: PaginationOptions = {},
+): Promise<PaginationResult> {
   return new Promise((resolve, reject) => {
+    const mode = options.mode ?? "direct";
     // The last good book is restored by the direct fixture path and left in place by
     // the production iframe path until its replacement has finished laying out.
     const snapshot: ContainerSnapshot = {
@@ -150,25 +159,23 @@ export function paginate(container: HTMLElement, html: string): Promise<Paginati
     const onError = (payload: Payload): void => {
       fail(new Error(`Vivliostyle failed to paginate the book: ${JSON.stringify(payload.content)}`));
     };
-    // Discards whatever the engine had already laid out before it gave up, along
-    // with the empty container a first-ever failure leaves (nothing to put back is
-    // an empty spread, not a special case). Attributes the engine added during the
-    // abandoned run go with it, and any it overwrote go back to the value they had
-    // on the way in.
+    // A direct target restores children and attributes exactly. An isolated target
+    // only removes its staging frame: the engine never receives or mutates the outer
+    // container, whose concurrent classes and ARIA state therefore stay untouched.
     const restoreLastGoodRender = (): void => {
       if (target !== undefined) {
         target.restore();
         return;
       }
 
-      restoreContainer(container, snapshot);
+      if (mode === "direct") restoreContainer(container, snapshot);
     };
     // Undoes everything this call registered, so that a run given up on cannot
     // reach back into a container the preview has since moved on with: the engine
     // is still working -- there is no way to stop it -- and its 'loaded' or 'error'
     // may still arrive for a book nobody is waiting for any more. This stops the
-    // handlers above from acting; it does not stop the engine, which goes on writing
-    // its own attributes onto the container afterwards (issue #15).
+    // handlers above from acting; it does not stop a direct-mode engine, which goes
+    // on writing its own attributes onto the container afterwards (issue #15).
     const cleanup = (): void => {
       if (timeoutId !== undefined) clearTimeout(timeoutId);
       if (blobUrl !== undefined) URL.revokeObjectURL(blobUrl);
@@ -194,15 +201,15 @@ export function paginate(container: HTMLElement, html: string): Promise<Paginati
     };
 
     try {
-      target = createPaginationTarget(container, snapshot);
-      // A fresh viewer prevents an older load from overwriting a newer one. The
-      // ordinary target stays on the shared window, where autoResize would leak one
-      // listener per repaint. An isolated target owns a fresh iframe window, so its
-      // listener is collected with that frame and can safely keep the page fitted.
+      target = createPaginationTarget(container, snapshot, mode);
+      // A fresh viewer prevents an older load from overwriting a newer one. Its own
+      // auto-resize path is disabled in both modes: direct fixtures must not leak a
+      // listener per repaint, and isolated previews are resized by a fresh app-owned
+      // repaint so page fitting and pagination are recomputed together (ADR-0008).
       viewer = new CoreViewer(
         { viewportElement: target.viewportElement, window: target.viewerWindow },
         {
-          autoResize: target.autoResize,
+          autoResize: false,
           fitToScreen: target.fitToScreen,
           allowScripts: false,
         },
@@ -222,12 +229,12 @@ export function paginate(container: HTMLElement, html: string): Promise<Paginati
 function createPaginationTarget(
   container: HTMLElement,
   snapshot: ContainerSnapshot,
+  mode: NonNullable<PaginationOptions["mode"]>,
 ): PaginationTarget {
-  if (!container.hasAttribute("data-isolated")) {
+  if (mode === "direct") {
     container.replaceChildren();
     return {
       viewportElement: container,
-      autoResize: false,
       fitToScreen: false,
       commit: () => {},
       restore: () => {
@@ -257,7 +264,6 @@ function createPaginationTarget(
   const frameWindow = frame.contentWindow;
   if (frameDocument === null || frameWindow === null) {
     frame.remove();
-    restoreAttributes(container, snapshot);
     throw new Error("Could not create an isolated preview document");
   }
 
@@ -270,16 +276,43 @@ function createPaginationTarget(
   return {
     viewportElement,
     viewerWindow: frameWindow,
-    autoResize: true,
     fitToScreen: true,
     commit: () => {
-      for (const child of snapshot.children) child.remove();
+      const parentWindow = container.ownerDocument.defaultView;
+      const frameGlobal = frameWindow as Window & typeof globalThis;
+      frameDocument.addEventListener(
+        "click",
+        (event) => {
+          const target = event.target;
+          if (!(target instanceof frameGlobal.Element)) return;
+
+          const anchor = target.closest("a[href]");
+          const href = anchor?.getAttribute("href")?.trim();
+          if (href === undefined || href.startsWith("#")) return;
+
+          event.preventDefault();
+          if (parentWindow === null) return;
+
+          let destination: URL;
+          try {
+            destination = new URL(href, parentWindow.location.href);
+          } catch {
+            return;
+          }
+          if (!["http:", "https:", "mailto:", "tel:"].includes(destination.protocol)) return;
+          parentWindow.open(destination.href, "_blank", "noopener,noreferrer");
+        },
+        true,
+      );
+      frameDocument.addEventListener("submit", (event) => event.preventDefault(), true);
+
       frame.removeAttribute("aria-hidden");
+      frame.removeAttribute("tabindex");
       frame.style.cssText = "display:block;width:100%;height:100%;border:0";
+      for (const child of snapshot.children) child.remove();
     },
     restore: () => {
       frame.remove();
-      restoreAttributes(container, snapshot);
     },
   };
 }

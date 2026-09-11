@@ -69,6 +69,7 @@ declare global {
     __paginateAndInspect: (source: string, extraThemeCss?: string) => Promise<PageInspection>;
     __paginateAndMeasure: (source: string) => Promise<PageMeasurement>;
     __paginateAndReportOverflow: (source: string) => Promise<OverflowInspection>;
+    __paginateAndReportIsolatedOverflow: (source: string) => Promise<OverflowInspection>;
     __paginateAndInspectHeaders: (source: string, extraThemeCss?: string) => Promise<HeaderInspection[]>;
     __inspectMarginBoxFonts: (source: string) => Promise<MarginBoxFontInspection>;
     __inspectFonts: (source: string, selectors: readonly string[]) => Promise<Record<string, string | undefined>>;
@@ -80,7 +81,9 @@ declare global {
     __stallEngine: () => void;
     __unstallEngine: () => void;
     __stalledEngineRuns: () => number;
+    __oldestStalledEngineDocument: () => Promise<string | undefined>;
     __resumeOldestStalledEngineRun: () => boolean;
+    __resumeOldestStalledEngineRunUntilLoaded: () => Promise<boolean>;
     __failOldestStalledEngineRun: () => boolean;
     __printAttemptsStarted: () => number;
     __printDialoguesOpened: () => number;
@@ -89,5 +92,6 @@ declare global {
     __editor?: EditorHandle;
     __writeCount: number;
     __repaintCount: number;
+    __openedPreviewLinks: string[];
   }
 }

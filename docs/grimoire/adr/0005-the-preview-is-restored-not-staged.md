@@ -1,7 +1,8 @@
 # A failed repaint restores the preview rather than staging into a detached container
 
-Superseded for the production preview by ADR-0008. Unmarked pagination fixtures still
-use this direct-container restoration path.
+Superseded for the production preview by ADR-0008. Pagination's default direct mode is
+still used by focused fixtures and retains this container-restoration path; isolation is
+selected explicitly in the adapter API rather than inferred from container markup.
 
 When the pagination engine fails, the author must keep seeing the last book that
 paginated successfully. Broken markup already behaves that way, because parsing throws

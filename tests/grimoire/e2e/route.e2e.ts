@@ -1,6 +1,17 @@
 import { expect, test, type Page } from '@playwright/test';
 
-const PREVIEW_FRAME = '#preview iframe[data-grimoire-preview-document]';
+const PREVIEW_FRAME = '#preview iframe[data-grimoire-preview-document]:not([aria-hidden="true"])';
+
+const INTERACTIVE_BOOK = [
+  '<Book size="A5">',
+  '<Section columns="1">',
+  '# Interactive preview',
+  '',
+  '<a href="https://example.com/from-book">Open reference</a>',
+  '<form action="https://example.com/submitted"><button type="submit">Submit book form</button></form>',
+  '</Section>',
+  '</Book>',
+].join('\n');
 
 async function renderedFonts(page: Page, selector: string) {
   const session = await page.context().newCDPSession(page);
@@ -144,6 +155,45 @@ test('a new book fits the preview without inheriting editor-shell styles', async
       return resized;
     })
     .toBe(true);
+});
+
+test('a committed preview is keyboard reachable and keeps navigation parent-owned', async ({
+  page,
+}) => {
+  await page.goto('/grimoire');
+  const preview = page.frameLocator(PREVIEW_FRAME);
+  await expect(preview.locator('body')).toContainText('Start writing your book here.');
+
+  await page.evaluate(() => {
+    window.__openedPreviewLinks = [];
+    window.open = (url) => {
+      window.__openedPreviewLinks.push(String(url));
+      return null;
+    };
+  });
+  await page.locator('.cm-editor').click();
+  await page.keyboard.press('ControlOrMeta+A');
+  await page.keyboard.insertText(INTERACTIVE_BOOK);
+  await expect(preview.getByRole('heading', { name: 'Interactive preview' })).toBeVisible();
+
+  const frame = page.locator(PREVIEW_FRAME);
+  await expect(frame).not.toHaveAttribute('tabindex', '-1');
+  await page.locator('#preview').focus();
+  await page.keyboard.press('Tab');
+  expect(
+    await page.evaluate((selector) => document.activeElement?.matches(selector), PREVIEW_FRAME),
+  ).toBe(true);
+
+  await preview.getByRole('link', { name: 'Open reference' }).click();
+  expect(await page.evaluate(() => window.__openedPreviewLinks)).toEqual([
+    'https://example.com/from-book',
+  ]);
+  await expect(page.locator(PREVIEW_FRAME)).toHaveCount(1);
+  await expect(preview.getByRole('heading', { name: 'Interactive preview' })).toBeVisible();
+
+  await preview.getByRole('button', { name: 'Submit book form' }).click();
+  await expect(page.locator(PREVIEW_FRAME)).toHaveCount(1);
+  await expect(preview.getByRole('heading', { name: 'Interactive preview' })).toBeVisible();
 });
 
 test('a failed isolated repaint keeps the last paginated book on screen', async ({ page }) => {
