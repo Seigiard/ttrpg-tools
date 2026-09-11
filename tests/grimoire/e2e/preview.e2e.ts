@@ -245,14 +245,10 @@ test.describe("preview coalescing", () => {
     await page.keyboard.insertText("# FAST MARKER\n\nContent from the fast request.\n");
     await page.locator("#refresh").click();
 
-    // #then: once things settle, the container shows the newer, faster request
-    // -- never the slow one finishing late and overwriting it. The wait below is
-    // not polling for an outcome that might still be pending -- it gives the slow
-    // request's fixed 300ms delay time to elapse, so a version that let it clobber
-    // the container afterwards is caught rather than missed because the assertion
-    // ran the moment the fast content first (correctly or not) appeared.
+    // #then: once the slow request is released, the container shows the newer,
+    // faster request -- never the slow one overwriting it afterwards.
+    await page.evaluate(() => window.__finishSlowPagination());
     await expect.poll(() => page.locator("#preview").textContent()).toContain("FAST MARKER");
-    await page.waitForTimeout(400);
     expect(await page.locator("#preview").textContent()).toContain("FAST MARKER");
     expect(await page.locator("#preview").textContent()).not.toContain("SLOW MARKER");
   });
@@ -267,6 +263,7 @@ test.describe("preview coalescing", () => {
     await replaceSource(page, "# QUEUED MARKER\n\nContent queued by automatic refresh.\n");
     await page.waitForTimeout(450);
     await page.locator("#auto-refresh").uncheck();
+    await page.evaluate(() => window.__finishSlowPagination());
 
     await expect.poll(() => page.locator("#preview").textContent()).toContain("SLOW MARKER");
     await page.waitForTimeout(500);

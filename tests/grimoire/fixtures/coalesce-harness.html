@@ -22,21 +22,24 @@
       // A stand-in for the real pagination adapter, substituted at the exact seam
       // issue #1's architecture designed for this (the three adapters are passed
       // in as plain arguments). It still does real, observable DOM work -- the
-      // container's final content is what the test reads -- but its delay is
-      // deterministic instead of depending on real Vivliostyle layout timing,
+      // container's final content is what the test reads -- but the test controls
+      // when a slow run finishes instead of depending on real layout timing,
       // which is what proving issue #6's coalescing defect needs: a controllable
       // "slow" render and a controllable "fast" one, not a hope that a big enough
       // document reliably outlasts a keystroke on every machine this runs on.
+      window.__finishSlowPagination = () => {};
       const fakePaginate = (container, html) => {
-        const delay = html.includes("SLOW MARKER") ? 700 : 0;
+        const finish = () => {
+          container.replaceChildren();
+          const div = document.createElement("div");
+          div.textContent = html;
+          container.appendChild(div);
+          return { pageCount: 1, pageSizes: [], overflowingPages: [] };
+        };
+
+        if (!html.includes("SLOW MARKER")) return Promise.resolve(finish());
         return new Promise((resolve) => {
-          setTimeout(() => {
-            container.replaceChildren();
-            const div = document.createElement("div");
-            div.textContent = html;
-            container.appendChild(div);
-            resolve({ pageCount: 1, pageSizes: [], overflowingPages: [] });
-          }, delay);
+          window.__finishSlowPagination = () => resolve(finish());
         });
       };
 
