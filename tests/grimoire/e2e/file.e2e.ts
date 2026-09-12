@@ -4,6 +4,7 @@ import { expect, test } from "@playwright/test";
 
 import { FILE_FORMAT } from "../../../src/features/grimoire/adapters/file";
 import { openSavedFileSession, type SavedFileSession } from "../support/saved";
+import { openPrintingSession } from "../support/printing";
 
 // Plain ASCII prose rather than the Cyrillic CONTEXT.md's default-ru theme is meant
 // for -- typing Unicode through Playwright's keyboard simulation is its own source
@@ -352,12 +353,12 @@ test.describe("loading two files in quick succession", () => {
  */
 test.describe("a successful load and a standing print error", () => {
   test("loading a book clears a print failure recorded against the book it replaced", async ({ page }, testInfo) => {
-    await page.goto("/tests/grimoire/fixtures/print-error-harness.html");
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("Start writing your book here.");
+    const printing = await openPrintingSession(page, "print-error");
+    await expect.poll(() => printing.previewText()).toContain("Start writing your book here.");
 
     // #given: a print failure standing against the current book
-    await page.locator("#print").click();
-    await expect.poll(() => page.locator("#status").textContent()).toContain("Printing failed");
+    await printing.print();
+    await expect.poll(() => printing.statusText()).toContain("Printing failed");
 
     // #when: that same book is downloaded and loaded back, replacing the current one
     const savedPath = testInfo.outputPath("book.grimoire.json");

@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { openBookDriver } from '../support/book';
+import { openPrintingSession, type PrintingSession } from '../support/printing';
 
 /**
  * Consumer: an author who declared a page -- a character sheet, a reference card --
@@ -179,22 +180,13 @@ const A_PAGE_THAT_DOES_NOT_FIT_AND_IS_NEVER_CLOSED = [
  * substituted, and only to have a standing status condition to hold the overflow
  * report against (see the harness for why).
  */
-const HARNESS = '/tests/grimoire/fixtures/overflow-harness.html';
-
-async function replaceSource(
-  browserPage: import('@playwright/test').Page,
-  source: string,
-): Promise<void> {
-  await browserPage.locator('.cm-editor').click();
-  await browserPage.keyboard.press('ControlOrMeta+A');
-  await browserPage.keyboard.insertText(source);
-}
-
 test.describe('what the author is told about a page that did not fit', () => {
+  let printing: PrintingSession;
+
   test.beforeEach(async ({ page: browserPage }) => {
-    await browserPage.goto(HARNESS);
+    printing = await openPrintingSession(browserPage, 'overflow-print-error');
     await expect
-      .poll(() => browserPage.locator('#preview').textContent())
+      .poll(() => printing.previewText())
       .toContain('Start writing your book here.');
   });
 
@@ -203,7 +195,7 @@ test.describe('what the author is told about a page that did not fit', () => {
   }) => {
     // #given: an author writing a card
     // #when: they put six paragraphs on it
-    await replaceSource(browserPage, A_PAGE_THAT_DOES_NOT_FIT);
+    await printing.replaceSource(A_PAGE_THAT_DOES_NOT_FIT);
 
     // #then: the editor names the line the page was declared on and how many pages
     // it took, the book the engine produced is still in the preview, and none of it
@@ -223,13 +215,13 @@ test.describe('what the author is told about a page that did not fit', () => {
 
   test('the report clears when the content fits again', async ({ page: browserPage }) => {
     // #given: a page the author has been told does not fit
-    await replaceSource(browserPage, A_PAGE_THAT_DOES_NOT_FIT);
+    await printing.replaceSource(A_PAGE_THAT_DOES_NOT_FIT);
     await expect
       .poll(() => browserPage.locator('#status').textContent())
       .toContain('line 5 took 2 pages');
 
     // #when: they cut it back to something that fits
-    await replaceSource(browserPage, A_PAGE_THAT_FITS);
+    await printing.replaceSource(A_PAGE_THAT_FITS);
     await expect
       .poll(() => browserPage.locator('#preview').textContent())
       .toContain('A card that stands on its own.');
@@ -242,14 +234,14 @@ test.describe('what the author is told about a page that did not fit', () => {
     page: browserPage,
   }) => {
     // #given: a page the author has been told does not fit
-    await replaceSource(browserPage, A_PAGE_THAT_DOES_NOT_FIT);
+    await printing.replaceSource(A_PAGE_THAT_DOES_NOT_FIT);
     await expect
       .poll(() => browserPage.locator('#status').textContent())
       .toContain('line 5 took 2 pages');
 
     // #when: their next keystroke leaves the page unclosed, so the repaint cannot
     // produce a book and the preview keeps the one it produced last
-    await replaceSource(browserPage, A_PAGE_THAT_DOES_NOT_FIT_AND_IS_NEVER_CLOSED);
+    await printing.replaceSource(A_PAGE_THAT_DOES_NOT_FIT_AND_IS_NEVER_CLOSED);
     await expect
       .poll(() => browserPage.locator('#status').textContent())
       .toContain('Preview is out of date');
@@ -268,13 +260,13 @@ test.describe('what the author is told about a page that did not fit', () => {
     page: browserPage,
   }) => {
     // #given: a page at line 5 the author has been told does not fit
-    await replaceSource(browserPage, A_PAGE_THAT_DOES_NOT_FIT);
+    await printing.replaceSource(A_PAGE_THAT_DOES_NOT_FIT);
     await expect
       .poll(() => browserPage.locator('#status').textContent())
       .toContain('line 5 took 2 pages');
 
     // #when: they rewrite the book into two different pages, both overrun
-    await replaceSource(browserPage, TWO_PAGES_THAT_DO_NOT_FIT);
+    await printing.replaceSource(TWO_PAGES_THAT_DO_NOT_FIT);
     await expect
       .poll(() => browserPage.locator('#status').textContent())
       .toContain('line 16 took 2 pages');
@@ -297,19 +289,19 @@ test.describe('what the author is told about a page that did not fit', () => {
     page: browserPage,
   }) => {
     // #given: a print failure the author has not acknowledged
-    await browserPage.locator('#print').click();
+    await printing.print();
     await expect
       .poll(() => browserPage.locator('#status').textContent())
       .toContain('Printing failed');
 
     // #when: a page overflows, and is then cut back until it fits
-    await replaceSource(browserPage, A_PAGE_THAT_DOES_NOT_FIT);
+    await printing.replaceSource(A_PAGE_THAT_DOES_NOT_FIT);
     await expect
       .poll(() => browserPage.locator('#status').textContent())
       .toContain('line 5 took 2 pages');
     const whileOverflowing = (await browserPage.locator('#status').textContent()) ?? '';
 
-    await replaceSource(browserPage, A_PAGE_THAT_FITS);
+    await printing.replaceSource(A_PAGE_THAT_FITS);
     await expect
       .poll(() => browserPage.locator('#preview').textContent())
       .toContain('A card that stands on its own.');
@@ -332,13 +324,13 @@ test.describe('what the author is told about a page that did not fit', () => {
     page: browserPage,
   }) => {
     // #given: a page the author has been told does not fit
-    await replaceSource(browserPage, A_PAGE_THAT_DOES_NOT_FIT);
+    await printing.replaceSource(A_PAGE_THAT_DOES_NOT_FIT);
     await expect
       .poll(() => browserPage.locator('#status').textContent())
       .toContain('line 5 took 2 pages');
 
     // #when: they try to print, and printing fails
-    await browserPage.locator('#print').click();
+    await printing.print();
     await expect
       .poll(() => browserPage.locator('#status').textContent())
       .toContain('Printing failed');

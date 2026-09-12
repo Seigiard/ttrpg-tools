@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { openPreviewSession } from "../support/preview";
+import { openPrintingAdapterDriver, openPrintingSession, type PrintingSession } from "../support/printing";
 
 const GOOD_SOURCE = ['<Book size="A5">', '<Section columns="1">', "A good paragraph appears here.", "</Section>", "</Book>"].join(
   "\n",
@@ -46,12 +47,6 @@ const BREAK_INSIDE_PAGE_SOURCE = [
   "</Page>",
   "</Book>",
 ].join("\n");
-
-async function replaceSource(page: import("@playwright/test").Page, source: string): Promise<void> {
-  await page.locator(".cm-editor").click();
-  await page.keyboard.press("ControlOrMeta+A");
-  await page.keyboard.type(source);
-}
 
 /**
  * The consumer throughout this file is the author editing the left pane. Every
@@ -270,19 +265,27 @@ test.describe("preview coalescing", () => {
 
 test.describe("printing", () => {
   test("two print requests made back-to-back share one in-flight attempt", async ({ page }) => {
-    await page.goto("/tests/grimoire/fixtures/harness.html");
+    const printing = await openPrintingAdapterDriver(page);
 
-    const shared = await page.evaluate((source) => window.__printTwiceSharesOneAttempt(source), GOOD_SOURCE);
+    const shared = await printing.sharedAttempt(GOOD_SOURCE);
 
-    expect(shared).toBe(true);
+    expect(shared).toEqual({ firstJoinedSecond: true });
   });
 
   test("a print request made after the previous one has settled starts its own fresh attempt", async ({ page }) => {
-    await page.goto("/tests/grimoire/fixtures/harness.html");
+    const printing = await openPrintingAdapterDriver(page);
 
-    const fresh = await page.evaluate((source) => window.__printSequentiallyStartsFreshAttempts(source), GOOD_SOURCE);
+    const fresh = await printing.sequentialAttempts(GOOD_SOURCE);
 
-    expect(fresh).toBe(true);
+    expect(fresh).toEqual({ firstJoinedSecond: false });
+  });
+
+  test("printing controls are not exposed by unrelated concept sessions", async ({ page }) => {
+    const preview = await openPreviewSession(page, "preview-controlled-engine");
+
+    expect("print" in preview).toBe(false);
+    expect("printAttemptsStarted" in preview).toBe(false);
+    expect("printDialoguesOpened" in preview).toBe(false);
   });
 });
 
@@ -298,43 +301,45 @@ test.describe("printing", () => {
  * the broken-markup case below exercises the real, unmodified `renderBook`.
  */
 test.describe("print button error paths", () => {
+  let printing: PrintingSession;
+
   test.beforeEach(async ({ page }) => {
-      await page.goto("/tests/grimoire/fixtures/print-error-harness.html");
+    printing = await openPrintingSession(page, "print-error");
   });
 
   test("a failing print engine is reported with printing's own wording", async ({ page }) => {
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("Start writing your book here.");
+    await expect.poll(() => printing.previewText()).toContain("Start writing your book here.");
 
-    await page.locator("#print").click();
+    await printing.print();
 
     await expect(page.locator("#status")).toBeVisible();
-    await expect.poll(() => page.locator("#status").textContent()).toContain("Printing failed");
+    await expect.poll(() => printing.statusText()).toContain("Printing failed");
   });
 
   test("printing broken markup is reported rather than thrown uncaught", async ({ page }) => {
-    await replaceSource(page, BROKEN_SOURCE);
+    await printing.replaceSource(BROKEN_SOURCE);
 
-    await page.locator("#print").click();
+    await printing.print();
 
     await expect(page.locator("#status")).toBeVisible();
-    await expect.poll(() => page.locator("#status").textContent()).toContain("Printing failed");
-    expect(await page.locator("#status").textContent()).toContain("line 3");
+    await expect.poll(() => printing.statusText()).toContain("Printing failed");
+    expect(await printing.statusText()).toContain("line 3");
   });
 
-  test("a standing print error survives a repaint that succeeds", async ({ page }) => {
+  test("a standing print error survives a repaint that succeeds", async () => {
     // #given: a print failure the author has not acknowledged
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("Start writing your book here.");
-    await page.locator("#print").click();
-    await expect.poll(() => page.locator("#status").textContent()).toContain("Printing failed");
+    await expect.poll(() => printing.previewText()).toContain("Start writing your book here.");
+    await printing.print();
+    await expect.poll(() => printing.statusText()).toContain("Printing failed");
 
     // #when: the author keeps writing and a repaint succeeds (this harness's
     // fake pagination adapter always resolves)
-    await replaceSource(page, GOOD_SOURCE);
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("A good paragraph appears here.");
+    await printing.replaceSource(GOOD_SOURCE);
+    await expect.poll(() => printing.previewText()).toContain("A good paragraph appears here.");
 
     // #then: the print error is still there -- a repaint's own success clears
     // only preview status, never print status
-    expect(await page.locator("#status").textContent()).toContain("Printing failed");
+    expect(await printing.statusText()).toContain("Printing failed");
   });
 });
 
