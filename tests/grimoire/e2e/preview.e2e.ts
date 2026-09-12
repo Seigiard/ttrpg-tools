@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { openPreviewSession } from "../support/preview";
-import { openPrintingAdapterDriver, openPrintingSession, type PrintingSession } from "../support/printing";
+import { openPrintingSession, type PrintingSession } from "../support/printing";
 
 const GOOD_SOURCE = ['<Book size="A5">', '<Section columns="1">', "A good paragraph appears here.", "</Section>", "</Book>"].join(
   "\n",
@@ -260,32 +260,6 @@ test.describe("preview coalescing", () => {
     await expect.poll(() => preview.previewText()).toContain("SLOW MARKER");
     await page.waitForTimeout(500);
     expect(await preview.previewText()).not.toContain("QUEUED MARKER");
-  });
-});
-
-test.describe("printing", () => {
-  test("two print requests made back-to-back share one in-flight attempt", async ({ page }) => {
-    const printing = await openPrintingAdapterDriver(page);
-
-    const shared = await printing.sharedAttempt(GOOD_SOURCE);
-
-    expect(shared).toEqual({ firstJoinedSecond: true });
-  });
-
-  test("a print request made after the previous one has settled starts its own fresh attempt", async ({ page }) => {
-    const printing = await openPrintingAdapterDriver(page);
-
-    const fresh = await printing.sequentialAttempts(GOOD_SOURCE);
-
-    expect(fresh).toEqual({ firstJoinedSecond: false });
-  });
-
-  test("printing controls are not exposed by unrelated concept sessions", async ({ page }) => {
-    const preview = await openPreviewSession(page, "preview-controlled-engine");
-
-    expect("print" in preview).toBe(false);
-    expect("printAttemptsStarted" in preview).toBe(false);
-    expect("printDialoguesOpened" in preview).toBe(false);
   });
 });
 

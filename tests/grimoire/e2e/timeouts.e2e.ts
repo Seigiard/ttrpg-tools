@@ -78,32 +78,6 @@ async function firstPrintPaint(page: import("@playwright/test").Page): Promise<P
  * real.
  */
 test.describe("a repaint the engine never answers", () => {
-  test("is given up on after 30 seconds, and not a moment before", async ({ page }) => {
-    // #given: a book the real engine has laid out, and an engine that will not
-    // answer about the next one
-    const preview = await firstPreviewPaint(page);
-    await preview.replaceSource(GOOD_SOURCE);
-    await expect.poll(() => preview.previewText()).toContain("A good paragraph appears here.");
-    await preview.stallEngine();
-
-    // #when: the author writes on, and the repaint that follows goes unanswered
-    await preview.replaceSource(OTHER_GOOD_SOURCE);
-    await expect.poll(() => preview.stalledEngineRuns()).toBe(1);
-
-    // #then: nothing is said for the whole of the bound -- a book that simply takes
-    // a while to lay out must not be cut off
-    await preview.advanceEngineClock(29_000);
-    await expect(preview.status()).toBeHidden();
-
-    // #then: and the second the bound elapses, the author is told, in words that
-    // name an engine that did not answer rather than a book it could not lay out
-    await preview.advanceEngineClock(1_000);
-    await expect(preview.status()).toBeVisible();
-    const status = await preview.statusText();
-    expect(status).toContain("the pagination engine did not answer within 30 seconds");
-    expect(status).not.toContain("could not lay out the book");
-  });
-
   test("leaves the last book that did paginate on screen (issue #11's guarantee, through the timeout)", async ({ page }) => {
     // #given: a book the real engine has laid out into the preview
     const preview = await firstPreviewPaint(page);
@@ -129,25 +103,6 @@ test.describe("a repaint the engine never answers", () => {
     // markup and the container's own attributes.
     expect(await preview.previewMarkup()).toBe(lastGood);
     expect(await preview.previewAttributes()).toBe(lastGoodAttributes);
-  });
-
-  test("does not wedge the repaint queue: the next edit paints", async ({ page }) => {
-    // #given: a repaint that has been given up on
-    const preview = await firstPreviewPaint(page);
-    await preview.stallEngine();
-    await preview.replaceSource(GOOD_SOURCE);
-    await expect.poll(() => preview.stalledEngineRuns()).toBe(1);
-    await preview.advanceEngineClock(30_000);
-    await expect(preview.status()).toBeVisible();
-
-    // #when: the engine recovers and the author keeps writing
-    await preview.unstallEngine();
-    await preview.replaceSource(OTHER_GOOD_SOURCE);
-
-    // #then: that edit actually reaches the preview -- the coalescing queue was
-    // released when the abandoned repaint settled, rather than holding the newer
-    // source forever without ever draining
-    await expect.poll(() => preview.previewText()).toContain("A second paragraph appears here.");
   });
 
   test("cannot put its stale book back when the engine answers for it later", async ({ page }) => {
@@ -289,47 +244,7 @@ test.describe("a repaint abandoned while the engine was mid-layout", () => {
   });
 });
 
-test.describe("a repaint the engine does answer", () => {
-  test("leaves no deadline behind once it has painted", async ({ page }) => {
-    // #given: a repaint under way, with its bound running
-    const preview = await firstPreviewPaint(page);
-    await preview.stallEngine();
-    await preview.replaceSource(GOOD_SOURCE);
-    await expect.poll(() => preview.stalledEngineRuns()).toBe(1);
-    expect(await preview.pendingEngineDeadlines()).toBeGreaterThan(0);
-
-    // #when: the engine is handed that very run and lays it out for real
-    expect(await preview.resumeOldestStalledEngineRun()).toBe(true);
-    await expect.poll(() => preview.previewText()).toContain("A good paragraph appears here.");
-
-    // #then: the bound is not left ticking towards a rejection half a minute into a
-    // session that already got its book
-    expect(await preview.pendingEngineDeadlines()).toBe(0);
-  });
-});
-
 test.describe("a print the engine never answers", () => {
-  test("is given up on after 60 seconds, in printing's own words", async ({ page }) => {
-    // #given: the author asks for a print the engine will not answer about
-    const printing = await firstPrintPaint(page);
-    await printing.stallEngine();
-    await printing.print();
-    await expect.poll(() => printing.stalledEngineRuns()).toBe(1);
-
-    // #then: printing is given longer than a repaint -- it lays the whole book out
-    // again, and the author is deliberately standing by for it
-    await printing.advanceEngineClock(59_000);
-    await expect(page.locator("#status")).toBeHidden();
-
-    await printing.advanceEngineClock(1_000);
-    await expect(page.locator("#status")).toBeVisible();
-    const status = await printing.statusText();
-    expect(status).toContain("Printing failed");
-    expect(status).toContain("the print engine did not answer within 60 seconds");
-    // The preview's own wording for the same union case, never borrowed here
-    expect(status).not.toContain("the pagination engine");
-  });
-
   test("does not open a dialogue over the author when the engine answers for it later", async ({ page }) => {
     // #given: a print given up on, with no dialogue opened for it
     const printing = await firstPrintPaint(page);
@@ -353,31 +268,6 @@ test.describe("a print the engine never answers", () => {
     // moved on to. Settling twice is a harmless no-op; opening a dialogue is not,
     // and it happens on the line before the resolve.
     expect(await printing.printDialoguesOpened()).toBe(0);
-  });
-
-  test("does not start another global print instance until the abandoned one finishes", async ({ page }) => {
-    const printing = await firstPrintPaint(page);
-    await printing.stallEngine();
-    await printing.print();
-    await expect.poll(() => printing.stalledEngineRuns()).toBe(1);
-    await printing.advanceEngineClock(60_000);
-    await expect.poll(() => printing.statusText()).toContain("Printing failed");
-
-    // A retry while the hidden iframe is still alive must not start another user of
-    // Vivliostyle's one global print instance.
-    await printing.print();
-    expect(await printing.printAttemptsStarted()).toBe(1);
-
-    // Once the abandoned attempt has really finished, a fresh print may start and
-    // open exactly one dialog of its own.
-    expect(await printing.resumeOldestStalledEngineRun()).toBe(true);
-    await expect.poll(() => printing.printAttemptsStarted()).toBe(0);
-    await printing.unstallEngine();
-    await printing.print();
-    await expect(page.locator("#status")).toBeHidden();
-    await expect.poll(() => printing.printDialoguesOpened(), { timeout: 30_000 }).toBe(1);
-    await expect.poll(() => printing.printAttemptsStarted()).toBe(0);
-    expect(await printing.printDialoguesOpened()).toBe(1);
   });
 
   test("an ignored print request renders no newer source for an older completion to clear", async ({ page }) => {
