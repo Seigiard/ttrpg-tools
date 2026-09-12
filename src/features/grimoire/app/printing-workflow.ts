@@ -21,27 +21,50 @@ interface PrintingWorkflowOptions {
 export function createPrintingWorkflow({ printBook, status }: PrintingWorkflowOptions): PrintingWorkflow {
   let active = true;
   let requestToken = 0;
+  let runningToken: number | undefined;
+
+  const finish = (token: number): void => {
+    if (runningToken === token) runningToken = undefined;
+  };
 
   return {
     printRequested(source) {
-      if (!active) return;
+      if (!active || runningToken !== undefined) return;
       const token = ++requestToken;
+      runningToken = token;
 
       let html: string;
       try {
         html = renderBook({ source });
       } catch (error) {
-        if (token === requestToken) status.printFailed(toBookMarkupError(error));
+        try {
+          if (active && token === requestToken) status.printFailed(toBookMarkupError(error));
+        } finally {
+          finish(token);
+        }
         return;
       }
 
-      void printBook(html)
+      let printed: Promise<void>;
+      try {
+        printed = Promise.resolve(printBook(html));
+      } catch (error) {
+        try {
+          if (active && token === requestToken) status.printFailed(toBookPrintError(error));
+        } finally {
+          finish(token);
+        }
+        return;
+      }
+
+      void printed
         .then(() => {
           if (active && token === requestToken) status.printSucceeded();
         })
         .catch((error: unknown) => {
           if (active && token === requestToken) status.printFailed(toBookPrintError(error));
-        });
+        })
+        .finally(() => finish(token));
     },
     bookReplaced() {
       requestToken += 1;
