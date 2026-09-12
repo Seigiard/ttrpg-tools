@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
 
+import { openPreviewSession, type PreviewSession } from "../support/preview";
+
 const HARNESS = "/tests/grimoire/fixtures/timeout-harness.html";
-const ISOLATED_HARNESS = `${HARNESS}?isolated`;
 const ALL_PREVIEW_FRAMES = "#preview iframe[data-grimoire-preview-document]";
 const PREVIEW_FRAME = `${ALL_PREVIEW_FRAMES}:not([aria-hidden="true"])`;
 
@@ -50,29 +51,25 @@ async function replaceSource(page: import("@playwright/test").Page, source: stri
 }
 
 /** The author's first book has painted, so anything that follows is a fresh run
- * rather than something coalesced into the session's opening repaint. */
+ * rather than something coalesced into the session's opening Preview refresh. */
 async function firstPaint(page: import("@playwright/test").Page): Promise<void> {
   await page.goto(HARNESS);
   await expect.poll(() => page.locator("#preview").textContent()).toContain("Start writing your book here.");
+}
+
+async function firstPreviewPaint(
+  page: import("@playwright/test").Page,
+  scenario: "preview-controlled-engine" | "preview-controlled-engine-isolated" = "preview-controlled-engine",
+): Promise<PreviewSession> {
+  const preview = await openPreviewSession(page, scenario);
+  await expect.poll(() => preview.previewText()).toContain("Start writing your book here.");
+  return preview;
 }
 
 /** A run the engine has been handed and is sitting on. Waiting for it is what makes
  * "the engine is not answering" a fact rather than a hope about timing. */
 async function withheldRuns(page: import("@playwright/test").Page): Promise<number> {
   return page.evaluate(() => window.__stalledEngineRuns());
-}
-
-/** The preview container's own attributes -- the oracle pagination.e2e.ts uses
- * for the sibling error path. `innerHTML` serializes descendants only and never sees
- * an attribute on the container itself, so the engine's own bookkeeping (which it
- * writes onto the container, not into it) is invisible to it. */
-async function previewAttributes(page: import("@playwright/test").Page): Promise<string> {
-  return page.evaluate(() =>
-    [...document.getElementById("preview")!.attributes]
-      .map((attribute) => `${attribute.name}=${attribute.value}`)
-      .sort()
-      .join("\n"),
-  );
 }
 
 /**
@@ -95,93 +92,91 @@ test.describe("a repaint the engine never answers", () => {
   test("is given up on after 30 seconds, and not a moment before", async ({ page }) => {
     // #given: a book the real engine has laid out, and an engine that will not
     // answer about the next one
-    await firstPaint(page);
-    await replaceSource(page, GOOD_SOURCE);
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("A good paragraph appears here.");
-    await page.evaluate(() => window.__stallEngine());
+    const preview = await firstPreviewPaint(page);
+    await preview.replaceSource(GOOD_SOURCE);
+    await expect.poll(() => preview.previewText()).toContain("A good paragraph appears here.");
+    await preview.stallEngine();
 
     // #when: the author writes on, and the repaint that follows goes unanswered
-    await replaceSource(page, OTHER_GOOD_SOURCE);
-    await expect.poll(() => withheldRuns(page)).toBe(1);
+    await preview.replaceSource(OTHER_GOOD_SOURCE);
+    await expect.poll(() => preview.stalledEngineRuns()).toBe(1);
 
     // #then: nothing is said for the whole of the bound -- a book that simply takes
     // a while to lay out must not be cut off
-    await page.evaluate(() => window.__advanceEngineClock(29_000));
-    await expect(page.locator("#status")).toBeHidden();
+    await preview.advanceEngineClock(29_000);
+    await expect(preview.status()).toBeHidden();
 
     // #then: and the second the bound elapses, the author is told, in words that
     // name an engine that did not answer rather than a book it could not lay out
-    await page.evaluate(() => window.__advanceEngineClock(1_000));
-    await expect(page.locator("#status")).toBeVisible();
-    const status = await page.locator("#status").textContent();
+    await preview.advanceEngineClock(1_000);
+    await expect(preview.status()).toBeVisible();
+    const status = await preview.statusText();
     expect(status).toContain("the pagination engine did not answer within 30 seconds");
     expect(status).not.toContain("could not lay out the book");
   });
 
   test("leaves the last book that did paginate on screen (issue #11's guarantee, through the timeout)", async ({ page }) => {
     // #given: a book the real engine has laid out into the preview
-    await firstPaint(page);
-    await replaceSource(page, GOOD_SOURCE);
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("A good paragraph appears here.");
-    const lastGood = await page.locator("#preview").innerHTML();
-    const lastGoodAttributes = await previewAttributes(page);
+    const preview = await firstPreviewPaint(page);
+    await preview.replaceSource(GOOD_SOURCE);
+    await expect.poll(() => preview.previewText()).toContain("A good paragraph appears here.");
+    const lastGood = await preview.previewMarkup();
+    const lastGoodAttributes = await preview.previewAttributes();
     expect(lastGoodAttributes).toContain("data-vivliostyle-viewer-status=complete");
 
-    // #when: the next repaint empties the preview and then goes unanswered for its
-    // whole bound. The preview being genuinely blank at this point, and the container
-    // itself genuinely describing the new run, is what makes the assertions below
-    // about restoring rather than about nothing having happened.
-    await page.evaluate(() => window.__stallEngine());
-    await replaceSource(page, OTHER_GOOD_SOURCE);
-    await expect.poll(() => withheldRuns(page)).toBe(1);
-    expect(await page.locator("#preview").textContent()).not.toContain("A good paragraph appears here.");
-    expect(await previewAttributes(page)).toContain("data-vivliostyle-viewer-status=loading");
+    // #when: the next repaint is staged transactionally and then goes unanswered for
+    // its whole bound. The published preview remains the stale book while the engine
+    // owns only its candidate viewport.
+    await preview.stallEngine();
+    await preview.replaceSource(OTHER_GOOD_SOURCE);
+    await expect.poll(() => preview.stalledEngineRuns()).toBe(1);
+    expect(await preview.previewText()).toContain("A good paragraph appears here.");
+    expect(await preview.previewAttributes()).toBe(lastGoodAttributes);
 
-    await page.evaluate(() => window.__advanceEngineClock(30_000));
-    await expect(page.locator("#status")).toBeVisible();
+    await preview.advanceEngineClock(30_000);
+    await expect(preview.status()).toBeVisible();
 
-    // #then: the preview holds exactly the book it held on the way in -- its markup,
-    // and the container's own attributes, the same all-or-nothing ADR-0005 records
-    // for a failed run
-    expect(await page.locator("#preview").innerHTML()).toBe(lastGood);
-    expect(await previewAttributes(page)).toBe(lastGoodAttributes);
+    // #then: the preview still holds exactly the book it held on the way in -- its
+    // markup and the container's own attributes.
+    expect(await preview.previewMarkup()).toBe(lastGood);
+    expect(await preview.previewAttributes()).toBe(lastGoodAttributes);
   });
 
   test("does not wedge the repaint queue: the next edit paints", async ({ page }) => {
     // #given: a repaint that has been given up on
-    await firstPaint(page);
-    await page.evaluate(() => window.__stallEngine());
-    await replaceSource(page, GOOD_SOURCE);
-    await expect.poll(() => withheldRuns(page)).toBe(1);
-    await page.evaluate(() => window.__advanceEngineClock(30_000));
-    await expect(page.locator("#status")).toBeVisible();
+    const preview = await firstPreviewPaint(page);
+    await preview.stallEngine();
+    await preview.replaceSource(GOOD_SOURCE);
+    await expect.poll(() => preview.stalledEngineRuns()).toBe(1);
+    await preview.advanceEngineClock(30_000);
+    await expect(preview.status()).toBeVisible();
 
     // #when: the engine recovers and the author keeps writing
-    await page.evaluate(() => window.__unstallEngine());
-    await replaceSource(page, OTHER_GOOD_SOURCE);
+    await preview.unstallEngine();
+    await preview.replaceSource(OTHER_GOOD_SOURCE);
 
     // #then: that edit actually reaches the preview -- the coalescing queue was
     // released when the abandoned repaint settled, rather than holding the newer
     // source forever without ever draining
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("A second paragraph appears here.");
+    await expect.poll(() => preview.previewText()).toContain("A second paragraph appears here.");
   });
 
   test("cannot put its stale book back when the engine answers for it later", async ({ page }) => {
     // #given: a repaint given up on, which restored the book before it
-    await firstPaint(page);
-    await replaceSource(page, GOOD_SOURCE);
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("A good paragraph appears here.");
-    await page.evaluate(() => window.__stallEngine());
-    await replaceSource(page, OTHER_GOOD_SOURCE);
-    await expect.poll(() => withheldRuns(page)).toBe(1);
-    await page.evaluate(() => window.__advanceEngineClock(30_000));
-    await expect(page.locator("#status")).toBeVisible();
+    const preview = await firstPreviewPaint(page);
+    await preview.replaceSource(GOOD_SOURCE);
+    await expect.poll(() => preview.previewText()).toContain("A good paragraph appears here.");
+    await preview.stallEngine();
+    await preview.replaceSource(OTHER_GOOD_SOURCE);
+    await expect.poll(() => preview.stalledEngineRuns()).toBe(1);
+    await preview.advanceEngineClock(30_000);
+    await expect(preview.status()).toBeVisible();
 
     // #given: and a newer book the author has since written, painted for real
-    await page.evaluate(() => window.__unstallEngine());
-    await replaceSource(page, THIRD_GOOD_SOURCE);
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("A third paragraph appears here.");
-    await expect(page.locator("#status")).toBeHidden();
+    await preview.unstallEngine();
+    await preview.replaceSource(THIRD_GOOD_SOURCE);
+    await expect.poll(() => preview.previewText()).toContain("A third paragraph appears here.");
+    await expect(preview.status()).toBeHidden();
 
     // #when: the engine finally answers about the abandoned run -- the work could
     // not be called off, so this is the real event arriving for a book nobody is
@@ -190,41 +185,40 @@ test.describe("a repaint the engine never answers", () => {
     // would put the stale book back writes to the container inline too, so by the
     // time this call has returned the damage is either done or it is not. There is
     // nothing to wait for, and a wait would only be waiting on nothing.
-    expect(await page.evaluate(() => window.__failOldestStalledEngineRun())).toBe(true);
+    expect(await preview.failOldestStalledEngineRun()).toBe(true);
 
     // #then: the preview is still the newest book, not the one the abandoned run
     // was holding on to, and nothing is reported about a book that is no longer
     // on screen
-    const preview = await page.locator("#preview").textContent();
-    expect(preview).toContain("A third paragraph appears here.");
-    expect(preview).not.toContain("A good paragraph appears here.");
-    await expect(page.locator("#status")).toBeHidden();
+    const previewText = await preview.previewText();
+    expect(previewText).toContain("A third paragraph appears here.");
+    expect(previewText).not.toContain("A good paragraph appears here.");
+    await expect(preview.status()).toBeHidden();
   });
 });
 
 test("an isolated resize keeps its published book through a timeout and late engine response", async ({ page }) => {
-  await page.goto(ISOLATED_HARNESS);
+  const previewSession = await firstPreviewPaint(page, "preview-controlled-engine-isolated");
   const preview = page.frameLocator(PREVIEW_FRAME);
-  await expect(preview.locator("body")).toContainText("Start writing your book here.");
 
-  await replaceSource(page, GOOD_SOURCE);
+  await previewSession.replaceSource(GOOD_SOURCE);
   await expect(preview.locator("body")).toContainText("A good paragraph appears here.");
   const lastGood = await preview.locator("body").textContent();
 
   // The editor may be ahead of the published preview while auto-refresh is off.
   // A resize must refit what is actually visible, not reveal that draft.
-  await page.locator("#auto-refresh").uncheck();
-  await replaceSource(page, OTHER_GOOD_SOURCE);
+  await previewSession.setAutomaticRefresh(false);
+  await previewSession.replaceSource(OTHER_GOOD_SOURCE);
   await page.waitForTimeout(500);
   await expect(preview.locator("body")).toContainText("A good paragraph appears here.");
 
-  await page.evaluate(() => window.__stallEngine());
+  await previewSession.stallEngine();
   await page.evaluate(() => {
     const previewContainer = document.getElementById("preview")!;
     previewContainer.style.width = "500px";
     previewContainer.style.height = "420px";
   });
-  await expect.poll(() => withheldRuns(page)).toBe(1);
+  await expect.poll(() => previewSession.stalledEngineRuns()).toBe(1);
   await expect(page.locator("#preview iframe")).toHaveCount(2);
   const committedFrame = PREVIEW_FRAME;
   const stagingFrame = `${ALL_PREVIEW_FRAMES}[aria-hidden="true"]`;
@@ -234,21 +228,21 @@ test("an isolated resize keeps its published book through a timeout and late eng
   );
   await expect(page.locator(stagingFrame)).toHaveCount(1);
   await expect(page.locator(stagingFrame)).toBeHidden();
-  const stagedDocument = await page.evaluate(() => window.__oldestStalledEngineDocument());
+  const stagedDocument = await previewSession.oldestStalledEngineDocument();
   expect(stagedDocument).toContain("A good paragraph appears here.");
   expect(stagedDocument).not.toContain("A second paragraph appears here.");
 
-  await page.evaluate(() => window.__advanceEngineClock(30_000));
-  await expect(page.locator("#status")).toBeVisible();
+  await previewSession.advanceEngineClock(30_000);
+  await expect(previewSession.status()).toBeVisible();
   await expect(page.locator("#preview iframe")).toHaveCount(1);
   expect(await preview.locator("body").textContent()).toBe(lastGood);
 
-  await page.evaluate(() => window.__unstallEngine());
-  await page.locator("#auto-refresh").check();
+  await previewSession.unstallEngine();
+  await previewSession.setAutomaticRefresh(true);
   await expect(preview.locator("body")).toContainText("A second paragraph appears here.");
-  await replaceSource(page, THIRD_GOOD_SOURCE);
+  await previewSession.replaceSource(THIRD_GOOD_SOURCE);
   await expect(preview.locator("body")).toContainText("A third paragraph appears here.");
-  expect(await page.evaluate(() => window.__resumeOldestStalledEngineRunUntilLoaded())).toBe(true);
+  expect(await previewSession.resumeOldestStalledEngineRunUntilLoaded()).toBe(true);
   await expect(page.locator("#preview iframe")).toHaveCount(1);
   await expect(preview.locator("body")).toContainText("A third paragraph appears here.");
 });
@@ -264,15 +258,15 @@ test("an isolated resize keeps its published book through a timeout and late eng
  * container is what closes it, and that is a decision with its own cost (ADR-0005).
  */
 test.describe("a repaint abandoned while the engine was mid-layout", () => {
-  test("keeps its pages out of the preview, but goes on stamping the container itself (issue #15)", async ({ page }) => {
+  test("keeps its pages and late container bookkeeping out of the preview", async ({ page }) => {
     test.setTimeout(90_000);
 
     // #given: a book on screen, and a much longer one the engine is part-way through
-    await firstPaint(page);
-    await page.evaluate((source) => window.__editor!.setSource(source), GOOD_SOURCE);
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("A good paragraph appears here.");
+    const preview = await firstPreviewPaint(page);
+    await preview.replaceSource(GOOD_SOURCE);
+    await expect.poll(() => preview.previewText()).toContain("A good paragraph appears here.");
 
-    await page.evaluate((source) => window.__editor!.setSource(source), LONG_SOURCE);
+    await preview.replaceSource(LONG_SOURCE);
     await expect
       .poll(() => page.evaluate(() => document.querySelectorAll("#preview [data-vivliostyle-page-index]").length), {
         timeout: 30_000,
@@ -280,50 +274,48 @@ test.describe("a repaint abandoned while the engine was mid-layout", () => {
       .toBeGreaterThan(5);
     // Pages of the new book are on screen and the call has still not settled: this run
     // is genuinely mid-layout, not merely started.
-    expect(await page.evaluate(() => window.__pendingEngineDeadlines())).toBe(1);
+    expect(await preview.pendingEngineDeadlines()).toBe(1);
 
     // #when: the bound fires there. The engine's own stamp is taken off the container
     // in the same task, so that its coming back can only be the abandoned run writing.
+    await preview.advanceEngineClock(30_000);
     await page.evaluate(() => {
-      window.__advanceEngineClock(30_000);
       document.getElementById("preview")!.removeAttribute("data-vivliostyle-viewer-status");
     });
-    await expect(page.locator("#status")).toBeVisible();
+    await expect(preview.status()).toBeVisible();
 
-    // #then: the run does come back and write to the live container -- this is the
-    // defect, recorded rather than claimed away
+    // #then: the abandoned run cannot write its late bookkeeping onto the published
+    // preview container.
     await expect
       .poll(() => page.evaluate(() => document.getElementById("preview")!.getAttribute("data-vivliostyle-viewer-status")), {
         timeout: 30_000,
       })
-      .not.toBeNull();
+      .toBeNull();
 
-    // #then: and its pages never arrive, because the restore took the engine's own
-    // viewport subtree out of the document with the rest of the children, and a
-    // detached element has no geometry to lay out against (ADR-0005) -- the run halts
-    // where it stands, writing into a subtree nobody can see
-    const preview = await page.locator("#preview").textContent();
-    expect(preview).toContain("A good paragraph appears here.");
-    expect(preview).not.toContain(LONG_BOOK_MARKER);
+    // #then: and its pages never arrive, because the abandoned engine can write only
+    // into the transaction candidate nobody can see.
+    const previewText = await preview.previewText();
+    expect(previewText).toContain("A good paragraph appears here.");
+    expect(previewText).not.toContain(LONG_BOOK_MARKER);
   });
 });
 
 test.describe("a repaint the engine does answer", () => {
   test("leaves no deadline behind once it has painted", async ({ page }) => {
     // #given: a repaint under way, with its bound running
-    await firstPaint(page);
-    await page.evaluate(() => window.__stallEngine());
-    await replaceSource(page, GOOD_SOURCE);
-    await expect.poll(() => withheldRuns(page)).toBe(1);
-    expect(await page.evaluate(() => window.__pendingEngineDeadlines())).toBeGreaterThan(0);
+    const preview = await firstPreviewPaint(page);
+    await preview.stallEngine();
+    await preview.replaceSource(GOOD_SOURCE);
+    await expect.poll(() => preview.stalledEngineRuns()).toBe(1);
+    expect(await preview.pendingEngineDeadlines()).toBeGreaterThan(0);
 
     // #when: the engine is handed that very run and lays it out for real
-    expect(await page.evaluate(() => window.__resumeOldestStalledEngineRun())).toBe(true);
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("A good paragraph appears here.");
+    expect(await preview.resumeOldestStalledEngineRun()).toBe(true);
+    await expect.poll(() => preview.previewText()).toContain("A good paragraph appears here.");
 
     // #then: the bound is not left ticking towards a rejection half a minute into a
     // session that already got its book
-    expect(await page.evaluate(() => window.__pendingEngineDeadlines())).toBe(0);
+    expect(await preview.pendingEngineDeadlines()).toBe(0);
   });
 });
 

@@ -284,9 +284,9 @@ test.describe("download and load a book", () => {
  * mean to load. Oracle: the real `getSource()` DOM state after two real
  * `setInputFiles` calls processed by the real `change` handler in
  * `start-app.ts` -- only the Saved file session's load adapter timing is faked,
- * the same substitution technique `coalesce-harness.html` already established as
- * legitimate for proving this exact class of ordering defect deterministically
- * rather than by hoping a slow read outlasts a fast one.
+ * the same substitution technique the Preview coalescing session already
+ * established as legitimate for proving this exact class of ordering defect
+ * deterministically rather than by hoping a slow read outlasts a fast one.
  */
 test.describe("loading two files in quick succession", () => {
   test("a slower load started first never overwrites a faster one requested after it", async ({ page }, testInfo) => {
