@@ -346,10 +346,9 @@ test.describe("loading two files in quick succession", () => {
  * a different book. Observable failure: the message keeps accusing a book that
  * no longer exists in the editor -- the print failure belonged to the book the
  * load just replaced, not the one now on screen. Oracle: `#status`'s own real
- * text after a real download-then-load round trip through
- * `print-error-harness.html`'s real file adapters (only pagination and printing
- * are substituted there, for reasons that harness's own existing tests already
- * establish and that have nothing to do with file loading).
+ * text after a real download-then-load round trip through the print-error
+ * app-host scenario's real file adapters. Only pagination and printing are
+ * substituted there, for reasons that have nothing to do with file loading.
  */
 test.describe("a successful load and a standing print error", () => {
   test("loading a book clears a print failure recorded against the book it replaced", async ({ page }, testInfo) => {
