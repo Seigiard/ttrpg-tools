@@ -1,6 +1,7 @@
 import type { Locator, Page as BrowserPage } from '@playwright/test';
 
 import { connectAppHost, type AppScenarioName } from './private/app-session';
+import { activePreviewBody } from './private/preview-body';
 
 type AuthoredPageScenarioName = Extract<AppScenarioName, 'authored-page'>;
 type IsolatedAuthoredPageScenarioName = Extract<AppScenarioName, 'authored-page-isolated'>;
@@ -18,14 +19,6 @@ export async function openAuthoredPageSession(
   scenario: AuthoredPageScenarioName | IsolatedAuthoredPageScenarioName = 'authored-page',
 ): Promise<AuthoredPageSession> {
   const transport = await connectAppHost(browserPage, scenario);
-  const activePreviewFrame = browserPage.locator(
-    '#preview > iframe[data-grimoire-preview-document]:not([aria-hidden])',
-  );
-
-  const renderedBook = async () => {
-    if ((await activePreviewFrame.count()) === 0) return browserPage.locator('#preview');
-    return activePreviewFrame.contentFrame().locator('body');
-  };
 
   return {
     replaceSource: (source) => transport.call('replaceSource', { source }),
@@ -35,11 +28,13 @@ export async function openAuthoredPageSession(
     statusText: () => browserPage.locator('#status').textContent(),
 
     async previewText() {
-      return (await renderedBook()).textContent().then((text) => text ?? '');
+      return (await activePreviewBody(browserPage)).textContent().then((text) => text ?? '');
     },
 
     async renderedSheetCount() {
-      return (await renderedBook()).locator('[data-vivliostyle-page-index]').count();
+      return (await activePreviewBody(browserPage))
+        .locator('[data-vivliostyle-page-index]')
+        .count();
     },
   };
 }
