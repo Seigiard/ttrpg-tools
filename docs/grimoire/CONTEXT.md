@@ -5,63 +5,74 @@ RPG rulebook on the left and sees the paginated result on the right.
 
 ## Book
 
-The whole work an author is editing: one rulebook, from first page to last. A book
-declares its page size and its theme. It is the root of a document.
+The whole work an author is editing: one rulebook, from first sheet to last. A book
+declares its sheet size and its theme. It is the root of a document.
 
 ## Draft
 
-The current editable copy of a book. A draft may change continuously and is kept so the
-author can return to their unfinished work.
+The editable copy of one book, saved automatically in the browser it is written in. A
+draft changes as the author edits, and is not the saved file an author chooses to keep.
+A browser holds one draft: opening a saved file replaces that draft's contents rather
+than adding a second one.
 
 ## Saved file
 
 The portable copy an author downloads or opens. A saved file carries a book together
 with its theme.
 
-## Draft
-
-The automatically saved working copy of one book's source in browser storage. A draft
-belongs to the current browser and is not a saved file chosen and kept by the author.
-
 ## Editor session
 
-One open instance of the editor, from opening it until it is closed. A session works on
-one book at a time and may restore that book from a draft or replace it from a saved file.
+One open instance of the editor, from opening it until it is closed. A session edits the
+browser's draft: it restores whatever that draft holds, and may replace its contents by
+opening a saved file.
 
 ## Section
 
-A run of pages that share one layout, above all a column count. The author declares a
-section; the engine decides how many physical pages the section's content occupies.
+A run of book content that shares one layout, above all a column count. The author
+declares a section; the engine decides how many sheets its content occupies.
 
 A section is the unit that answers "how is this part of the book laid out", never "where
-does this page end".
+does this sheet end".
+
+## Sheet
+
+One numbered output surface produced by pagination; in print, one side of a physical leaf.
+A section may flow across any number of sheets; an author-declared page occupies exactly
+one.
+
+"Sheet" is the canonical term for this surface. Earlier ADRs and the code written against
+them name the same surface a physical page; read those as sheets, and do not reach for
+"physical page" in new writing.
 
 ## Page
 
-Exactly one physical page, composed by the author rather than filled by the engine. Used
-where the arrangement itself is the content: a character sheet, a reference card, a
-table meant to sit alone on its own page.
+An author-declared element that must occupy exactly one sheet rather than being filled by
+the engine. Used where the arrangement itself is the content: a character sheet, a
+reference card, a table meant to sit alone on its own sheet.
 
 A page is the exception. Text in a book flows through sections; a page opts out of that
 flow. It sits beside a section rather than inside one, because a section is the flow a
 page opts out of.
 
-"Exactly one" is a claim the editor checks, not a hope. A section between two page
-breaks happens to occupy one page today and silently occupies two tomorrow when the
-author adds a line. A page that no longer fits on a page is reported to the author.
+"Exactly one" is a claim the editor checks, not a hope. A span of section content between
+two page breaks may occupy one sheet today and silently occupy two tomorrow when the
+author adds a line. A page that no longer fits on one sheet is reported to the author.
 
 A page may be turned landscape. It may not be a different size from the book: a book is
 bound at one format, and a rotated sheet is still that format while a larger one is a
 book nobody can bind.
 
 A page carries no running header. The header names where the reader is in the flow, and
-a page has left the flow, so on a page it would name somewhere the reader is not. The
-page number stays, because it is an address and the address is still true.
+a page has left the flow, so on a page it would name somewhere the reader is not. Its
+printed number stays, because it is an address and the address is still true.
 
 ## Page break
 
-A point where the author forces the current page to end, even though content would
+A point where the author forces the current sheet to end, even though content would
 otherwise continue on it. Belongs inside a section.
+
+The name is inherited from CSS and word processors, where it is the term authors already
+know. Despite the word, a page break ends a sheet; it does not declare a page.
 
 ## Column break
 
@@ -77,7 +88,11 @@ set a Russian book.
 
 A book names one theme.
 
-A theme does not choose or override page size. Page size belongs to the book.
+A theme does not choose or override sheet size. Sheet size belongs to the book.
+
+"Sheet size" is the prose name for that declaration. CSS and the code spell it page size,
+because the mechanism is a `@page` rule and the pagination adapter reports `pageSizes`;
+those names stay as the platform writes them and mean the book's sheet size.
 
 ## Component
 
@@ -94,11 +109,20 @@ may change them.
 
 ## Preview
 
-The right-hand side of the editor: the book already divided into pages, shown as it will
-be printed. The preview and the PDF are produced from the same marked-up book, so what
-the author sees is what is printed.
+The paginated rendering of the book, shown in the preview pane on the right-hand side of
+the editor. A current preview and the PDF are produced from the same marked-up book, so
+the current preview shows what will be printed.
+
+## Stale preview
+
+The last successfully generated preview retained after a preview refresh fails. It
+remains visible but no longer represents the draft's current contents.
 
 ## Preview refresh
 
-The operation that replaces the Preview with a newly paginated version of the current
-Book. "Refresh" is the author-facing term; avoid "repaint" for this operation.
+An attempt to paginate a book and show the result. A refresh the author asks for, and an
+automatic one, paginates the draft's current contents; a refresh the preview pane's own
+resize triggers repaginates the source the visible preview was built from, which is behind
+the draft whenever automatic refresh is off. On success it replaces the preview; on failure
+any existing preview remains visible as a stale preview, while a first refresh has nothing
+to retain. "Refresh" is the author-facing term; avoid "repaint" for this operation.
