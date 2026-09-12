@@ -28,6 +28,7 @@
       import { createPagination } from "/src/features/grimoire/adapters/private/create-pagination.ts";
       import { createPrinting } from "/src/features/grimoire/adapters/private/create-printing.ts";
       import { createControlledScheduler } from "/src/features/grimoire/adapters/private/scheduler.ts";
+      import { disabledDraftPersistence } from "/tests/grimoire/support/draft.browser.ts";
 
       // The two adapters share this manually controlled scheduling capability. Their
       // deadlines can move independently of CodeMirror and Vivliostyle, which keep
@@ -196,7 +197,7 @@
           editor: { create: createEditor },
           preview: { paginate: paginateAdapter },
           printing: { printBook },
-          draft: { read: () => undefined, write: () => {}, flush: () => {}, destroy: () => {} },
+          draft: disabledDraftPersistence,
           savedFile: { downloadBook, loadBookFile },
         },
       );

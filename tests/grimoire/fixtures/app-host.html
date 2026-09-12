@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Grimoire full-app test host</title>
+    <link rel="stylesheet" href="/src/features/grimoire/app/app.css" />
+    <style>
+      body {
+        margin: 0;
+        display: flex;
+      }
+      #editor {
+        flex: 1;
+        overflow: auto;
+      }
+      #preview {
+        flex: 1;
+        overflow: auto;
+        border-left: 1px solid #ccc;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="editor"></div>
+    <div id="preview"></div>
+    <button id="print"></button>
+    <button id="refresh"></button>
+    <button id="download"></button>
+    <input id="load" type="file" />
+    <input id="auto-refresh" type="checkbox" checked />
+    <div id="status" hidden></div>
+    <script type="module" src="../support/app-host.ts"></script>
+  </body>
+</html>

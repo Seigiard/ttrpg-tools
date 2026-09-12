@@ -34,6 +34,7 @@
       import { createEditor } from "/src/features/grimoire/adapters/editor.ts";
       import { downloadBook, loadBookFile } from "/src/features/grimoire/adapters/file.ts";
       import { paginate } from "/src/features/grimoire/adapters/pagination.ts";
+      import { disabledDraftPersistence } from "/tests/grimoire/support/draft.browser.ts";
 
       // The real pagination adapter and the real engine: an overflowing page is
       // something only a laid-out book can be, so a stand-in that answered
@@ -48,16 +49,6 @@
       // engine itself (see print-error-harness.html), and the
       // print adapter is an explicit seam exactly so it can be substituted.
       const failingPrint = () => Promise.reject(new Error("Vivliostyle failed to prepare the book for printing: boom"));
-
-      // No draft is read or written: each test types the book it is about, and a
-      // draft left over from the previous test would be what the preview opened
-      // on instead.
-      const noPersistence = {
-        read: () => undefined,
-        write: () => {},
-        flush: () => {},
-        destroy: () => {},
-      };
 
       const app = startApp(
         {
@@ -74,7 +65,7 @@
           editor: { create: createEditor },
           preview: { paginate },
           printing: { printBook: failingPrint },
-          draft: noPersistence,
+          draft: disabledDraftPersistence,
           savedFile: { downloadBook, loadBookFile },
         },
       );

@@ -18,6 +18,7 @@
       import { createEditor } from "/src/features/grimoire/adapters/editor.ts";
       import { downloadBook, loadBookFile } from "/src/features/grimoire/adapters/file.ts";
       import { printBook } from "/src/features/grimoire/adapters/printing.ts";
+      import { disabledDraftPersistence } from "/tests/grimoire/support/draft.browser.ts";
 
       // A stand-in for the real pagination adapter, substituted at the exact seam
       // issue #1's architecture designed for this. It still does real, observable DOM work -- the
@@ -66,7 +67,7 @@
           editor: { create: createEditor },
           preview: { paginate: fakePaginate },
           printing: { printBook },
-          draft: { read: () => undefined, write: () => {}, flush: () => {}, destroy: () => {} },
+          draft: disabledDraftPersistence,
           savedFile: { downloadBook, loadBookFile },
         },
       );
