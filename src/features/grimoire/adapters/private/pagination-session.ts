@@ -35,14 +35,22 @@ export function createVivliostylePaginationSession(): PaginationSession {
       viewer.addListener('nav', onNav);
       viewer.addListener('loaded', onLoaded);
       viewer.addListener('error', onError);
-      viewer.loadDocument(blobUrl);
 
-      return () => {
+      const cleanup = (): void => {
         URL.revokeObjectURL(blobUrl);
         viewer.removeListener('nav', onNav);
         viewer.removeListener('loaded', onLoaded);
         viewer.removeListener('error', onError);
       };
+
+      try {
+        viewer.loadDocument(blobUrl);
+      } catch (error) {
+        cleanup();
+        throw error;
+      }
+
+      return cleanup;
     },
   };
 }

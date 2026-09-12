@@ -50,7 +50,7 @@ async function replaceSource(page: import("@playwright/test").Page, source: stri
 }
 
 /** The author's first book has painted, so anything that follows is a fresh run
- * rather than something coalesced into the session's opening repaint. */
+ * rather than something coalesced into the session's opening Preview refresh. */
 async function firstPaint(page: import("@playwright/test").Page): Promise<void> {
   await page.goto(HARNESS);
   await expect.poll(() => page.locator("#preview").textContent()).toContain("Start writing your book here.");
