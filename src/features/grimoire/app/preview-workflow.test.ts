@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { createControlledScheduler } from "../adapters/private/scheduler";
 import type { PaginationResult } from "../adapters/pagination";
 import { createPreviewWorkflow, type PreviewStatus } from "./preview-workflow";
+import { createStatus } from "./status";
 
 const RESULT: PaginationResult = { pageCount: 1, pageSizes: [], overflowingPages: [] };
 
@@ -254,6 +255,63 @@ describe("preview workflow", () => {
     expect(status.events).toEqual(["failed", "succeeded"]);
     expect(htmlCalls).toHaveLength(2);
     expect(htmlCalls[1]).toContain("RECOVERS");
+  });
+
+  test("a synchronous markup throw reports failure, cleans up running state, and continues queued work", async () => {
+    const htmlCalls: string[] = [];
+    let preview!: ReturnType<typeof createPreviewWorkflow>;
+    const status: PreviewStatus & { events: string[] } = {
+      events: [],
+      previewFailed: () => {
+        status.events.push("failed");
+        preview.refreshRequested("RECOVERS");
+      },
+      previewSucceeded: () => status.events.push("succeeded"),
+    };
+    preview = createPreviewWorkflow({
+      container: document.createElement("div"),
+      paginate: (_container, html) => {
+        htmlCalls.push(html);
+        return Promise.resolve(RESULT);
+      },
+      status,
+    });
+
+    preview.refreshRequested("<Book>\n<Section>\n<Section>\n</Section>\n</Section>\n</Book>");
+    await settle();
+
+    expect(status.events).toEqual(["failed", "succeeded"]);
+    expect(htmlCalls).toHaveLength(1);
+    expect(htmlCalls[0]).toContain("RECOVERS");
+  });
+
+  test("a failed markup refresh preserves the last successful preview and overflow status", async () => {
+    const previewContainer = document.createElement("div");
+    const statusContainer = document.createElement("div");
+    const status = createStatus(statusContainer);
+    const preview = createPreviewWorkflow({
+      container: previewContainer,
+      paginate: (container, html) => {
+        container.textContent = html.includes("STABLE PREVIEW") ? "visible stable preview" : "unexpected preview";
+        return Promise.resolve({
+          pageCount: 2,
+          pageSizes: [],
+          overflowingPages: [{ line: 7, pages: 2 }],
+        });
+      },
+      status,
+    });
+
+    preview.refreshRequested("STABLE PREVIEW");
+    await settle();
+    preview.refreshRequested("<Book>\n<Section>\n<Section>\n</Section>\n</Section>\n</Book>");
+    await settle();
+
+    expect(previewContainer.textContent).toBe("visible stable preview");
+    expect(statusContainer.hidden).toBe(false);
+    expect(statusContainer.textContent).toContain("Preview is out of date");
+    expect(statusContainer.textContent).toContain("A page did not fit");
+    expect(statusContainer.textContent).toContain("line 7 took 2 pages");
   });
 
   test("a rejected pagination promise cleans up running state and continues queued work", async () => {
