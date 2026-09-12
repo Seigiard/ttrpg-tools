@@ -202,6 +202,28 @@ test.describe("download and load a book", () => {
     expect(after).toBe(before);
   });
 
+  test("validating a book clears an obsolete load error even when replacement is declined", async ({
+    page,
+  }, testInfo) => {
+    await replaceSource(page, SOURCE);
+    const savedPath = testInfo.outputPath("book.grimoire.json");
+    const [download] = await Promise.all([page.waitForEvent("download"), page.locator("#download").click()]);
+    await download.saveAs(savedPath);
+
+    await replaceSource(page, "the current book must survive the declined replacement");
+    const before = await page.evaluate(() => window.__editor?.getSource?.());
+    const invalidPath = testInfo.outputPath("not-a-book.json");
+    writeFileSync(invalidPath, "{}");
+    await page.locator("#load").setInputFiles(invalidPath);
+    await expect.poll(() => page.locator("#status").textContent()).toContain("Loading file failed");
+
+    page.once("dialog", (dialog) => void dialog.dismiss());
+    await page.locator("#load").setInputFiles(savedPath);
+
+    await expect.poll(() => page.locator("#status").textContent()).not.toContain("Loading file failed");
+    expect(await page.evaluate(() => window.__editor?.getSource?.())).toBe(before);
+  });
+
   // Consumer: the author typing with auto-refresh on, who loads a file instead
   // of typing. Observable failure: `EditorHandle.setSource` fires the same
   // update listener a keystroke would, arming a debounced repaint, while the

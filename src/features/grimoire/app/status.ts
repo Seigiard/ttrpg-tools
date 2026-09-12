@@ -14,6 +14,7 @@ export interface AppStatus {
   printFailed(error: BookPrintError): void;
   printSucceeded(): void;
   loadFailed(error: SavedFileLoadError): void;
+  savedFileValidated(): void;
   draftSaveChanged(failed: boolean): void;
   bookReplaced(): void;
 }
@@ -39,6 +40,8 @@ export function createStatus(container: HTMLElement): AppStatus {
     container.hidden = parts.length === 0;
   };
 
+  render();
+
   return {
     previewFailed(error) {
       previewError = error;
@@ -59,6 +62,10 @@ export function createStatus(container: HTMLElement): AppStatus {
     },
     loadFailed(error) {
       loadError = error;
+      render();
+    },
+    savedFileValidated() {
+      loadError = undefined;
       render();
     },
     draftSaveChanged(failed) {

@@ -10,11 +10,14 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   return { promise, resolve };
 }
 
-function statusRecorder(): SavedFileStatus & { failures: unknown[] } {
+function statusRecorder(): SavedFileStatus & { failures: unknown[]; validations: string[] } {
   const failures: unknown[] = [];
+  const validations: string[] = [];
   return {
     failures,
+    validations,
     loadFailed: (error) => failures.push(error),
+    savedFileValidated: () => validations.push("validated"),
   };
 }
 
@@ -63,5 +66,29 @@ describe("saved-file workflow", () => {
 
     expect(replacements).toEqual([]);
     expect(status.failures).toEqual([]);
+    expect(status.validations).toEqual([]);
+  });
+
+  test("clears a previous load failure after validation, before asking to replace", async () => {
+    const events: string[] = [];
+    const workflow = createSavedFileWorkflow({
+      downloadBook: () => undefined,
+      loadBookFile: () => Promise.resolve("VALID BOOK"),
+      confirmReplacement: () => {
+        events.push("confirmed");
+        return false;
+      },
+      replaceBook: () => events.push("replaced"),
+      status: {
+        loadFailed: () => undefined,
+        savedFileValidated: () => events.push("validated"),
+      },
+    });
+
+    workflow.fileSelected(new File([], "book.json"));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(events).toEqual(["validated", "confirmed"]);
   });
 });

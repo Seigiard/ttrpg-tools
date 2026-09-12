@@ -3,6 +3,7 @@ import { toSavedFileLoadError, type SavedFileLoadError } from "./operation-error
 
 export interface SavedFileStatus {
   loadFailed(error: SavedFileLoadError): void;
+  savedFileValidated(): void;
 }
 
 export interface SavedFileWorkflow {
@@ -39,7 +40,9 @@ export function createSavedFileWorkflow({
 
       void loadBookFile(file).then(
         (source) => {
-          if (!active || token !== loadToken || !confirmReplacement()) return;
+          if (!active || token !== loadToken) return;
+          status.savedFileValidated();
+          if (!confirmReplacement()) return;
           replaceBook(source);
         },
         (error: unknown) => {
