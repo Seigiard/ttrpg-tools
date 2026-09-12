@@ -25,61 +25,18 @@
       import { startApp } from "/src/features/grimoire/app/start-app.ts";
       import { createEditor } from "/src/features/grimoire/adapters/editor.ts";
       import { downloadBook, loadBookFile } from "/src/features/grimoire/adapters/file.ts";
-      import { paginate, PAGINATION_TIMEOUT_SECONDS } from "/src/features/grimoire/adapters/pagination.ts";
-      import { printBook, PRINT_TIMEOUT_SECONDS } from "/src/features/grimoire/adapters/printing.ts";
+      import { createPagination } from "/src/features/grimoire/adapters/private/create-pagination.ts";
+      import { createPrinting } from "/src/features/grimoire/adapters/private/create-printing.ts";
+      import { createControlledScheduler } from "/src/features/grimoire/adapters/private/scheduler.ts";
 
-      // A clock for the two bounds issue #10 adds, and for nothing else.
-      //
-      // They are 30 and 60 seconds, deliberately, so no test may sit through one.
-      // Faking every timer in the page would fake the preview's 400ms debounce,
-      // CodeMirror's own scheduling and Vivliostyle's layout time slices along with
-      // them -- and the real engine has to keep running here, because what these
-      // tests watch is a real repaint being restored and a real print starting fresh
-      // afterwards. So only timers set for at least the shorter of the two bounds
-      // are held back; everything else goes straight to the real clock, untouched.
-      //
-      // The threshold is derived from the bounds themselves rather than written out
-      // again. A number copied from the source is a number that stops matching it:
-      // lowering a bound below a hardcoded threshold would leave this holding
-      // nothing back, and every test here would go on passing by waiting out a real
-      // timer that fires within the poll window instead of proving the bound at all.
-      //
-      // Installed before `startApp` is called rather than before the modules load:
-      // the adapters look `setTimeout` up on the global object at each call, and
-      // module evaluation sets no timers.
-      const SHORTEST_BOUND_MS = Math.min(PAGINATION_TIMEOUT_SECONDS, PRINT_TIMEOUT_SECONDS) * 1000;
-      const realSetTimeout = window.setTimeout.bind(window);
-      const realClearTimeout = window.clearTimeout.bind(window);
-      const deadlines = new Map();
-      // Negative, so `clearTimeout` can never mistake one of these for a real timer
-      // id (the browser's own are positive).
-      let nextDeadlineId = 0;
-
-      window.setTimeout = (handler, delay, ...args) => {
-        if (typeof handler === "function" && typeof delay === "number" && delay >= SHORTEST_BOUND_MS) {
-          const id = --nextDeadlineId;
-          deadlines.set(id, { remaining: delay, fire: () => handler(...args) });
-          return id;
-        }
-        return realSetTimeout(handler, delay, ...args);
-      };
-
-      window.clearTimeout = (id) => {
-        if (typeof id === "number" && id < 0) deadlines.delete(id);
-        else realClearTimeout(id);
-      };
-
-      window.__advanceEngineClock = (ms) => {
-        for (const [id, deadline] of [...deadlines]) {
-          deadline.remaining -= ms;
-          if (deadline.remaining <= 0) {
-            deadlines.delete(id);
-            deadline.fire();
-          }
-        }
-      };
-
-      window.__pendingEngineDeadlines = () => deadlines.size;
+      // The two adapters share this manually controlled scheduling capability. Their
+      // deadlines can move independently of CodeMirror and Vivliostyle, which keep
+      // using the browser clock for their own work.
+      const controlledScheduler = createControlledScheduler();
+      const paginate = createPagination(controlledScheduler.scheduler);
+      const printBook = createPrinting(controlledScheduler.scheduler);
+      window.__advanceEngineClock = (ms) => controlledScheduler.advanceBy(ms);
+      window.__pendingEngineDeadlines = () => controlledScheduler.pendingCount();
 
       // An engine that has been handed a book and says nothing back -- the failure
       // issue #10 is about, which has no document-level trigger at all (issue #11
@@ -221,12 +178,9 @@
         ? (container, html) => paginate(container, html, { mode: "isolated" })
         : paginate;
 
-      // The real pagination and printing adapters, at the seam issue #1's
-      // architecture built for substitution -- not substituted here. Both bounds
-      // live inside those adapters, because both guards they release do: nothing
-      // above them can release printing's module-level single-flight guard, and
-      // nothing above them knows what the preview held before the engine emptied
-      // it. So these tests drive the real ones.
+      // Real Pagination and Printing implementations, composed only with a manual
+      // scheduler. Vivliostyle and every browser timer outside these two private
+      // deadlines remain untouched.
       const app = startApp(
         {
           editorContainer,

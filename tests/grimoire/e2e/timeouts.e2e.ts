@@ -87,9 +87,9 @@ async function previewAttributes(page: import("@playwright/test").Page): Promise
  * content and `#status`'s own text and visibility. Real CodeMirror, real
  * Vivliostyle, real pagination and printing adapters -- what the harness substitutes
  * is not an adapter but the engine's own silence (see the harness for why that has
- * to be forced at `loadDocument` rather than through a document), and the clock the
- * two bounds are measured on, which holds back timers of 30 seconds or more and lets
- * every other timer in the page run for real.
+ * to be forced at `loadDocument` rather than through a document), and the private
+ * scheduler the two bounds use. Every browser timer in the page continues to run for
+ * real.
  */
 test.describe("a repaint the engine never answers", () => {
   test("is given up on after 30 seconds, and not a moment before", async ({ page }) => {
