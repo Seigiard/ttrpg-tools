@@ -1,13 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
-const HARNESS = "/tests/grimoire/fixtures/persistence-harness.html";
-
-async function moveBeforeBookClose(page: Page): Promise<void> {
-  await page.locator(".cm-editor").click();
-  await page.keyboard.press("ControlOrMeta+End");
-  await page.keyboard.press("ArrowUp");
-  await page.keyboard.press("Home");
-}
+import { openDraftSession } from "../support/draft";
 
 /**
  * The oracle for every test here is the browser's own storage, observed through the
@@ -17,96 +10,74 @@ async function moveBeforeBookClose(page: Page): Promise<void> {
  * per keystroke.
  */
 test.describe("persistence", () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto(HARNESS);
-  });
-
   test("a draft written before the tab closes comes back when it reopens", async ({ page }) => {
+    const draft = await openDraftSession(page);
+
     // #when: the author writes, then the tab is closed and reopened
-    await moveBeforeBookClose(page);
-    await page.keyboard.type("\n\nThe referee rolls two dice.\n");
+    await draft.typeBeforeBookClose("\n\nThe referee rolls two dice.\n");
 
-    await expect
-      .poll(() => page.evaluate(() => window.__editor?.getSource?.()))
-      .toContain("The referee rolls two dice.");
-    await expect
-      .poll(() => page.evaluate(() => localStorage.getItem("grimoire:draft")))
-      .toContain("The referee rolls two dice.");
+    await expect.poll(() => draft.source()).toContain("The referee rolls two dice.");
+    await expect.poll(() => draft.storedDraft()).toContain("The referee rolls two dice.");
 
-    await page.reload();
+    const reopened = await draft.reopen();
 
     // #then: the reopened editor holds what the author wrote
-    const restored = await page.evaluate(() => window.__editor?.getSource?.());
-    expect(restored).toContain("The referee rolls two dice.");
+    expect(await reopened.source()).toContain("The referee rolls two dice.");
   });
 
   test("closing the tab straight after typing does not lose the last edits", async ({ page }) => {
+    const draft = await openDraftSession(page);
+
     // #given: the author writes and closes the tab before the debounce has elapsed
-    await moveBeforeBookClose(page);
-    await page.keyboard.type("\n\nDamage is dealt before movement.\n");
+    await draft.typeBeforeBookClose("\n\nDamage is dealt before movement.\n");
 
     // #when: the page goes away immediately, with no pause to let the timer fire
-    await page.reload();
+    const reopened = await draft.reopen();
 
     // #then: the reopened editor still holds what was written
-    const restored = await page.evaluate(() => window.__editor?.getSource?.());
-    expect(restored).toContain("Damage is dealt before movement.");
+    expect(await reopened.source()).toContain("Damage is dealt before movement.");
   });
 
   test("a first-time visitor gets a usable editor rather than an error", async ({ page }) => {
-    // #given: storage holds no draft (cleared in beforeEach)
+    // #given: storage holds no draft (every test opens its own browser context)
     // #when: the editor opens
-    const source = await page.evaluate(() => window.__editor?.getSource?.());
+    const draft = await openDraftSession(page);
+    const source = await draft.source();
 
     // #then: there is a book to edit, and typing into it works
     expect(source).toBeTruthy();
 
-    await page.locator(".cm-editor").click();
-    await page.keyboard.type("x");
-    const afterTyping = await page.evaluate(() => window.__editor?.getSource?.());
-    expect(afterTyping).not.toBe(source);
+    await draft.type("x");
+    expect(await draft.source()).not.toBe(source);
   });
 
   test("a burst of typing costs far fewer writes than it has keystrokes", async ({ page }) => {
+    const draft = await openDraftSession(page);
+
     // #given: a counter on the native storage API, which is the browser's, not ours.
     // Counting here rather than inside the adapter keeps the oracle independent of
     // the code under test: a writer that ignored its debounce would still be counted.
-    await page.evaluate(() => {
-      const nativeSetItem = Storage.prototype.setItem;
-      window.__writeCount = 0;
-      Storage.prototype.setItem = function (key: string, value: string): void {
-        window.__writeCount += 1;
-        nativeSetItem.call(this, key, value);
-      };
-    });
+    const writes = await draft.countStorageWrites();
 
     // #when: the author types a run of characters with no pause between them
     const burst = "Roll under your ability score to succeed.";
-    await moveBeforeBookClose(page);
-    await page.keyboard.type(`${burst}\n`, { delay: 0 });
+    await draft.typeBeforeBookClose(`${burst}\n`, { delay: 0 });
 
-    await expect
-      .poll(() => page.evaluate(() => localStorage.getItem("grimoire:draft")))
-      .toContain(burst);
+    await expect.poll(() => draft.storedDraft()).toContain(burst);
 
     // #then: the burst reached storage in a handful of writes, not one per keystroke.
     // The bound is deliberately loose: the point is the order of magnitude, not an
     // exact count, which would depend on how fast the machine running this types.
-    const writes = await page.evaluate(() => window.__writeCount);
-    expect(writes).toBeLessThan(burst.length / 4);
+    expect(await writes.count()).toBeLessThan(burst.length / 4);
   });
 
   test("a failed draft write warns the author before they leave", async ({ page }) => {
-    await page.evaluate(() => {
-      Storage.prototype.setItem = () => {
-        throw new DOMException("Storage quota exceeded", "QuotaExceededError");
-      };
-    });
+    const draft = await openDraftSession(page);
+    await draft.failStorageWrites();
 
-    await moveBeforeBookClose(page);
-    await page.keyboard.type("\n\nThis edit cannot be persisted.\n");
+    await draft.typeBeforeBookClose("\n\nThis edit cannot be persisted.\n");
 
-    await expect.poll(() => page.locator("#status").textContent()).toContain("This book is not being saved");
-    await expect(page.locator("#status")).toContainText("download it before closing this page");
+    await expect.poll(() => draft.statusText()).toContain("This book is not being saved");
+    await expect.poll(() => draft.statusText()).toContain("download it before closing this page");
   });
 });
