@@ -210,6 +210,39 @@ test.describe("download and load a book", () => {
     expect(await saved.source()).toBe(before);
   });
 
+  test("the Saved driver reads the committed preview, not a hidden staging frame", async ({ page }) => {
+    await saved.replaceSource(SOURCE);
+    await expect.poll(() => saved.previewText()).toContain("Roll two dice and add the result.");
+
+    await page.evaluate(() => {
+      const preview = document.getElementById("preview")!;
+      const committedFrame = preview.querySelector('iframe[data-grimoire-preview-document]:not([aria-hidden])')!;
+      const stagingFrame = document.createElement("iframe");
+      stagingFrame.dataset.grimoirePreviewDocument = "";
+      stagingFrame.setAttribute("aria-hidden", "true");
+      preview.insertBefore(stagingFrame, committedFrame);
+      stagingFrame.contentDocument!.body.textContent = "hidden staging draft that must not be read";
+    });
+
+    expect(await saved.previewText()).toContain("Roll two dice and add the result.");
+    expect(await saved.previewText()).not.toContain("hidden staging draft");
+  });
+
+  test("the Saved driver refuses to count repaints before an isolated preview commits", async ({ page }) => {
+    await page.evaluate(() => {
+      const preview = document.getElementById("preview")!;
+      const stagingFrame = document.createElement("iframe");
+      stagingFrame.dataset.grimoirePreviewDocument = "";
+      stagingFrame.setAttribute("aria-hidden", "true");
+      preview.replaceChildren(stagingFrame);
+      stagingFrame.contentDocument!.body.textContent = "hidden staging draft";
+    });
+
+    await expect(saved.countPreviewRepaints()).rejects.toThrow(
+      "Cannot count preview repaints before the isolated preview has committed",
+    );
+  });
+
   // Consumer: the author typing with auto-refresh on, who loads a file instead
   // of typing. Observable failure: `EditorHandle.setSource` fires the same
   // update listener a keystroke would, arming a debounced repaint, while the

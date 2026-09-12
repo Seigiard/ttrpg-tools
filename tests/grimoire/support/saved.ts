@@ -2,6 +2,9 @@ import type { Download, Page as BrowserPage } from '@playwright/test';
 
 import { connectAppHost, type AppScenarioName } from './private/app-session';
 
+const COMMITTED_PREVIEW_FRAME = 'iframe[data-grimoire-preview-document]:not([aria-hidden])';
+const ISOLATED_PREVIEW_FRAME = 'iframe[data-grimoire-preview-document]';
+
 export type SavedFileScenario = Extract<AppScenarioName, 'saved-file' | 'saved-file-load-race'>;
 
 export interface DialogObservation {
@@ -37,11 +40,13 @@ export async function openSavedFileSession(
     source: () => transport.call('source', undefined),
 
     previewText: () =>
-      browserPage.evaluate(() => {
+      browserPage.evaluate((committedPreviewFrame) => {
         const preview = document.getElementById('preview');
-        const frame = preview?.querySelector('iframe');
+        const frame = preview?.querySelector<HTMLIFrameElement>(
+          committedPreviewFrame,
+        );
         return frame?.contentDocument?.body.textContent ?? preview?.textContent ?? null;
-      }),
+      }, COMMITTED_PREVIEW_FRAME),
 
     statusText: () => browserPage.locator('#status').textContent(),
 
@@ -78,16 +83,26 @@ export async function openSavedFileSession(
     },
 
     async countPreviewRepaints() {
-      const counter = await browserPage.evaluateHandle(() => {
-        const counted = { total: 0 };
-        const preview = document.getElementById('preview');
-        new MutationObserver((mutations) => {
-          if (mutations.some((mutation) => mutation.removedNodes.length > 0)) {
-            counted.total += 1;
+      const counter = await browserPage.evaluateHandle(
+        ({ committedPreviewFrame, isolatedPreviewFrame }) => {
+          const counted = { total: 0 };
+          const preview = document.getElementById('preview');
+          if (
+            preview !== null &&
+            preview.querySelector(isolatedPreviewFrame) !== null &&
+            preview.querySelector(committedPreviewFrame) === null
+          ) {
+            throw new Error('Cannot count preview repaints before the isolated preview has committed');
           }
-        }).observe(preview ?? document.body, { childList: true });
-        return counted;
-      });
+          new MutationObserver((mutations) => {
+            if (mutations.some((mutation) => mutation.removedNodes.length > 0)) {
+              counted.total += 1;
+            }
+          }).observe(preview ?? document.body, { childList: true });
+          return counted;
+        },
+        { committedPreviewFrame: COMMITTED_PREVIEW_FRAME, isolatedPreviewFrame: ISOLATED_PREVIEW_FRAME },
+      );
 
       return { count: () => counter.evaluate((counted) => counted.total) };
     },
