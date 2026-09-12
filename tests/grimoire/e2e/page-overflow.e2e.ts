@@ -151,7 +151,7 @@ test.describe('the pagination adapter reports the pages that did not fit', () =>
 
     await expect(authoredPage.status()).toBeVisible();
     await expect.poll(() => authoredPage.statusText()).toContain('line 5 took 2 pages');
-    expect(await authoredPage.renderedSheetCount()).toBe(3);
+    await expect.poll(() => authoredPage.renderedSheetCount()).toBe(3);
     expect(await authoredPage.previewText()).toContain('Paragraph 1.');
   });
 });
