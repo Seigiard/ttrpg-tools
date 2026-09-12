@@ -387,12 +387,16 @@ test.describe("a print the engine never answers", () => {
     await page.locator("#print").click();
     expect(await page.evaluate(() => window.__printAttemptsStarted())).toBe(1);
 
-    // Once the abandoned attempt has really finished, a fresh print may start.
+    // Once the abandoned attempt has really finished, a fresh print may start and
+    // open exactly one dialog of its own.
     expect(await page.evaluate(() => window.__resumeOldestStalledEngineRun())).toBe(true);
     await expect.poll(() => page.evaluate(() => window.__printAttemptsStarted())).toBe(0);
     await page.evaluate(() => window.__unstallEngine());
     await page.locator("#print").click();
     await expect(page.locator("#status")).toBeHidden();
+    await expect.poll(() => page.evaluate(() => window.__printDialoguesOpened()), { timeout: 30_000 }).toBe(1);
+    await expect.poll(() => page.evaluate(() => window.__printAttemptsStarted())).toBe(0);
+    expect(await page.evaluate(() => window.__printDialoguesOpened())).toBe(1);
   });
 
   test("an older print completion cannot clear a newer markup error", async ({ page }) => {
