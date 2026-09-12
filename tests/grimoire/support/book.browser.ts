@@ -7,48 +7,50 @@ import {
   observeBookLayout,
   observeFlowingHeaders,
 } from './private/vivliostyle-observer';
+import {
+  createObservationScheduler,
+  type ObservationScheduler,
+} from './private/observation-scheduler';
 
-function renderWithExtraThemeCss(source: string, extraThemeCss?: string): string {
+function renderWithAdversarialThemeCss(source: string, adversarialThemeCss?: string): string {
   const html = renderBook({ source });
-  if (extraThemeCss === undefined) return html;
+  if (adversarialThemeCss === undefined) return html;
 
   const themeStart = html.indexOf(defaultRuTheme.css);
   if (themeStart === -1) throw new Error('the rendered book does not contain the default-ru Theme');
   const themeEnd = themeStart + defaultRuTheme.css.length;
-  return `${html.slice(0, themeEnd)}\n${extraThemeCss}${html.slice(themeEnd)}`;
+  return `${html.slice(0, themeEnd)}\n${adversarialThemeCss}${html.slice(themeEnd)}`;
 }
 
-export function createBookTestSurface(container: HTMLElement): BookTestSurface {
-  let previousObservation = Promise.resolve();
-
-  const observe = <Result>(operation: () => Promise<Result>): Promise<Result> => {
-    const result = previousObservation.then(operation, operation);
-    previousObservation = result.then(
-      () => undefined,
-      () => undefined,
-    );
-    return result;
-  };
-
+export function createBookTestSurface(
+  container: HTMLElement,
+  observe: ObservationScheduler = createObservationScheduler(),
+): BookTestSurface {
   return {
     pageCount: ({ source }) =>
       observe(async () => {
         const result = await paginate(container, renderBook({ source }));
         return result.pageCount;
       }),
-    layout: ({ source, extraThemeCss }) =>
+    layout: ({ source, adversarialThemeCss }) =>
       observe(async () => {
-        const result = await paginate(container, renderWithExtraThemeCss(source, extraThemeCss));
+        const result = await paginate(
+          container,
+          renderWithAdversarialThemeCss(source, adversarialThemeCss),
+        );
         return observeBookLayout(container, result);
       }),
-    authoredPage: ({ source, extraThemeCss }) =>
+    authoredPage: ({ source, adversarialThemeCss }) =>
       observe(async () => {
-        const result = await paginate(container, renderWithExtraThemeCss(source, extraThemeCss));
+        const result = await paginate(
+          container,
+          renderWithAdversarialThemeCss(source, adversarialThemeCss),
+        );
         return observeAuthoredPageLayout(container, result);
       }),
-    flowingHeaders: ({ source, extraThemeCss }) =>
+    flowingHeaders: ({ source, adversarialThemeCss }) =>
       observe(async () => {
-        await paginate(container, renderWithExtraThemeCss(source, extraThemeCss));
+        await paginate(container, renderWithAdversarialThemeCss(source, adversarialThemeCss));
         return observeFlowingHeaders(container);
       }),
   };

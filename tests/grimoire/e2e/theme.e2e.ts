@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { openThemeDriver } from "../support/theme";
+
 // A Latin phrase set off with emphasis so it renders as its own element
 // (marked wraps *…* in <em>), nested inside Cyrillic prose. Neither
 // magick.css nor default-ru's edits give <em>/<i> their own font-family (see
@@ -31,39 +33,33 @@ const THEMELESS_BOOK = ["# A cheat sheet", "", "Some prose with no theme at all.
  * itself, not a comparison against render-book.ts's or magick.css's own text.
  */
 test.describe("theme font resolution", () => {
-  test("a themed book's heading and body text resolve to the theme's own typefaces", async ({ page }) => {
-    await page.goto("/tests/grimoire/fixtures/harness.html");
+  test("a themed book's heading and body text resolve to the theme's own typefaces", async ({
+    page,
+  }) => {
+    const theme = await openThemeDriver(page);
 
-    const fonts = await page.evaluate(
-      ({ source }) => window.__inspectFonts(source, ["h1", "p"]),
-      { source: THEMED_BOOK },
-    );
+    const fonts = await theme.renderedElementFonts(THEMED_BOOK);
 
-    expect(fonts["h1"]).toContain("Alegreya");
-    expect(fonts["p"]).toContain("Vollkorn");
+    expect(fonts.heading).toContain("Alegreya");
+    expect(fonts.body).toContain("Vollkorn");
   });
 
   test("a Latin phrase inside Russian prose resolves to the same font-family as the Cyrillic around it", async ({
     page,
   }) => {
-    await page.goto("/tests/grimoire/fixtures/harness.html");
+    const theme = await openThemeDriver(page);
 
-    const fonts = await page.evaluate(
-      ({ source }) => window.__inspectFonts(source, ["p", "p em"]),
-      { source: THEMED_BOOK },
-    );
+    const fonts = await theme.renderedElementFonts(THEMED_BOOK);
 
-    expect(fonts["p em"]).toBe(fonts["p"]);
+    expect(fonts.emphasizedBody).toBe(fonts.body);
   });
 
   test("a themeless book keeps its plain fallback font, unaffected by the theme existing", async ({ page }) => {
-    await page.goto("/tests/grimoire/fixtures/harness.html");
+    const theme = await openThemeDriver(page);
 
-    const fonts = await page.evaluate(({ source }) => window.__inspectFonts(source, ["body"]), {
-      source: THEMELESS_BOOK,
-    });
+    const fonts = await theme.renderedElementFonts(THEMELESS_BOOK);
 
-    expect(fonts["body"]).not.toContain("Vollkorn");
+    expect(fonts.document).not.toContain("Vollkorn");
   });
 
   /**
@@ -79,17 +75,17 @@ test.describe("theme font resolution", () => {
    * Vivliostyle-rendered element, not a string comparison against the
    * stylesheet this patch wrote. A margin box only exists once a real
    * pagination pass has run (unlike `h1`/`p` above), so this reads it off
-   * `__inspectMarginBoxFonts`'s real Vivliostyle container rather than a
-   * plain srcdoc iframe.
+   * `theme.marginBoxFonts`'s real Vivliostyle container rather than a plain
+   * srcdoc iframe.
    */
   test("a themed book's margin boxes resolve to the theme's own typefaces for the running header and the page number", async ({
     page,
   }) => {
-    await page.goto("/tests/grimoire/fixtures/harness.html");
+    const theme = await openThemeDriver(page);
 
-    const fonts = await page.evaluate((source) => window.__inspectMarginBoxFonts(source), THEMED_BOOK);
+    const fonts = await theme.marginBoxFonts(THEMED_BOOK);
 
-    expect(fonts.topCenter).toContain("Alegreya");
-    expect(fonts.bottomCenter).toContain("Vollkorn");
+    expect(fonts.runningHeader).toContain("Alegreya");
+    expect(fonts.pageNumber).toContain("Vollkorn");
   });
 });
