@@ -9,7 +9,7 @@ const APP_HOST = '/tests/grimoire/fixtures/app-host.html';
  * a free string: a scenario decides which production seams are replaced, so a typo
  * must not quietly run a different adapter combination than the test names.
  */
-export type AppScenarioName = 'production' | 'persistence-disabled';
+export type AppScenarioName = 'production' | 'persistence-disabled' | 'saved-file' | 'saved-file-load-race';
 
 /**
  * What the mounted application offers concept drivers. Each driver re-exposes only

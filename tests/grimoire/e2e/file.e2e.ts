@@ -3,8 +3,7 @@ import { writeFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 
 import { FILE_FORMAT } from "../../../src/features/grimoire/adapters/file";
-
-const HARNESS = "/tests/grimoire/fixtures/persistence-harness.html";
+import { openSavedFileSession, type SavedFileSession } from "../support/saved";
 
 // Plain ASCII prose rather than the Cyrillic CONTEXT.md's default-ru theme is meant
 // for -- typing Unicode through Playwright's keyboard simulation is its own source
@@ -15,12 +14,6 @@ const HARNESS = "/tests/grimoire/fixtures/persistence-harness.html";
 const SOURCE = ['<Book size="A5" theme="default-ru">', '<Section columns="2">', "# Skill list", "", "Roll two dice and add the result.", "</Section>", "</Book>"].join(
   "\n",
 );
-
-async function replaceSource(page: import("@playwright/test").Page, source: string): Promise<void> {
-  await page.locator(".cm-editor").click();
-  await page.keyboard.press("ControlOrMeta+A");
-  await page.keyboard.type(source);
-}
 
 /**
  * The consumer throughout this file is the author who downloads a book to keep it,
@@ -33,50 +26,51 @@ async function replaceSource(page: import("@playwright/test").Page, source: stri
  * the file's own bytes are never inspected directly by these tests.
  */
 test.describe("download and load a book", () => {
+  let saved: SavedFileSession;
+
   test.beforeEach(async ({ page }) => {
-    await page.goto(HARNESS);
+    saved = await openSavedFileSession(page);
   });
 
-  test("a book downloaded and loaded back holds what it held, preview included", async ({ page }, testInfo) => {
+  test("a book downloaded and loaded back holds what it held, preview included", async ({}, testInfo) => {
     // #given: a book the author wrote, whose preview has painted
-    await replaceSource(page, SOURCE);
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("Roll two dice and add the result.");
-    const originalPreview = await page.locator("#preview").textContent();
+    await saved.replaceSource(SOURCE);
+    await expect.poll(() => saved.previewText()).toContain("Roll two dice and add the result.");
+    const originalPreview = await saved.previewText();
 
     // #when: it is downloaded, the editor is then changed to something else
     // entirely (so a load that silently did nothing could not be mistaken for one
     // that worked), and the downloaded file is loaded back in and confirmed
     const savedPath = testInfo.outputPath("book.grimoire.json");
-    const [download] = await Promise.all([page.waitForEvent("download"), page.locator("#download").click()]);
+    const download = await saved.download();
     await download.saveAs(savedPath);
 
-    await replaceSource(page, "placeholder text that must not survive the load");
+    await saved.replaceSource("placeholder text that must not survive the load");
 
-    page.once("dialog", (dialog) => void dialog.accept());
-    await page.locator("#load").setInputFiles(savedPath);
+    await saved.openFile(savedPath, { confirm: "accept" });
 
     // #then: the editor holds exactly the source it held before, and the preview
     // shows exactly what it showed before
-    await expect.poll(() => page.evaluate(() => window.__editor?.getSource?.())).toBe(SOURCE);
-    await expect.poll(() => page.locator("#preview").textContent()).toBe(originalPreview);
+    await expect.poll(() => saved.source()).toBe(SOURCE);
+    await expect.poll(() => saved.previewText()).toBe(originalPreview);
   });
 
   test("loading a file that is not a book is reported, and the current book is untouched", async ({ page }, testInfo) => {
     // #given: a book in progress, and an unrelated JSON file with no connection to
     // this editor's saved-file format
-    await replaceSource(page, "Distinctive text the author was in the middle of writing.");
-    const before = await page.evaluate(() => window.__editor?.getSource?.());
+    await saved.replaceSource("Distinctive text the author was in the middle of writing.");
+    const before = await saved.source();
 
     const notABookPath = testInfo.outputPath("definitely-not-a-book.json");
     writeFileSync(notABookPath, JSON.stringify({ some: "unrelated JSON file" }));
 
     // #when: that file is loaded
-    await page.locator("#load").setInputFiles(notABookPath);
+    await saved.openFile(notABookPath);
 
     // #then: the author is told, and the book they were writing is unchanged
     await expect(page.locator("#status")).toBeVisible();
-    await expect.poll(() => page.locator("#status").textContent()).toContain("Loading file failed");
-    const after = await page.evaluate(() => window.__editor?.getSource?.());
+    await expect.poll(() => saved.statusText()).toContain("Loading file failed");
+    const after = await saved.source();
     expect(after).toBe(before);
   });
 
@@ -84,19 +78,19 @@ test.describe("download and load a book", () => {
     // #given: a book in progress, and another tool's JSON file that happens to have
     // a top-level "source" string -- the shape check alone cannot tell it apart, so
     // only the format marker stands between the author and a silent replacement
-    await replaceSource(page, "Distinctive text the author was in the middle of writing.");
-    const before = await page.evaluate(() => window.__editor?.getSource?.());
+    await saved.replaceSource("Distinctive text the author was in the middle of writing.");
+    const before = await saved.source();
 
     const lookalikePath = testInfo.outputPath("some-other-tool.json");
     writeFileSync(lookalikePath, JSON.stringify({ source: "print('hello from another tool')" }));
 
     // #when: that file is loaded
-    await page.locator("#load").setInputFiles(lookalikePath);
+    await saved.openFile(lookalikePath);
 
     // #then: the author is told, and the book they were writing is unchanged
     await expect(page.locator("#status")).toBeVisible();
-    await expect.poll(() => page.locator("#status").textContent()).toContain("Loading file failed");
-    const after = await page.evaluate(() => window.__editor?.getSource?.());
+    await expect.poll(() => saved.statusText()).toContain("Loading file failed");
+    const after = await saved.source();
     expect(after).toBe(before);
   });
 
@@ -112,30 +106,30 @@ test.describe("download and load a book", () => {
   // imported from production code rather than retyped here, so this can't drift
   // from the marker `loadBookFile` actually checks against.
   test("a file with the right format marker but no source field is still not a book", async ({ page }, testInfo) => {
-    await replaceSource(page, "Distinctive text the author was in the middle of writing.");
-    const before = await page.evaluate(() => window.__editor?.getSource?.());
+    await saved.replaceSource("Distinctive text the author was in the middle of writing.");
+    const before = await saved.source();
 
     const missingSourcePath = testInfo.outputPath("missing-source.json");
     writeFileSync(missingSourcePath, JSON.stringify({ format: FILE_FORMAT, version: 1 }));
 
-    await page.locator("#load").setInputFiles(missingSourcePath);
+    await saved.openFile(missingSourcePath);
 
     await expect(page.locator("#status")).toBeVisible();
-    await expect.poll(() => page.locator("#status").textContent()).toContain("Loading file failed");
-    const after = await page.evaluate(() => window.__editor?.getSource?.());
+    await expect.poll(() => saved.statusText()).toContain("Loading file failed");
+    const after = await saved.source();
     expect(after).toBe(before);
   });
 
-  test("a file from an unsupported format version is not loaded", async ({ page }, testInfo) => {
-    await replaceSource(page, "Distinctive text the author was in the middle of writing.");
-    const before = await page.evaluate(() => window.__editor?.getSource?.());
+  test("a file from an unsupported format version is not loaded", async ({}, testInfo) => {
+    await saved.replaceSource("Distinctive text the author was in the middle of writing.");
+    const before = await saved.source();
     const unsupportedPath = testInfo.outputPath("unsupported-version.json");
     writeFileSync(unsupportedPath, JSON.stringify({ format: FILE_FORMAT, version: 999, source: SOURCE }));
 
-    await page.locator("#load").setInputFiles(unsupportedPath);
+    await saved.openFile(unsupportedPath);
 
-    await expect.poll(() => page.locator("#status").textContent()).toContain("Loading file failed");
-    expect(await page.evaluate(() => window.__editor?.getSource?.())).toBe(before);
+    await expect.poll(() => saved.statusText()).toContain("Loading file failed");
+    expect(await saved.source()).toBe(before);
   });
 
   // Consumer: the author whose saved file was corrupted between download and
@@ -151,19 +145,19 @@ test.describe("download and load a book", () => {
   test("a file corrupted into invalid UTF-8 is reported rather than loaded full of replacement characters", async ({
     page,
   }, testInfo) => {
-    await replaceSource(page, "Distinctive text the author was in the middle of writing.");
-    const before = await page.evaluate(() => window.__editor?.getSource?.());
+    await saved.replaceSource("Distinctive text the author was in the middle of writing.");
+    const before = await saved.source();
 
     const corruptPath = testInfo.outputPath("corrupt.grimoire.json");
     const prefix = Buffer.from(`{"format":"${FILE_FORMAT}","version":1,"source":"`, "utf-8");
     const suffix = Buffer.from(`"}`, "utf-8");
     writeFileSync(corruptPath, Buffer.concat([prefix, Buffer.from([0xff]), suffix]));
 
-    await page.locator("#load").setInputFiles(corruptPath);
+    await saved.openFile(corruptPath);
 
     await expect(page.locator("#status")).toBeVisible();
-    await expect.poll(() => page.locator("#status").textContent()).toContain("Loading file failed");
-    const after = await page.evaluate(() => window.__editor?.getSource?.());
+    await expect.poll(() => saved.statusText()).toContain("Loading file failed");
+    const after = await saved.source();
     expect(after).toBe(before);
   });
 
@@ -177,51 +171,43 @@ test.describe("download and load a book", () => {
   // before the decision not to replace anything is asserted.
   test("declining the confirmation leaves the current book exactly as it was", async ({ page }, testInfo) => {
     // #given: a downloaded book, and newer work in the editor since then
-    await replaceSource(page, SOURCE);
+    await saved.replaceSource(SOURCE);
     const savedPath = testInfo.outputPath("book.grimoire.json");
-    const [download] = await Promise.all([page.waitForEvent("download"), page.locator("#download").click()]);
+    const download = await saved.download();
     await download.saveAs(savedPath);
 
-    await replaceSource(page, "the author's newer, still-unsaved work");
-    const before = await page.evaluate(() => window.__editor?.getSource?.());
+    await saved.replaceSource("the author's newer, still-unsaved work");
+    const before = await saved.source();
 
     // #when: the file is loaded, but the replace-your-book confirmation is declined
-    let dialogMessage: string | undefined;
-    page.once("dialog", (dialog) => {
-      dialogMessage = dialog.message();
-      void dialog.dismiss();
-    });
-    await page.locator("#load").setInputFiles(savedPath);
+    const dialog = await saved.openFile(savedPath, { confirm: "dismiss" });
     await page.waitForTimeout(200);
 
     // #then: the confirmation was genuinely reached (proving the load path ran
     // all the way to the decision point, not that it silently did nothing)...
-    expect(dialogMessage).toContain("replaces the book you are currently editing");
+    expect(dialog?.message).toContain("replaces the book you are currently editing");
     // ...and declining it is what left the current book untouched
-    const after = await page.evaluate(() => window.__editor?.getSource?.());
+    const after = await saved.source();
     expect(after).toBe(before);
   });
 
-  test("validating a book clears an obsolete load error even when replacement is declined", async ({
-    page,
-  }, testInfo) => {
-    await replaceSource(page, SOURCE);
+  test("validating a book clears an obsolete load error even when replacement is declined", async ({}, testInfo) => {
+    await saved.replaceSource(SOURCE);
     const savedPath = testInfo.outputPath("book.grimoire.json");
-    const [download] = await Promise.all([page.waitForEvent("download"), page.locator("#download").click()]);
+    const download = await saved.download();
     await download.saveAs(savedPath);
 
-    await replaceSource(page, "the current book must survive the declined replacement");
-    const before = await page.evaluate(() => window.__editor?.getSource?.());
+    await saved.replaceSource("the current book must survive the declined replacement");
+    const before = await saved.source();
     const invalidPath = testInfo.outputPath("not-a-book.json");
     writeFileSync(invalidPath, "{}");
-    await page.locator("#load").setInputFiles(invalidPath);
-    await expect.poll(() => page.locator("#status").textContent()).toContain("Loading file failed");
+    await saved.openFile(invalidPath);
+    await expect.poll(() => saved.statusText()).toContain("Loading file failed");
 
-    page.once("dialog", (dialog) => void dialog.dismiss());
-    await page.locator("#load").setInputFiles(savedPath);
+    await saved.openFile(savedPath, { confirm: "dismiss" });
 
-    await expect.poll(() => page.locator("#status").textContent()).not.toContain("Loading file failed");
-    expect(await page.evaluate(() => window.__editor?.getSource?.())).toBe(before);
+    await expect.poll(() => saved.statusText()).not.toContain("Loading file failed");
+    expect(await saved.source()).toBe(before);
   });
 
   // Consumer: the author typing with auto-refresh on, who loads a file instead
@@ -233,36 +219,27 @@ test.describe("download and load a book", () => {
   // independent oracle `preview.spec.ts`'s own burst-typing test already
   // established for counting repaints, unrelated to any file this patch touches.
   test("loading a file triggers exactly one repaint, not two", async ({ page }, testInfo) => {
-    await replaceSource(page, SOURCE);
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("Roll two dice and add the result.");
+    await saved.replaceSource(SOURCE);
+    await expect.poll(() => saved.previewText()).toContain("Roll two dice and add the result.");
 
     const savedPath = testInfo.outputPath("book.grimoire.json");
-    const [download] = await Promise.all([page.waitForEvent("download"), page.locator("#download").click()]);
+    const download = await saved.download();
     await download.saveAs(savedPath);
 
-    await replaceSource(page, "placeholder text");
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("placeholder text");
+    await saved.replaceSource("placeholder text");
+    await expect.poll(() => saved.previewText()).toContain("placeholder text");
 
     // Counting starts only now, so the placeholder's own repaint above isn't
     // mistaken for one the load itself caused.
-    await page.evaluate(() => {
-      const native = Element.prototype.replaceChildren;
-      const preview = document.getElementById("preview");
-      window.__repaintCount = 0;
-      Element.prototype.replaceChildren = function (...args: (string | Node)[]) {
-        if (this === preview) window.__repaintCount += 1;
-        return native.apply(this, args);
-      };
-    });
+    const repaints = await saved.countPreviewRepaints();
 
-    page.once("dialog", (dialog) => void dialog.accept());
-    await page.locator("#load").setInputFiles(savedPath);
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("Roll two dice and add the result.");
+    await saved.openFile(savedPath, { confirm: "accept" });
+    await expect.poll(() => saved.previewText()).toContain("Roll two dice and add the result.");
     // Past the auto-refresh debounce window, so a stray second repaint the bug
     // would schedule has time to land before the count below is read.
     await page.waitForTimeout(600);
 
-    expect(await page.evaluate(() => window.__repaintCount)).toBe(1);
+    expect(await repaints.count()).toBe(1);
   });
 });
 
@@ -273,15 +250,15 @@ test.describe("download and load a book", () => {
  * silently overwrites it, leaving the editor holding the file the author did not
  * mean to load. Oracle: the real `getSource()` DOM state after two real
  * `setInputFiles` calls processed by the real `change` handler in
- * `start-app.ts` -- only the load adapter's timing is faked (this harness's own
- * `fakeLoadBookFile`), the same substitution technique `coalesce-harness.html`
- * already established as legitimate for proving this exact class of ordering
- * defect deterministically rather than by hoping a slow read outlasts a fast one.
+ * `start-app.ts` -- only the Saved file session's load adapter timing is faked,
+ * the same substitution technique `coalesce-harness.html` already established as
+ * legitimate for proving this exact class of ordering defect deterministically
+ * rather than by hoping a slow read outlasts a fast one.
  */
 test.describe("loading two files in quick succession", () => {
   test("a slower load started first never overwrites a faster one requested after it", async ({ page }, testInfo) => {
-    await page.goto("/tests/grimoire/fixtures/load-race-harness.html");
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("Start writing your book here.");
+    const saved = await openSavedFileSession(page, "saved-file-load-race");
+    await expect.poll(() => saved.previewText()).toContain("Start writing your book here.");
 
     const slowPath = testInfo.outputPath("slow-book.json");
     const fastPath = testInfo.outputPath("fast-book.json");
@@ -290,14 +267,14 @@ test.describe("loading two files in quick succession", () => {
 
     page.on("dialog", (dialog) => void dialog.accept());
 
-    await page.locator("#load").setInputFiles(slowPath);
-    await page.locator("#load").setInputFiles(fastPath);
+    await saved.openFile(slowPath);
+    await saved.openFile(fastPath);
 
-    await expect.poll(() => page.evaluate(() => window.__editor?.getSource?.())).toContain("fast-book.json");
+    await expect.poll(() => saved.source()).toContain("fast-book.json");
     // The slow selection's 300ms delay has time to resolve and, if the bug is
     // present, clobber the editor after the fact.
     await page.waitForTimeout(400);
-    expect(await page.evaluate(() => window.__editor?.getSource?.())).toContain("fast-book.json");
+    expect(await saved.source()).toContain("fast-book.json");
   });
 });
 

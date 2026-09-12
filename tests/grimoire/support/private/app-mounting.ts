@@ -9,6 +9,7 @@ import {
   type AppElements,
 } from '../../../../src/features/grimoire/app/start-app';
 import { disabledDraftPersistence } from '../draft.browser';
+import { loadBookFileWithControlledTiming } from '../saved.browser';
 import type { AppScenarioName, AppTestSurface } from './app-session';
 
 /**
@@ -21,9 +22,16 @@ type AppScenarioRecipe = Partial<AppAdapters>;
 const paginateIsolated: typeof paginate = (container, html) =>
   paginate(container, html, { mode: 'isolated' });
 
+const savedFileBaseRecipe = { draft: disabledDraftPersistence } satisfies AppScenarioRecipe;
+
 const APP_SCENARIOS = {
   production: {},
   'persistence-disabled': { draft: disabledDraftPersistence },
+  'saved-file': savedFileBaseRecipe,
+  'saved-file-load-race': {
+    ...savedFileBaseRecipe,
+    savedFile: { downloadBook, loadBookFile: loadBookFileWithControlledTiming },
+  },
 } satisfies Record<AppScenarioName, AppScenarioRecipe>;
 
 /**
