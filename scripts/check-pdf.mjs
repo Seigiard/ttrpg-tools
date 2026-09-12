@@ -21,12 +21,12 @@
 // `string-set`/`content(string(...))` into literal text, and it only does
 // that as part of pagination, so this script now runs the book through
 // `printHTML` (the same Vivliostyle entry point src/features/grimoire/adapters/printing.ts
-// calls) via a small fixture (tests/grimoire/fixtures/print-capture-harness.html) that
-// reads the fully-paginated iframe's document instead of calling
-// `iframeWindow.print()` on it. What comes back is already-resolved, ordinary
-// HTML -- literal header text and page numbers baked in by Vivliostyle, not a
-// `string-set` declaration the printing browser must understand -- which is
-// then handed to Chromium's page.pdf() exactly as before.
+// calls) via an imported print-capture driver that reads the fully-paginated
+// iframe's document instead of calling `iframeWindow.print()` on it. What comes
+// back is already-resolved, ordinary HTML -- literal header text and page
+// numbers baked in by Vivliostyle, not a `string-set` declaration the printing
+// browser must understand -- which is then handed to Chromium's page.pdf()
+// exactly as before.
 //
 // render-book.ts imports the theme through Vite-only `?raw`/`?inline` asset
 // suffixes (see src/features/grimoire/core/themes/vite-assets.d.ts), which plain Node has no
@@ -39,6 +39,11 @@
 import { chromium } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { createServer } from "vite";
+
+import {
+  connectPrintCaptureHost,
+  PRINT_CAPTURE_HOST,
+} from "../tests/grimoire/support/print-capture.ts";
 
 // The book is bound at one format, in millimetres, so the checks at the foot of
 // this file can say what a sheet of it measures without reading the size back out
@@ -161,13 +166,16 @@ try {
   if (serverUrl === undefined) throw new Error("Vite did not expose its local URL");
   browser = await chromium.launch();
 
-  const harnessPage = await browser.newPage();
-  await harnessPage.goto(new URL("/tests/grimoire/fixtures/print-capture-harness.html", serverUrl).href);
+  const capturePage = await browser.newPage();
+  const printCapture = await connectPrintCaptureHost(
+    capturePage,
+    new URL(PRINT_CAPTURE_HOST, serverUrl).href,
+  );
   const printReadyHtml = await withTimeout(
-    harnessPage.evaluate((source) => window.__renderPrintReadyHtml(source), RUSSIAN_BOOK),
+    printCapture.renderPrintReadyHtml(RUSSIAN_BOOK),
     "Vivliostyle did not prepare the PDF within 120 seconds",
   );
-  await harnessPage.close();
+  await capturePage.close();
 
   // data: URL, not page.setContent(): setContent leaves page.url() at
   // about:blank, and this book's fonts are base64 data: URIs anyway (see
