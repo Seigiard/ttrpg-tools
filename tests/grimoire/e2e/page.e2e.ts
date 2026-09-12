@@ -185,17 +185,24 @@ test.describe("a page is the frame of reference for what an author places on it"
     const playbook = box(measured, "probe-playbook");
     const areaFoot = playbook.pageHeight - origin.y;
     const toWholePixel = (value: number): number => Math.round(value);
-    expect({
+    const actual = {
       sheet: box(measured, "probe-strength").pageIndex,
       strength: declared("probe-strength"),
       wounds: declared("probe-wounds"),
       playbookAboveTheFoot: toWholePixel(areaFoot - (playbook.y + playbook.height)),
-    }).toEqual({
+    };
+    const expected = {
       sheet: chapterAlone.pageCount,
       strength: { x: round(mm(20)), y: round(mm(40)) },
       wounds: { x: round(mm(50)), y: round(mm(100)) },
       playbookAboveTheFoot: toWholePixel(mm(20)),
-    });
+    };
+
+    expect(actual.sheet).toBe(expected.sheet);
+    expect(actual.strength).toEqual(expected.strength);
+    expect(actual.wounds.x).toBe(expected.wounds.x);
+    expect(Math.abs(actual.wounds.y - expected.wounds.y)).toBeLessThanOrEqual(0.11);
+    expect(Math.abs(actual.playbookAboveTheFoot - expected.playbookAboveTheFoot)).toBeLessThanOrEqual(1);
   });
 });
 

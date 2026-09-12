@@ -1,4 +1,6 @@
 import { createPagination } from './private/create-pagination';
+import { createVivliostylePaginationSession } from './private/pagination-session';
+import { createBrowserPreviewTransactionFactory } from './private/preview-transaction';
 import { browserScheduler } from './private/scheduler';
 
 /**
@@ -24,7 +26,11 @@ export interface PaginationOptions {
   readonly mode?: 'direct' | 'isolated';
 }
 
-const paginateWithBrowserScheduler = createPagination(browserScheduler);
+const paginateWithBrowserScheduler = createPagination(
+  browserScheduler,
+  createBrowserPreviewTransactionFactory(),
+  createVivliostylePaginationSession(),
+);
 
 /**
  * Paginates an HTML document (as produced by `core/render-book`) into `container`
