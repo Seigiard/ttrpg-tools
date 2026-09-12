@@ -14,6 +14,7 @@ import {
   type AppElements,
 } from '../../../../src/features/grimoire/app/start-app';
 import { disabledDraftPersistence } from '../draft.browser';
+import { loadBookFileWithControlledTiming } from '../saved.browser';
 import type { AppScenarioName, AppTestSurface } from './app-session';
 
 /**
@@ -185,9 +186,16 @@ function createControlledEngineRecipe(isolatedPreview: boolean) {
   };
 }
 
+const savedFileBaseRecipe = { draft: disabledDraftPersistence } satisfies AppScenarioRecipe;
+
 const APP_SCENARIOS = {
   production: () => ({}),
   'persistence-disabled': () => ({ draft: disabledDraftPersistence }),
+  'saved-file': () => savedFileBaseRecipe,
+  'saved-file-load-race': () => ({
+    ...savedFileBaseRecipe,
+    savedFile: { downloadBook, loadBookFile: loadBookFileWithControlledTiming },
+  }),
   preview: () => ({ draft: disabledDraftPersistence, isolatedPreview: false }),
   'preview-coalescing': createCoalescingPreviewRecipe,
   'preview-controlled-engine': createControlledEngineRecipe(false),

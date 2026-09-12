@@ -12,6 +12,8 @@ const APP_HOST = '/tests/grimoire/fixtures/app-host.html';
 export type AppScenarioName =
   | 'production'
   | 'persistence-disabled'
+  | 'saved-file'
+  | 'saved-file-load-race'
   | 'preview'
   | 'preview-coalescing'
   | 'preview-controlled-engine'
