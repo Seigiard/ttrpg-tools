@@ -54,6 +54,14 @@ declare global {
     bottomCenter: string | undefined;
   }
 
+  interface ContainerAfterFailure {
+    rejection: string | undefined;
+    before?: string;
+    after: string;
+    attributesBefore?: string;
+    attributesAfter: string;
+  }
+
   interface Window {
     __paginateBook: (source: string) => Promise<number>;
     __paginateAndInspect: (source: string, extraThemeCss?: string) => Promise<PageInspection>;
@@ -61,8 +69,6 @@ declare global {
     __paginateAndReportOverflow: (source: string) => Promise<OverflowInspection>;
     __paginateAndReportIsolatedOverflow: (source: string) => Promise<OverflowInspection>;
     __paginateAndInspectHeaders: (source: string, extraThemeCss?: string) => Promise<HeaderInspection[]>;
-    __inspectMarginBoxFonts: (source: string) => Promise<MarginBoxFontInspection>;
-    __inspectFonts: (source: string, selectors: readonly string[]) => Promise<Record<string, string | undefined>>;
     __printTwiceSharesOneAttempt: (source: string) => boolean;
     /** tests/grimoire/fixtures/timeout-harness.html: the manual scheduler for the two
      * engine deadlines, and the withheld engine runs they are measured against. */

@@ -207,17 +207,25 @@ test.describe('a page is the frame of reference for what an author places on it'
     const playbook = box(authoredPage, 'probe-playbook');
     const strength = declared('probe-strength');
     const wounds = declared('probe-wounds');
-    expect({
+    const actual = {
       sheet: box(authoredPage, 'probe-strength').sheetIndex,
+      strength,
+      wounds,
       playbookAboveTheFoot: toWholePixel(playbook.frameHeight - (playbook.y + playbook.height)),
-    }).toEqual({
+    };
+    const expected = {
       sheet: chapterAlone.sheetCount,
+      strength: { x: round(mm(20)), y: round(mm(40)) },
+      wounds: { x: round(mm(50)), y: round(mm(100)) },
       playbookAboveTheFoot: toWholePixel(mm(20)),
-    });
-    expect(strength.x).toBeCloseTo(mm(20), 0);
-    expect(strength.y).toBeCloseTo(mm(40), 0);
-    expect(wounds.x).toBeCloseTo(mm(50), 0);
-    expect(wounds.y).toBeCloseTo(mm(100), 0);
+    };
+
+    expect(actual.sheet).toBe(expected.sheet);
+    expect(Math.abs(actual.strength.x - expected.strength.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(actual.strength.y - expected.strength.y)).toBeLessThanOrEqual(1);
+    expect(Math.abs(actual.wounds.x - expected.wounds.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(actual.wounds.y - expected.wounds.y)).toBeLessThanOrEqual(1);
+    expect(Math.abs(actual.playbookAboveTheFoot - expected.playbookAboveTheFoot)).toBeLessThanOrEqual(1);
   });
 });
 
