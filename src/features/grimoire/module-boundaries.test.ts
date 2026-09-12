@@ -15,6 +15,13 @@ const allowedLayers: Record<Layer, ReadonlySet<Layer>> = {
 };
 
 const allowedCorePackages = new Set(['marked']);
+const privatePaginationPrintingModules = new Set([
+  'adapters/private/create-pagination',
+  'adapters/private/pagination-session',
+  'adapters/private/preview-transaction',
+  'adapters/private/create-printing',
+]);
+const publicPaginationPrintingWrappers = new Set(['adapters/pagination', 'adapters/printing']);
 
 function layerFor(filePath: string): Layer | undefined {
   const relativePath = path.relative(grimoireRoot, filePath);
@@ -24,6 +31,10 @@ function layerFor(filePath: string): Layer | undefined {
 function packageName(specifier: string): string {
   const [first, second] = specifier.split('/');
   return first?.startsWith('@') ? `${first}/${second}` : (first ?? specifier);
+}
+
+function moduleKey(filePath: string): string {
+  return path.relative(grimoireRoot, filePath).replace(/\\/g, '/').replace(/\.[cm]?tsx?$/, '');
 }
 
 function importedSpecifiers(filePath: string, source: string): Array<string | undefined> {
@@ -73,6 +84,17 @@ function boundaryViolations(filePath: string, source: string): string[] {
       if (!importedLayer || !allowedLayers[sourceLayer].has(importedLayer)) {
         return [
           `${path.relative(grimoireRoot, filePath)}: ${sourceLayer} cannot import ${specifier}`,
+        ];
+      }
+      const sourceKey = moduleKey(filePath);
+      const importedKey = moduleKey(importedPath);
+      if (
+        privatePaginationPrintingModules.has(importedKey) &&
+        !sourceKey.startsWith('adapters/private/') &&
+        !publicPaginationPrintingWrappers.has(sourceKey)
+      ) {
+        return [
+          `${path.relative(grimoireRoot, filePath)}: production code must use public Pagination/Printing wrappers instead of ${specifier}`,
         ];
       }
       return [];
@@ -163,5 +185,36 @@ describe('Grimoire module boundaries', () => {
       boundaryViolations(filePath, 'import { CoreViewer } from "@vivliostyle/core";'),
     ).toHaveLength(1);
     expect(boundaryViolations(filePath, 'import path from "node:path";')).toEqual([]);
+  });
+
+  test('keeps private Pagination and Printing factories behind public wrappers', () => {
+    expect(
+      boundaryViolations(
+        path.join(grimoireRoot, 'app/probe.ts'),
+        'import { createPagination } from "../adapters/private/create-pagination";',
+      ),
+    ).toEqual([
+      'app/probe.ts: production code must use public Pagination/Printing wrappers instead of ../adapters/private/create-pagination',
+    ]);
+    expect(
+      boundaryViolations(
+        path.join(grimoireRoot, 'adapters/file.ts'),
+        'import { createPrinting } from "./private/create-printing";',
+      ),
+    ).toEqual([
+      'adapters/file.ts: production code must use public Pagination/Printing wrappers instead of ./private/create-printing',
+    ]);
+    expect(
+      boundaryViolations(
+        path.join(grimoireRoot, 'adapters/pagination.ts'),
+        'import { createPagination } from "./private/create-pagination";',
+      ),
+    ).toEqual([]);
+    expect(
+      boundaryViolations(
+        path.join(grimoireRoot, 'adapters/private/create-pagination.ts'),
+        'import { createBrowserPreviewTransactionFactory } from "./preview-transaction";',
+      ),
+    ).toEqual([]);
   });
 });
