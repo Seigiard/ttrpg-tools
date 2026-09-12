@@ -49,6 +49,11 @@ declare global {
     pageNumber: string | undefined;
   }
 
+  interface MarginBoxFontInspection {
+    topCenter: string | undefined;
+    bottomCenter: string | undefined;
+  }
+
   interface ContainerAfterFailure {
     rejection: string | undefined;
     before?: string;
@@ -59,8 +64,6 @@ declare global {
 
   interface Window {
     __paginateBook: (source: string) => Promise<number>;
-    __previewAfterEngineFailure: (goodSource: string, nextSource: string) => Promise<ContainerAfterFailure>;
-    __previewAfterFirstEverEngineFailure: (source: string) => Promise<ContainerAfterFailure>;
     __paginateAndInspect: (source: string, extraThemeCss?: string) => Promise<PageInspection>;
     __paginateAndMeasure: (source: string) => Promise<PageMeasurement>;
     __paginateAndReportOverflow: (source: string) => Promise<OverflowInspection>;
@@ -81,7 +84,6 @@ declare global {
     __printAttemptsStarted: () => number;
     __printDialoguesOpened: () => number;
     __printSequentiallyStartsFreshAttempts: (source: string) => Promise<boolean>;
-    __finishSlowPagination: () => void;
     __editor?: EditorHandle;
     __repaintCount: number;
     __openedPreviewLinks: string[];
