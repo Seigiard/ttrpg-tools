@@ -88,7 +88,6 @@ declare global {
     __printAttemptsStarted: () => number;
     __printDialoguesOpened: () => number;
     __printSequentiallyStartsFreshAttempts: (source: string) => Promise<boolean>;
-    __finishSlowPagination: () => void;
     __editor?: EditorHandle;
     __repaintCount: number;
     __openedPreviewLinks: string[];

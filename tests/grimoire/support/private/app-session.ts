@@ -9,7 +9,15 @@ const APP_HOST = '/tests/grimoire/fixtures/app-host.html';
  * a free string: a scenario decides which production seams are replaced, so a typo
  * must not quietly run a different adapter combination than the test names.
  */
-export type AppScenarioName = 'production' | 'persistence-disabled';
+export type AppScenarioName =
+  | 'production'
+  | 'persistence-disabled'
+  | 'preview'
+  | 'preview-coalescing'
+  | 'preview-controlled-engine'
+  | 'preview-controlled-engine-isolated'
+  | 'preview-engine-failure'
+  | 'preview-first-engine-failure';
 
 /**
  * What the mounted application offers concept drivers. Each driver re-exposes only
@@ -18,6 +26,18 @@ export type AppScenarioName = 'production' | 'persistence-disabled';
  */
 export interface AppTestSurface {
   source(): string;
+  replaceSource(input: { readonly source: string }): void;
+  finishSlowPagination(): void;
+  makePreviewEngineFail(): void;
+  advanceEngineClock(input: { readonly ms: number }): void;
+  pendingEngineDeadlines(): number;
+  stallEngine(): void;
+  unstallEngine(): void;
+  stalledEngineRuns(): number;
+  oldestStalledEngineDocument(): Promise<string | undefined>;
+  resumeOldestStalledEngineRun(): boolean;
+  resumeOldestStalledEngineRunUntilLoaded(): Promise<boolean>;
+  failOldestStalledEngineRun(): boolean;
 }
 
 export function connectAppHost(

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const HARNESS = "/tests/grimoire/fixtures/persistence-harness.html";
+import { openPreviewSession } from "../support/preview";
 
 const GOOD_SOURCE = ['<Book size="A5">', '<Section columns="1">', "A good paragraph appears here.", "</Section>", "</Book>"].join(
   "\n",
@@ -54,106 +54,116 @@ async function replaceSource(page: import("@playwright/test").Page, source: stri
 }
 
 /**
- * The consumer throughout this file is the author typing into the left pane. Every
- * oracle below is the real DOM the harness's real `startApp` wiring -- real
- * CodeMirror, real Vivliostyle -- produces: `#preview`'s own rendered text,
- * `#status`'s own text and visibility, and (for the burst test) the native
- * `Element.prototype.replaceChildren` that `paginate()` calls once per attempted
- * repaint, patched from the test the same way the existing persistence suite
- * patches `Storage.prototype.setItem`.
+ * The consumer throughout this file is the author editing the left pane. Every
+ * oracle below is the real DOM the Preview session's real `startApp` wiring -- real
+ * CodeMirror, real Vivliostyle -- produces: the preview's own rendered text,
+ * `#status`'s own text and visibility, and (for the burst test) the browser's own
+ * DOM mutation stream above any application counter.
  */
 test.describe("preview refresh and error surface", () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto(HARNESS);
-  });
-
   test("broken markup leaves the last good preview on screen and names the line", async ({ page }) => {
+    const preview = await openPreviewSession(page);
+
     // #given: a book that parses and paginates
-    await replaceSource(page, GOOD_SOURCE);
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("A good paragraph appears here.");
-    const goodPreview = await page.locator("#preview").textContent();
+    await preview.replaceSource(GOOD_SOURCE);
+    await expect.poll(() => preview.previewText()).toContain("A good paragraph appears here.");
+    const goodPreview = await preview.previewText();
 
     // #when: the author breaks it (a <Section> nested inside another <Section>)
-    await replaceSource(page, BROKEN_SOURCE);
-    await expect(page.locator("#status")).toBeVisible();
-    await expect.poll(() => page.locator("#status").textContent()).toContain("line 3");
+    await preview.setAutomaticRefresh(false);
+    await preview.replaceSource(BROKEN_SOURCE);
+    await preview.refresh();
+    await expect(preview.status()).toBeVisible();
+    await expect.poll(() => preview.statusText()).toContain("line 3");
 
     // #then: the preview still shows exactly what it showed before the break
-    expect(await page.locator("#preview").textContent()).toBe(goodPreview);
+    expect(await preview.previewText()).toBe(goodPreview);
   });
 
   test("a break inside a page is reported with its reason, and the last good preview stays put", async ({ page }) => {
+    const preview = await openPreviewSession(page);
+
     // #given: a book that parses and paginates
-    await replaceSource(page, GOOD_SOURCE);
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("A good paragraph appears here.");
-    const goodPreview = await page.locator("#preview").textContent();
+    await preview.replaceSource(GOOD_SOURCE);
+    await expect.poll(() => preview.previewText()).toContain("A good paragraph appears here.");
+    const goodPreview = await preview.previewText();
 
     // #when: the author writes a page break inside a page
-    await replaceSource(page, BREAK_INSIDE_PAGE_SOURCE);
+    await preview.setAutomaticRefresh(false);
+    await preview.replaceSource(BREAK_INSIDE_PAGE_SOURCE);
+    await preview.refresh();
 
     // #then: the status names the line and says why a page has nothing to break --
     // an author who read only "unexpected tag" would go looking for a typo
-    await expect(page.locator("#status")).toBeVisible();
-    await expect.poll(() => page.locator("#status").textContent()).toContain("line 4");
-    expect(await page.locator("#status").textContent()).toContain("a page is already one page");
+    await expect(preview.status()).toBeVisible();
+    await expect.poll(() => preview.statusText()).toContain("line 4");
+    expect(await preview.statusText()).toContain("a page is already one page");
 
     // #then: and the book they were writing against is still on screen
-    expect(await page.locator("#preview").textContent()).toBe(goodPreview);
+    expect(await preview.previewText()).toBe(goodPreview);
   });
 
   test("an unrecognized tag is reported by name rather than silently ignored", async ({ page }) => {
-    await replaceSource(page, UNKNOWN_TAG_SOURCE);
+    const preview = await openPreviewSession(page);
+    await preview.setAutomaticRefresh(false);
+    await preview.replaceSource(UNKNOWN_TAG_SOURCE);
+    await preview.refresh();
 
-    await expect(page.locator("#status")).toBeVisible();
-    await expect.poll(() => page.locator("#status").textContent()).toContain("PageBrek");
-    expect(await page.locator("#status").textContent()).toContain("line 4");
+    await expect(preview.status()).toBeVisible();
+    await expect.poll(() => preview.statusText()).toContain("PageBrek");
+    expect(await preview.statusText()).toContain("line 4");
   });
 
   test("turning auto-refresh off stops automatic repaints; the refresh control repaints on demand", async ({ page }) => {
+    const preview = await openPreviewSession(page);
+
     // #given: the initial book has painted
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("Start writing your book here.");
+    await expect.poll(() => preview.previewText()).toContain("Start writing your book here.");
 
     // #when: auto-refresh is turned off and the author writes something new
-    await page.locator("#auto-refresh").uncheck();
-    await replaceSource(page, GOOD_SOURCE);
+    await preview.setAutomaticRefresh(false);
+    await preview.replaceSource(GOOD_SOURCE);
 
     // #then: waiting well past the debounce window, the preview has not moved
     await page.waitForTimeout(1000);
-    expect(await page.locator("#preview").textContent()).not.toContain("A good paragraph appears here.");
+    expect(await preview.previewText()).not.toContain("A good paragraph appears here.");
 
     // #when: the author asks for a refresh explicitly
-    await page.locator("#refresh").click();
+    await preview.refresh();
 
     // #then: the preview now reflects the current source
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("A good paragraph appears here.");
+    await expect.poll(() => preview.previewText()).toContain("A good paragraph appears here.");
   });
 
   test("unchecking auto-refresh mid-debounce cancels the pending repaint too", async ({ page }) => {
+    const preview = await openPreviewSession(page);
+
     // #given: the author types with auto-refresh still on, so a repaint is
     // debounced and waiting
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("Start writing your book here.");
-    await replaceSource(page, GOOD_SOURCE);
+    await expect.poll(() => preview.previewText()).toContain("Start writing your book here.");
+    await preview.replaceSource(GOOD_SOURCE);
 
     // #when: auto-refresh is switched off before the debounce has elapsed
-    await page.locator("#auto-refresh").uncheck();
+    await preview.setAutomaticRefresh(false);
 
     // #then: waiting well past the debounce window, the pending repaint never
     // fires -- switching off a moment before the timer would have landed does
     // not still let it through
     await page.waitForTimeout(600);
-    expect(await page.locator("#preview").textContent()).not.toContain("A good paragraph appears here.");
+    expect(await preview.previewText()).not.toContain("A good paragraph appears here.");
   });
 
   test("book scripts cannot execute in the shared site origin", async ({ page }) => {
+    const preview = await openPreviewSession(page);
+
     await page.evaluate(() => {
       (window as Window & { __grimoireScriptRan?: boolean }).__grimoireScriptRan = false;
     });
-    await replaceSource(
-      page,
+    await preview.replaceSource(
       '<script>window.top.__grimoireScriptRan = true</script>\n\nText after an inert script.',
     );
 
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("Text after an inert script.");
+    await expect.poll(() => preview.previewText()).toContain("Text after an inert script.");
     expect(
       await page.evaluate(
         () => (window as Window & { __grimoireScriptRan?: boolean }).__grimoireScriptRan,
@@ -162,47 +172,38 @@ test.describe("preview refresh and error surface", () => {
   });
 
   test("re-enabling auto-refresh repaints immediately, without waiting for another keystroke", async ({ page }) => {
+    const preview = await openPreviewSession(page);
+
     // #given: auto-refresh is off and the author has written something new that
     // has not reached the preview yet
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("Start writing your book here.");
-    await page.locator("#auto-refresh").uncheck();
-    await replaceSource(page, GOOD_SOURCE);
+    await expect.poll(() => preview.previewText()).toContain("Start writing your book here.");
+    await preview.setAutomaticRefresh(false);
+    await preview.replaceSource(GOOD_SOURCE);
     await page.waitForTimeout(600);
-    expect(await page.locator("#preview").textContent()).not.toContain("A good paragraph appears here.");
+    expect(await preview.previewText()).not.toContain("A good paragraph appears here.");
 
     // #when: the author re-enables auto-refresh, without typing anything else
-    await page.locator("#auto-refresh").check();
+    await preview.setAutomaticRefresh(true);
 
     // #then: the preview catches up on its own
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("A good paragraph appears here.");
+    await expect.poll(() => preview.previewText()).toContain("A good paragraph appears here.");
   });
 
   test("a burst of typing costs far fewer repaints than it has keystrokes", async ({ page }) => {
+    const preview = await openPreviewSession(page);
+
     // #given: a counter on the native DOM method pagination.ts calls once per
     // attempted repaint, counted independently of anything our own code tracks.
-    await page.evaluate(() => {
-      const native = Element.prototype.replaceChildren;
-      const preview = document.getElementById("preview")!;
-      window.__repaintCount = 0;
-      Element.prototype.replaceChildren = function (...args: (string | Node)[]) {
-        if (this === preview) window.__repaintCount += 1;
-        return native.apply(this, args);
-      };
-    });
+    const repaints = await preview.countRepaints();
 
     // #when: the author types a run of characters with no pause between them
     const burst = "A burst of characters typed with no pause between them at all.";
-    await page.locator(".cm-editor").click();
-    await page.keyboard.press("ControlOrMeta+End");
-    await page.keyboard.press("ArrowUp");
-    await page.keyboard.press("Home");
-    await page.keyboard.type(`${burst}\n`, { delay: 0 });
+    await preview.typeBeforeBookClose(`${burst}\n`, { delay: 0 });
 
-    await expect.poll(() => page.locator("#preview").textContent()).toContain(burst);
+    await expect.poll(() => preview.previewText()).toContain(burst);
 
     // #then: far fewer repaints happened than keystrokes were typed
-    const repaints = await page.evaluate(() => window.__repaintCount);
-    expect(repaints).toBeLessThan(burst.length / 4);
+    expect(await repaints.count()).toBeLessThan(burst.length / 4);
   });
 });
 
@@ -221,53 +222,49 @@ test.describe("preview refresh and error surface", () => {
  * (`startApp`'s own run/pending queue, `renderBook`, real DOM writes) is untouched.
  */
 test.describe("preview coalescing", () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto("/tests/grimoire/fixtures/coalesce-harness.html");
-  });
-
   test("a slow repaint in flight never lets it clobber a faster, newer one", async ({ page }) => {
+    const preview = await openPreviewSession(page, "preview-coalescing");
+
     // #given: initial paint settled, so the click below starts a fresh run
     // rather than getting coalesced into the startup one.
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("Start writing your book here.");
+    await expect.poll(() => preview.previewText()).toContain("Start writing your book here.");
 
     // #when: a slow-to-resolve repaint is requested, then -- before it can
     // possibly have finished -- a fast one is requested too. Each edit
     // re-focuses the editor first: clicking #refresh moves focus onto the
     // button, and a select-all sent to the wrong element would silently select
     // nothing in the editor at all.
-    await page.locator(".cm-editor").click();
-    await page.keyboard.press("ControlOrMeta+A");
-    await page.keyboard.insertText("# SLOW MARKER\n\nContent from the slow request.\n");
-    await page.locator("#refresh").click();
+    await preview.replaceSource("# SLOW MARKER\n\nContent from the slow request.\n");
+    await preview.refresh();
 
-    await page.locator(".cm-editor").click();
-    await page.keyboard.press("ControlOrMeta+A");
-    await page.keyboard.insertText("# FAST MARKER\n\nContent from the fast request.\n");
-    await page.locator("#refresh").click();
+    await preview.replaceSource("# FAST MARKER\n\nContent from the fast request.\n");
+    await preview.refresh();
 
     // #then: once the slow request is released, the container shows the newer,
     // faster request -- never the slow one overwriting it afterwards.
-    await page.evaluate(() => window.__finishSlowPagination());
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("FAST MARKER");
-    expect(await page.locator("#preview").textContent()).toContain("FAST MARKER");
-    expect(await page.locator("#preview").textContent()).not.toContain("SLOW MARKER");
+    await preview.finishSlowPagination();
+    await expect.poll(() => preview.previewText()).toContain("FAST MARKER");
+    expect(await preview.previewText()).toContain("FAST MARKER");
+    expect(await preview.previewText()).not.toContain("SLOW MARKER");
   });
 
   test("turning auto-refresh off discards an automatic repaint already queued behind a slow one", async ({
     page,
   }) => {
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("Start writing your book here.");
+    const preview = await openPreviewSession(page, "preview-coalescing");
 
-    await replaceSource(page, "# SLOW MARKER\n\nContent from the explicit slow request.\n");
-    await page.locator("#refresh").click();
-    await replaceSource(page, "# QUEUED MARKER\n\nContent queued by automatic refresh.\n");
+    await expect.poll(() => preview.previewText()).toContain("Start writing your book here.");
+
+    await preview.replaceSource("# SLOW MARKER\n\nContent from the explicit slow request.\n");
+    await preview.refresh();
+    await preview.replaceSource("# QUEUED MARKER\n\nContent queued by automatic refresh.\n");
     await page.waitForTimeout(450);
-    await page.locator("#auto-refresh").uncheck();
-    await page.evaluate(() => window.__finishSlowPagination());
+    await preview.setAutomaticRefresh(false);
+    await preview.finishSlowPagination();
 
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("SLOW MARKER");
+    await expect.poll(() => preview.previewText()).toContain("SLOW MARKER");
     await page.waitForTimeout(500);
-    expect(await page.locator("#preview").textContent()).not.toContain("QUEUED MARKER");
+    expect(await preview.previewText()).not.toContain("QUEUED MARKER");
   });
 });
 
@@ -363,27 +360,24 @@ const OTHER_GOOD_SOURCE = ['<Book size="A5">', '<Section columns="1">', "A secon
  * a native browser API from the test is what the burst test above already does to
  * `Element.prototype.replaceChildren`.
  */
-const UNLOADABLE_DOCUMENT = () => {
-  URL.createObjectURL = () => `blob:${location.origin}/a-blob-url-that-resolves-to-nothing`;
-};
-
 test.describe("a repaint the engine cannot finish", () => {
   test("the last good book stays on screen and the status names the engine", async ({ page }) => {
+    const preview = await openPreviewSession(page, "preview-engine-failure");
+
     // #given: a book the real engine has laid out into the preview
-    await page.goto(HARNESS);
-    await replaceSource(page, GOOD_SOURCE);
-    await expect.poll(() => page.locator("#preview").textContent()).toContain("A good paragraph appears here.");
-    const goodPreview = await page.locator("#preview").textContent();
+    await preview.replaceSource(GOOD_SOURCE);
+    await expect.poll(() => preview.previewText()).toContain("A good paragraph appears here.");
+    const goodPreview = await preview.previewText();
 
     // #when: the engine can no longer load what it is handed, and the author writes on
-    await page.evaluate(UNLOADABLE_DOCUMENT);
-    await replaceSource(page, OTHER_GOOD_SOURCE);
+    await preview.makeEngineFail();
+    await preview.replaceSource(OTHER_GOOD_SOURCE);
 
     // #then: the failure is reported in pagination's own wording, and the preview is
     // still the book the author was writing against
-    await expect(page.locator("#status")).toBeVisible();
-    await expect.poll(() => page.locator("#status").textContent()).toContain("the pagination engine could not lay out the book");
-    expect(await page.locator("#preview").textContent()).toBe(goodPreview);
+    await expect(preview.status()).toBeVisible();
+    await expect.poll(() => preview.statusText()).toContain("the pagination engine could not lay out the book");
+    expect(await preview.previewText()).toBe(goodPreview);
     expect(goodPreview).toContain("A good paragraph appears here.");
   });
 
@@ -394,17 +388,16 @@ test.describe("a repaint the engine cannot finish", () => {
     // #given: an engine that cannot load a document, armed before the app's own
     // module runs, so there is no previous good render to keep at all
     // #when: the session's first repaint runs
-    await page.addInitScript(UNLOADABLE_DOCUMENT);
-    await page.goto(HARNESS);
+    const preview = await openPreviewSession(page, "preview-first-engine-failure");
 
     // #then: the failure is reported, the preview holds nothing at all, and nothing
     // threw. Emptiness is read as markup rather than as text because the engine
     // leaves its own empty viewport scaffolding behind when it gives up -- divs that
     // read as no text at all, so a preview that was never actually put back would
     // look identical to one that was.
-    await expect(page.locator("#status")).toBeVisible();
-    await expect.poll(() => page.locator("#status").textContent()).toContain("the pagination engine could not lay out the book");
-    expect(await page.locator("#preview").innerHTML()).toBe("");
+    await expect(preview.status()).toBeVisible();
+    await expect.poll(() => preview.statusText()).toContain("the pagination engine could not lay out the book");
+    expect(await preview.previewMarkup()).toBe("");
     expect(pageErrors).toEqual([]);
   });
 });
