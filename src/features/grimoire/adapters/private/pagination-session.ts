@@ -19,10 +19,14 @@ export function createVivliostylePaginationSession(): PaginationSession {
         observer.progress(payload.epageCount);
       };
       const onLoaded = (payload: Payload): void => {
-        observer.loaded({
-          pageCount: payload.epageCount,
-          pageSizes: viewer.getPageSizes(),
-        });
+        try {
+          observer.loaded({
+            pageCount: payload.epageCount,
+            pageSizes: viewer.getPageSizes(),
+          });
+        } catch (error) {
+          observer.failed(error instanceof Error ? error : new Error(String(error)));
+        }
       };
       const onError = (payload: Payload): void => {
         observer.failed(
