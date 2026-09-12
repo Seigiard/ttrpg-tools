@@ -1,4 +1,4 @@
-import type { downloadBook, loadBookFile } from "../adapters/file";
+import type { loadBookFile } from "../adapters/file";
 import { toSavedFileLoadError, type SavedFileLoadError } from "./operation-error";
 
 export interface SavedFileStatus {
@@ -7,13 +7,11 @@ export interface SavedFileStatus {
 }
 
 export interface SavedFileWorkflow {
-  downloadRequested(source: string): void;
-  fileSelected(file: File): void;
+  fileSelected(file: File | undefined): void;
   destroy(): void;
 }
 
 interface SavedFileWorkflowOptions {
-  readonly downloadBook: typeof downloadBook;
   readonly loadBookFile: typeof loadBookFile;
   readonly confirmReplacement: () => boolean;
   readonly replaceBook: (source: string) => void;
@@ -21,7 +19,6 @@ interface SavedFileWorkflowOptions {
 }
 
 export function createSavedFileWorkflow({
-  downloadBook,
   loadBookFile,
   confirmReplacement,
   replaceBook,
@@ -31,14 +28,19 @@ export function createSavedFileWorkflow({
   let loadToken = 0;
 
   return {
-    downloadRequested(source) {
-      if (active) downloadBook(source);
-    },
     fileSelected(file) {
-      if (!active) return;
+      if (!active || file === undefined) return;
       const token = ++loadToken;
 
-      void loadBookFile(file).then(
+      let load: Promise<string>;
+      try {
+        load = Promise.resolve(loadBookFile(file));
+      } catch (error) {
+        status.loadFailed(toSavedFileLoadError(error));
+        return;
+      }
+
+      void load.then(
         (source) => {
           if (!active || token !== loadToken) return;
           status.savedFileValidated();

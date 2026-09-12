@@ -84,7 +84,6 @@ export function startApp(elements: AppElements, adapters: AppAdapters): AppHandl
   };
 
   const savedFile = createSavedFileWorkflow({
-    downloadBook: adapters.savedFile.downloadBook,
     loadBookFile: adapters.savedFile.loadBookFile,
     confirmReplacement: () =>
       window.confirm("Loading this file replaces the book you are currently editing. Continue?"),
@@ -111,11 +110,11 @@ export function startApp(elements: AppElements, adapters: AppAdapters): AppHandl
   const onAutomaticRefreshChange = (): void =>
     preview.automaticRefreshChanged(elements.autoRefreshControl.checked, editor.getSource());
   const onPrint = (): void => printing.printRequested(editor.getSource());
-  const onDownload = (): void => savedFile.downloadRequested(editor.getSource());
+  const onDownload = (): void => adapters.savedFile.downloadBook(editor.getSource());
   const onLoad = (): void => {
     const file = elements.loadControl.files?.[0];
     elements.loadControl.value = "";
-    if (file !== undefined) savedFile.fileSelected(file);
+    savedFile.fileSelected(file);
   };
 
   elements.refreshControl.addEventListener("click", onRefresh);
