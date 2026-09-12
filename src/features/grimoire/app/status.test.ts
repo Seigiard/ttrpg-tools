@@ -87,6 +87,16 @@ describe("status", () => {
     expect(container.hidden).toBe(true);
   });
 
+  test("describes saved-file load failures without pagination wording", () => {
+    const container = document.createElement("div");
+    const status = createStatus(container);
+
+    status.loadFailed({ kind: "load-failure", message: "reader rejected" });
+
+    expect(container.textContent).toBe("Loading file failed — reader rejected");
+    expect(container.textContent).not.toContain("pagination");
+  });
+
   test("replacing a book clears only messages that belonged to the replaced book", () => {
     const container = document.createElement("div");
     const status = createStatus(container);
