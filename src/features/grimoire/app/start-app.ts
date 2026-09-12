@@ -1,8 +1,9 @@
 import type { createEditor, EditorHandle } from "../adapters/editor";
 import type { downloadBook, loadBookFile } from "../adapters/file";
 import type { paginate } from "../adapters/pagination";
-import type { DraftPersistence } from "../adapters/persistence";
+import type { DraftStorage } from "../adapters/persistence";
 import type { printBook } from "../adapters/printing";
+import { createDraftPersistence } from "./persistence";
 import { createPreviewWorkflow } from "./preview-workflow";
 import { createPrintingWorkflow } from "./printing-workflow";
 import { createSavedFileWorkflow } from "./saved-file-workflow";
@@ -32,7 +33,7 @@ export interface AppAdapters {
   readonly editor: { readonly create: typeof createEditor };
   readonly preview: { readonly paginate: typeof paginate };
   readonly printing: { readonly printBook: typeof printBook };
-  readonly draft: DraftPersistence;
+  readonly draft: DraftStorage;
   readonly savedFile: {
     readonly downloadBook: typeof downloadBook;
     readonly loadBookFile: typeof loadBookFile;
@@ -58,12 +59,15 @@ export function startApp(elements: AppElements, adapters: AppAdapters): AppHandl
     automaticRefresh: elements.autoRefreshControl.checked,
   });
   const printing = createPrintingWorkflow({ printBook: adapters.printing.printBook, status });
-  const initialSource = adapters.draft.read() ?? INITIAL_SOURCE;
+  const draft = createDraftPersistence({ storage: adapters.draft });
+  // Only an absent draft falls back to the built-in book: an empty draft is the
+  // author's cleared book and is restored as it stands.
+  const initialSource = draft.read() ?? INITIAL_SOURCE;
   let active = true;
 
   const onChange = (source: string): void => {
     if (!active) return;
-    adapters.draft.write(source, (error) => {
+    draft.write(source, (error) => {
       if (active) status.draftSaveChanged(error !== undefined);
     });
     preview.sourceChanged(source);
@@ -138,7 +142,7 @@ export function startApp(elements: AppElements, adapters: AppAdapters): AppHandl
       savedFile.destroy();
       printing.destroy();
       preview.destroy();
-      adapters.draft.destroy();
+      draft.dispose();
       editor.destroy();
     },
   };

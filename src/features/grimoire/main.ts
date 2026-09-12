@@ -4,7 +4,7 @@ import { createEditor } from "./adapters/editor";
 import { downloadBook, loadBookFile } from "./adapters/file";
 import { paginate } from "./adapters/pagination";
 import { printBook } from "./adapters/printing";
-import { createDraftPersistence } from "./adapters/persistence";
+import { draftStorage } from "./adapters/persistence";
 import { startApp } from "./app/start-app";
 
 const paginateIsolated: typeof paginate = (container, html) => paginate(container, html, { mode: "isolated" });
@@ -48,7 +48,7 @@ startApp(
     editor: { create: createEditor },
     preview: { paginate: paginateIsolated },
     printing: { printBook },
-    draft: createDraftPersistence(),
+    draft: draftStorage,
     savedFile: { downloadBook, loadBookFile },
   },
 );

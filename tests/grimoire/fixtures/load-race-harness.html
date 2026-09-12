@@ -60,7 +60,7 @@
           editor: { create: createEditor },
           preview: { paginate },
           printing: { printBook },
-          draft: { read: () => undefined, write: () => {}, flush: () => {}, destroy: () => {} },
+          draft: { read: () => undefined, write: () => {} },
           savedFile: { downloadBook, loadBookFile: fakeLoadBookFile },
         },
       );
