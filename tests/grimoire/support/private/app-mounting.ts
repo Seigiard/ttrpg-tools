@@ -39,10 +39,40 @@ interface AppHostControls {
   resumeOldestStalledEngineRun(): boolean;
   resumeOldestStalledEngineRunUntilLoaded(): Promise<boolean>;
   failOldestStalledEngineRun(): boolean;
+  printAttemptsStarted(): number;
+  printDialoguesOpened(): number;
 }
 
 const paginateIsolated: typeof paginate = (container, html) =>
   paginate(container, html, { mode: 'isolated' });
+
+const deterministicPaginate: typeof paginate = (container, html) => {
+  container.replaceChildren();
+  const div = document.createElement('div');
+  div.textContent = html;
+  container.appendChild(div);
+  return Promise.resolve({ pageCount: 1, pageSizes: [], overflowingPages: [] });
+};
+
+const failingPrint: typeof printBook = () =>
+  Promise.reject(new Error('Vivliostyle failed to prepare the book for printing: boom'));
+
+function installPrintObservers(controls: AppHostControls): void {
+  let printDialoguesOpened = 0;
+  new MutationObserver((records) => {
+    for (const record of records) {
+      for (const node of record.addedNodes) {
+        if (!(node instanceof HTMLIFrameElement)) continue;
+        node.addEventListener('load', () => {
+          if (node.contentWindow) node.contentWindow.print = () => (printDialoguesOpened += 1);
+        });
+      }
+    }
+  }).observe(document.body, { childList: true });
+
+  controls.printAttemptsStarted = () => document.querySelectorAll('iframe').length;
+  controls.printDialoguesOpened = () => printDialoguesOpened;
+}
 
 function createCoalescingPreviewRecipe(controls: AppHostControls): AppScenarioRecipe {
   controls.finishSlowPagination = () => {};
@@ -92,6 +122,8 @@ function createControlledEngineRecipe(isolatedPreview: boolean) {
       readonly args: Parameters<CoreViewer['loadDocument']>;
       readonly document: Promise<string | undefined>;
     }> = [];
+
+    installPrintObservers(controls);
 
     if (isolatedPreview) {
       URL.revokeObjectURL = (url) => {
@@ -202,6 +234,18 @@ const APP_SCENARIOS = {
   'preview-controlled-engine-isolated': createControlledEngineRecipe(true),
   'preview-engine-failure': createPreviewEngineFailureRecipe,
   'preview-first-engine-failure': installFirstPreviewEngineFailure,
+  'print-error': () => ({
+    draft: disabledDraftPersistence,
+    isolatedPreview: false,
+    preview: { paginate: deterministicPaginate },
+    printing: { printBook: failingPrint },
+  }),
+  'overflow-print-error': () => ({
+    draft: disabledDraftPersistence,
+    isolatedPreview: false,
+    preview: { paginate },
+    printing: { printBook: failingPrint },
+  }),
 } satisfies Record<AppScenarioName, (controls: AppHostControls) => AppScenarioRecipe>;
 
 /**
@@ -224,6 +268,8 @@ export function mountAppHost(scenario: string | null): AppTestSurface {
     resumeOldestStalledEngineRun: unsupportedControl,
     resumeOldestStalledEngineRunUntilLoaded: unsupportedControl,
     failOldestStalledEngineRun: unsupportedControl,
+    printAttemptsStarted: unsupportedControl,
+    printDialoguesOpened: unsupportedControl,
   };
   const recipe = scenarioRecipe(scenario, controls);
 
@@ -265,6 +311,8 @@ export function mountAppHost(scenario: string | null): AppTestSurface {
     resumeOldestStalledEngineRunUntilLoaded: () =>
       controls.resumeOldestStalledEngineRunUntilLoaded(),
     failOldestStalledEngineRun: () => controls.failOldestStalledEngineRun(),
+    printAttemptsStarted: () => controls.printAttemptsStarted(),
+    printDialoguesOpened: () => controls.printDialoguesOpened(),
   };
 }
 

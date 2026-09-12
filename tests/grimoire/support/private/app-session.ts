@@ -19,7 +19,9 @@ export type AppScenarioName =
   | 'preview-controlled-engine'
   | 'preview-controlled-engine-isolated'
   | 'preview-engine-failure'
-  | 'preview-first-engine-failure';
+  | 'preview-first-engine-failure'
+  | 'print-error'
+  | 'overflow-print-error';
 
 /**
  * What the mounted application offers concept drivers. Each driver re-exposes only
@@ -40,6 +42,8 @@ export interface AppTestSurface {
   resumeOldestStalledEngineRun(): boolean;
   resumeOldestStalledEngineRunUntilLoaded(): Promise<boolean>;
   failOldestStalledEngineRun(): boolean;
+  printAttemptsStarted(): number;
+  printDialoguesOpened(): number;
 }
 
 export function connectAppHost(

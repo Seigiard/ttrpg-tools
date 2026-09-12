@@ -69,21 +69,6 @@ declare global {
     __paginateAndReportOverflow: (source: string) => Promise<OverflowInspection>;
     __paginateAndReportIsolatedOverflow: (source: string) => Promise<OverflowInspection>;
     __paginateAndInspectHeaders: (source: string, extraThemeCss?: string) => Promise<HeaderInspection[]>;
-    __printTwiceSharesOneAttempt: (source: string) => boolean;
-    /** tests/grimoire/fixtures/timeout-harness.html: the manual scheduler for the two
-     * engine deadlines, and the withheld engine runs they are measured against. */
-    __advanceEngineClock: (ms: number) => void;
-    __pendingEngineDeadlines: () => number;
-    __stallEngine: () => void;
-    __unstallEngine: () => void;
-    __stalledEngineRuns: () => number;
-    __oldestStalledEngineDocument: () => Promise<string | undefined>;
-    __resumeOldestStalledEngineRun: () => boolean;
-    __resumeOldestStalledEngineRunUntilLoaded: () => Promise<boolean>;
-    __failOldestStalledEngineRun: () => boolean;
-    __printAttemptsStarted: () => number;
-    __printDialoguesOpened: () => number;
-    __printSequentiallyStartsFreshAttempts: (source: string) => Promise<boolean>;
     __editor?: EditorHandle;
     __repaintCount: number;
     __openedPreviewLinks: string[];
