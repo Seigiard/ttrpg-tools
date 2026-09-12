@@ -18,6 +18,9 @@ import type { AppScenarioName, AppTestSurface } from './app-session';
  */
 type AppScenarioRecipe = Partial<AppAdapters>;
 
+const paginateIsolated: typeof paginate = (container, html) =>
+  paginate(container, html, { mode: 'isolated' });
+
 const APP_SCENARIOS = {
   production: {},
   'persistence-disabled': { draft: disabledDraftPersistence },
@@ -43,7 +46,7 @@ export function mountAppHost(scenario: string | null): AppTestSurface {
 
   const app = startApp(elements, {
     editor: recipe.editor ?? { create: createEditor },
-    preview: recipe.preview ?? { paginate },
+    preview: recipe.preview ?? { paginate: paginateIsolated },
     printing: recipe.printing ?? { printBook },
     draft: recipe.draft ?? draftStorage,
     savedFile: recipe.savedFile ?? { downloadBook, loadBookFile },
