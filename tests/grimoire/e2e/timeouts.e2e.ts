@@ -50,7 +50,7 @@ async function replaceSource(page: import("@playwright/test").Page, source: stri
 }
 
 /** The author's first book has painted, so anything that follows is a fresh run
- * rather than something coalesced into the session's opening repaint. */
+ * rather than something coalesced into the session's opening Preview refresh. */
 async function firstPaint(page: import("@playwright/test").Page): Promise<void> {
   await page.goto(HARNESS);
   await expect.poll(() => page.locator("#preview").textContent()).toContain("Start writing your book here.");
@@ -127,22 +127,20 @@ test.describe("a repaint the engine never answers", () => {
     const lastGoodAttributes = await previewAttributes(page);
     expect(lastGoodAttributes).toContain("data-vivliostyle-viewer-status=complete");
 
-    // #when: the next repaint empties the preview and then goes unanswered for its
-    // whole bound. The preview being genuinely blank at this point, and the container
-    // itself genuinely describing the new run, is what makes the assertions below
-    // about restoring rather than about nothing having happened.
+    // #when: the next repaint is staged transactionally and then goes unanswered for
+    // its whole bound. The published preview remains the stale book while the engine
+    // owns only its candidate viewport.
     await page.evaluate(() => window.__stallEngine());
     await replaceSource(page, OTHER_GOOD_SOURCE);
     await expect.poll(() => withheldRuns(page)).toBe(1);
-    expect(await page.locator("#preview").textContent()).not.toContain("A good paragraph appears here.");
-    expect(await previewAttributes(page)).toContain("data-vivliostyle-viewer-status=loading");
+    expect(await page.locator("#preview").textContent()).toContain("A good paragraph appears here.");
+    expect(await previewAttributes(page)).toBe(lastGoodAttributes);
 
     await page.evaluate(() => window.__advanceEngineClock(30_000));
     await expect(page.locator("#status")).toBeVisible();
 
-    // #then: the preview holds exactly the book it held on the way in -- its markup,
-    // and the container's own attributes, the same all-or-nothing ADR-0005 records
-    // for a failed run
+    // #then: the preview still holds exactly the book it held on the way in -- its
+    // markup and the container's own attributes.
     expect(await page.locator("#preview").innerHTML()).toBe(lastGood);
     expect(await previewAttributes(page)).toBe(lastGoodAttributes);
   });
@@ -264,7 +262,7 @@ test("an isolated resize keeps its published book through a timeout and late eng
  * container is what closes it, and that is a decision with its own cost (ADR-0005).
  */
 test.describe("a repaint abandoned while the engine was mid-layout", () => {
-  test("keeps its pages out of the preview, but goes on stamping the container itself (issue #15)", async ({ page }) => {
+  test("keeps its pages and late container bookkeeping out of the preview", async ({ page }) => {
     test.setTimeout(90_000);
 
     // #given: a book on screen, and a much longer one the engine is part-way through
@@ -290,18 +288,16 @@ test.describe("a repaint abandoned while the engine was mid-layout", () => {
     });
     await expect(page.locator("#status")).toBeVisible();
 
-    // #then: the run does come back and write to the live container -- this is the
-    // defect, recorded rather than claimed away
+    // #then: the abandoned run cannot write its late bookkeeping onto the published
+    // preview container.
     await expect
       .poll(() => page.evaluate(() => document.getElementById("preview")!.getAttribute("data-vivliostyle-viewer-status")), {
         timeout: 30_000,
       })
-      .not.toBeNull();
+      .toBeNull();
 
-    // #then: and its pages never arrive, because the restore took the engine's own
-    // viewport subtree out of the document with the rest of the children, and a
-    // detached element has no geometry to lay out against (ADR-0005) -- the run halts
-    // where it stands, writing into a subtree nobody can see
+    // #then: and its pages never arrive, because the abandoned engine can write only
+    // into the transaction candidate nobody can see.
     const preview = await page.locator("#preview").textContent();
     expect(preview).toContain("A good paragraph appears here.");
     expect(preview).not.toContain(LONG_BOOK_MARKER);
