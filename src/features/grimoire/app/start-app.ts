@@ -42,13 +42,13 @@ export interface AppAdapters {
 
 export interface AppHandle {
   readonly editor: EditorHandle;
-  destroy(): void;
+  dispose(): void;
 }
 
 /**
  * Owns one editor session. The workflows hide scenario-specific ordering and
  * scheduling; this module maps DOM events onto those interfaces and releases every
- * resource acquired for the session through one idempotent `destroy` operation.
+ * resource acquired for the session through one idempotent `dispose` operation.
  */
 export function startApp(elements: AppElements, adapters: AppAdapters): AppHandle {
   const status = createStatus(elements.statusContainer);
@@ -127,7 +127,7 @@ export function startApp(elements: AppElements, adapters: AppAdapters): AppHandl
 
   return {
     editor,
-    destroy() {
+    dispose() {
       if (!active) return;
       active = false;
 
@@ -138,10 +138,10 @@ export function startApp(elements: AppElements, adapters: AppAdapters): AppHandl
       elements.loadControl.removeEventListener("change", onLoad);
       previewResizeObserver?.disconnect();
 
+      draft.dispose();
       savedFile.destroy();
       printing.destroy();
       preview.destroy();
-      draft.dispose();
       editor.destroy();
     },
   };

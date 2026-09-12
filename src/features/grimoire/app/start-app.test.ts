@@ -63,7 +63,7 @@ describe("startApp", () => {
     elements.downloadControl.click();
 
     expect(downloads).toEqual(["# Latest book"]);
-    app.destroy();
+    app.dispose();
   });
 
   test("clears the file input after every change so the same file can be selected again", async () => {
@@ -105,7 +105,7 @@ describe("startApp", () => {
 
     expect(elements.loadControl.value).toBe("");
     expect(loaded).toEqual(["book.json", "book.json"]);
-    app.destroy();
+    app.dispose();
     window.confirm = confirm;
   });
 
@@ -147,7 +147,7 @@ describe("startApp", () => {
     await settle();
 
     expect(source).toBe("LOADED BOOK");
-    app.destroy();
+    app.dispose();
     window.confirm = confirm;
   });
 
@@ -186,7 +186,7 @@ describe("startApp", () => {
 
     expect(htmlCalls).toHaveLength(1);
     expect(htmlCalls[0]).toContain("RESTORED DRAFT");
-    app.destroy();
+    app.dispose();
   });
 
   test("accepting replacement persists, clears obsolete status, and immediately repaints exactly once", async () => {
@@ -236,7 +236,7 @@ describe("startApp", () => {
     expect(htmlCalls).toHaveLength(1);
     expect(htmlCalls[0]).toContain("LOADED BOOK");
     expect(elements.statusContainer.textContent).not.toContain("Loading file failed");
-    app.destroy();
+    app.dispose();
     expect(drafts).toEqual(["LOADED BOOK"]);
     window.confirm = confirm;
   });
@@ -278,7 +278,7 @@ describe("startApp", () => {
 
     expect(source).toBe(invalidSource);
     expect(elements.statusContainer.textContent).toContain("Preview is out of date");
-    app.destroy();
+    app.dispose();
     expect(drafts).toEqual([invalidSource]);
     window.confirm = confirm;
   });
@@ -287,6 +287,7 @@ describe("startApp", () => {
     const elements = appElements();
     const calls = { paginate: 0, print: 0, download: 0, load: 0, editorDestroy: 0 };
     const drafts: string[] = [];
+    const disposalOrder: string[] = [];
     let source = "INITIAL BOOK";
     let editorChanged: ((source: string) => void) | undefined;
     const editor: EditorHandle = {
@@ -296,6 +297,7 @@ describe("startApp", () => {
       },
       destroy: () => {
         calls.editorDestroy += 1;
+        disposalOrder.push("editor");
       },
     };
     const adapters: AppAdapters = {
@@ -321,6 +323,7 @@ describe("startApp", () => {
         read: () => source,
         write: (next) => {
           drafts.push(next);
+          disposalOrder.push("draft");
         },
       },
       savedFile: {
@@ -340,9 +343,9 @@ describe("startApp", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(calls.paginate).toBe(2);
 
-    editorChanged?.("BEFORE DESTROY");
-    app.destroy();
-    app.destroy();
+    editorChanged?.("BEFORE DISPOSE");
+    app.dispose();
+    app.dispose();
     elements.refreshControl.click();
     elements.autoRefreshControl.dispatchEvent(new Event("change"));
     elements.printControl.click();
@@ -352,7 +355,7 @@ describe("startApp", () => {
       value: [new File([], "book.json")],
     });
     elements.loadControl.dispatchEvent(new Event("change"));
-    editorChanged?.("AFTER DESTROY");
+    editorChanged?.("AFTER DISPOSE");
     await Promise.resolve();
 
     expect(app.editor).toBe(editor);
@@ -360,9 +363,77 @@ describe("startApp", () => {
     expect(calls.print).toBe(0);
     expect(calls.download).toBe(0);
     expect(calls.load).toBe(0);
-    // Disposal flushes the draft the author was still writing, and nothing after it.
-    expect(drafts).toEqual(["BEFORE DESTROY"]);
+    // Disposal flushes the draft the author was still writing before the editor is destroyed.
+    expect(drafts).toEqual(["BEFORE DISPOSE"]);
+    expect(disposalOrder).toEqual(["draft", "editor"]);
     expect(calls.editorDestroy).toBe(1);
+  });
+
+  test("late child completions cannot mutate UI after root disposal", async () => {
+    const elements = appElements();
+    let source = "CURRENT BOOK";
+    let finishPreview: ((value: PaginationResult) => void) | undefined;
+    let finishPrint: (() => void) | undefined;
+    let finishLoad: ((value: string) => void) | undefined;
+    let editorChanged: ((source: string) => void) | undefined;
+    const adapters: AppAdapters = {
+      editor: {
+        create: (_container, _initialSource, onChange) => {
+          editorChanged = onChange;
+          return {
+            getSource: () => source,
+            setSource: (next) => {
+              source = next;
+            },
+            destroy: () => undefined,
+          };
+        },
+      },
+      preview: {
+        paginate: () =>
+          new Promise<PaginationResult>((resolve) => {
+            finishPreview = resolve;
+          }),
+      },
+      printing: {
+        printBook: () =>
+          new Promise<void>((resolve) => {
+            finishPrint = resolve;
+          }),
+      },
+      draft: {
+        read: () => source,
+        write: () => undefined,
+      },
+      savedFile: {
+        downloadBook: () => undefined,
+        loadBookFile: () =>
+          new Promise<string>((resolve) => {
+            finishLoad = resolve;
+          }),
+      },
+    };
+
+    const confirm = window.confirm;
+    window.confirm = () => true;
+    const app = startApp(elements, adapters);
+    elements.printControl.click();
+    Object.defineProperty(elements.loadControl, "files", {
+      configurable: true,
+      value: [new File([], "book.json")],
+    });
+    elements.loadControl.dispatchEvent(new Event("change"));
+    editorChanged?.("UNFLUSHED DRAFT");
+
+    app.dispose();
+    finishPreview?.(RESULT);
+    finishPrint?.();
+    finishLoad?.("LOADED AFTER DISPOSE");
+    await settle();
+
+    expect(source).toBe("CURRENT BOOK");
+    expect(elements.statusContainer.textContent).toBe("");
+    window.confirm = confirm;
   });
 
   test("prints the current editor source independently of preview refresh", async () => {
@@ -409,6 +480,6 @@ describe("startApp", () => {
     expect(printed).toHaveLength(1);
     expect(printed[0]).toContain("Current editor book");
     expect(printed[0]).not.toContain("Restored draft");
-    app.destroy();
+    app.dispose();
   });
 });
