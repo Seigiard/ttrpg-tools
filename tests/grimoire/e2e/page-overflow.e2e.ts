@@ -151,13 +151,13 @@ test.describe('the pagination adapter reports the pages that did not fit', () =>
 
     await expect(authoredPage.status()).toBeVisible();
     await expect.poll(() => authoredPage.statusText()).toContain('line 5 took 2 pages');
-    expect(await authoredPage.renderedPageCount()).toBe(3);
+    expect(await authoredPage.renderedSheetCount()).toBe(3);
     expect(await authoredPage.previewText()).toContain('Paragraph 1.');
   });
 });
 
 // The overflowing book with its closing </Page> taken away: a markup error, so the
-// repaint cannot produce a book at all and the preview keeps the last one it did.
+// refresh cannot produce a book at all and the preview keeps the last one it did.
 // 1 <Book>            5 <Page>              18 </Book>
 // 2 <Section ...>     6..17 six paragraphs
 const A_PAGE_THAT_DOES_NOT_FIT_AND_IS_NEVER_CLOSED = [
@@ -221,14 +221,14 @@ test.describe('what the author is told about a page that did not fit', () => {
     await expect(authoredPage.status()).toBeHidden();
   });
 
-  test('a standing report survives a repaint that could not produce a book', async () => {
+  test('a standing report survives a refresh that could not produce a book', async () => {
     // #given: a page the author has been told does not fit
     await authoredPage.replaceSource(A_PAGE_THAT_DOES_NOT_FIT);
     await expect
       .poll(() => authoredPage.statusText())
       .toContain('line 5 took 2 pages');
 
-    // #when: their next keystroke leaves the page unclosed, so the repaint cannot
+    // #when: their next keystroke leaves the page unclosed, so the refresh cannot
     // produce a book and the preview keeps the one it produced last
     await authoredPage.replaceSource(A_PAGE_THAT_DOES_NOT_FIT_AND_IS_NEVER_CLOSED);
     await expect

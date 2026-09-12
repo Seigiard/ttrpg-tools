@@ -10,7 +10,7 @@ export interface AuthoredPageSession {
   status(): Locator;
   statusText(): Promise<string | null>;
   previewText(): Promise<string>;
-  renderedPageCount(): Promise<number>;
+  renderedSheetCount(): Promise<number>;
 }
 
 export async function openAuthoredPageSession(
@@ -38,7 +38,7 @@ export async function openAuthoredPageSession(
       return (await renderedBook()).textContent().then((text) => text ?? '');
     },
 
-    async renderedPageCount() {
+    async renderedSheetCount() {
       return (await renderedBook()).locator('[data-vivliostyle-page-index]').count();
     },
   };
