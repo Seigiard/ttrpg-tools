@@ -391,7 +391,7 @@ test.describe("a print the engine never answers", () => {
     expect(await page.evaluate(() => window.__printDialoguesOpened())).toBe(1);
   });
 
-  test("an older print completion cannot clear a newer markup error", async ({ page }) => {
+  test("an ignored print request renders no newer source for an older completion to clear", async ({ page }) => {
     await firstPaint(page);
     await page.evaluate(() => window.__stallEngine());
     await page.locator("#print").click();
@@ -399,10 +399,12 @@ test.describe("a print the engine never answers", () => {
 
     await replaceSource(page, BROKEN_SOURCE);
     await page.locator("#print").click();
-    await expect.poll(() => page.locator("#status").textContent()).toContain("Printing failed");
+    await expect(page.locator("#status")).toContainText("Preview is out of date");
+    await expect(page.locator("#status")).not.toContainText("Printing failed");
 
     expect(await page.evaluate(() => window.__resumeOldestStalledEngineRun())).toBe(true);
     await expect.poll(() => page.evaluate(() => window.__printAttemptsStarted())).toBe(0);
-    await expect(page.locator("#status")).toContainText("Printing failed");
+    await expect(page.locator("#status")).toContainText("Preview is out of date");
+    await expect(page.locator("#status")).not.toContainText("Printing failed");
   });
 });

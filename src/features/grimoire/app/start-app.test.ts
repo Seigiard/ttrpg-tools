@@ -143,4 +143,51 @@ describe("startApp", () => {
     expect(drafts).toEqual(["BEFORE DESTROY"]);
     expect(calls.editorDestroy).toBe(1);
   });
+
+  test("prints the current editor source independently of preview refresh", async () => {
+    const elements = appElements();
+    elements.autoRefreshControl.checked = false;
+    const printed: string[] = [];
+    let source = "# Restored draft";
+    const adapters: AppAdapters = {
+      editor: {
+        create: () => ({
+          getSource: () => source,
+          setSource: (next) => {
+            source = next;
+          },
+          destroy: () => undefined,
+        }),
+      },
+      preview: {
+        paginate: () => Promise.resolve(RESULT),
+      },
+      printing: {
+        printBook: (html) => {
+          printed.push(html);
+          return Promise.resolve();
+        },
+      },
+      draft: {
+        read: () => source,
+        write: () => undefined,
+      },
+      savedFile: {
+        downloadBook: () => undefined,
+        loadBookFile: () => Promise.resolve("# Loaded book"),
+      },
+    };
+
+    const app = startApp(elements, adapters);
+    await Promise.resolve();
+    source = "# Current editor book";
+    elements.printControl.click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(printed).toHaveLength(1);
+    expect(printed[0]).toContain("Current editor book");
+    expect(printed[0]).not.toContain("Restored draft");
+    app.destroy();
+  });
 });
