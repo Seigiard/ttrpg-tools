@@ -60,7 +60,7 @@ export interface AuthoredPageObservation {
 
 interface RenderInput {
   readonly source: string;
-  readonly extraThemeCss?: string;
+  readonly adversarialThemeCss?: string;
 }
 
 export interface BookTestSurface {
@@ -72,11 +72,11 @@ export interface BookTestSurface {
 
 export interface BookDriver {
   pageCount(source: string): Promise<number>;
-  layout(source: string, extraThemeCss?: string): Promise<BookLayoutObservation>;
-  authoredPage(source: string, extraThemeCss?: string): Promise<AuthoredPageObservation>;
+  layout(source: string, adversarialThemeCss?: string): Promise<BookLayoutObservation>;
+  authoredPage(source: string, adversarialThemeCss?: string): Promise<AuthoredPageObservation>;
   flowingHeaders(
     source: string,
-    extraThemeCss?: string,
+    adversarialThemeCss?: string,
   ): Promise<readonly FlowingHeaderObservation[]>;
 }
 
@@ -85,10 +85,11 @@ export async function openBookDriver(browserPage: BrowserPage): Promise<BookDriv
 
   return {
     pageCount: (source) => transport.call('pageCount', { source }),
-    layout: (source, extraThemeCss) => transport.call('layout', { source, extraThemeCss }),
-    authoredPage: (source, extraThemeCss) =>
-      transport.call('authoredPage', { source, extraThemeCss }),
-    flowingHeaders: (source, extraThemeCss) =>
-      transport.call('flowingHeaders', { source, extraThemeCss }),
+    layout: (source, adversarialThemeCss) =>
+      transport.call('layout', { source, adversarialThemeCss }),
+    authoredPage: (source, adversarialThemeCss) =>
+      transport.call('authoredPage', { source, adversarialThemeCss }),
+    flowingHeaders: (source, adversarialThemeCss) =>
+      transport.call('flowingHeaders', { source, adversarialThemeCss }),
   };
 }
