@@ -24,6 +24,44 @@ function appElements(): AppElements {
 }
 
 describe("startApp", () => {
+  test("runs the initial preview refresh even when automatic refresh starts disabled", async () => {
+    const elements = appElements();
+    elements.autoRefreshControl.checked = false;
+    const htmlCalls: string[] = [];
+    const adapters: AppAdapters = {
+      editor: {
+        create: (_container, initialSource) => ({
+          getSource: () => initialSource,
+          setSource: () => undefined,
+          destroy: () => undefined,
+        }),
+      },
+      preview: {
+        paginate: (_container, html) => {
+          htmlCalls.push(html);
+          return Promise.resolve(RESULT);
+        },
+      },
+      printing: { printBook: () => Promise.resolve() },
+      draft: {
+        read: () => "RESTORED DRAFT",
+        write: () => undefined,
+      },
+      savedFile: {
+        downloadBook: () => undefined,
+        loadBookFile: () => Promise.resolve("LOADED BOOK"),
+      },
+    };
+
+    const app = startApp(elements, adapters);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(htmlCalls).toHaveLength(1);
+    expect(htmlCalls[0]).toContain("RESTORED DRAFT");
+    app.destroy();
+  });
+
   test("owns all session resources through one idempotent handle", async () => {
     const elements = appElements();
     const calls = { paginate: 0, print: 0, download: 0, load: 0, editorDestroy: 0 };
