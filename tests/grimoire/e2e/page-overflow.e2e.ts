@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { openAuthoredPageSession, type AuthoredPageSession } from '../support/authored-page';
 import { openBookDriver } from '../support/book';
 import { openPrintingSession, type PrintingSession } from '../support/printing';
 
@@ -141,22 +142,17 @@ test.describe('the pagination adapter reports the pages that did not fit', () =>
     ]);
   });
 
-  test('an isolated preview reports overflow and commits the book inside its frame', async ({
+  test('the full app reports overflow and commits the book inside its preview frame', async ({
     page: browserPage,
   }) => {
-    await browserPage.goto('/tests/grimoire/fixtures/harness.html');
+    const authoredPage = await openAuthoredPageSession(browserPage, 'authored-page-isolated');
 
-    const reported = await browserPage.evaluate(
-      (source) => window.__paginateAndReportIsolatedOverflow(source),
-      A_PAGE_THAT_DOES_NOT_FIT,
-    );
+    await authoredPage.replaceSource(A_PAGE_THAT_DOES_NOT_FIT);
 
-    expect(reported.overflowingPages).toEqual([{ line: 5, pages: 2 }]);
-    expect(reported.renderedPages).toBe(3);
-    const previewFrame = browserPage.locator('#preview iframe[data-grimoire-preview-document]');
-    await expect(previewFrame).toHaveCount(1);
-    await expect(previewFrame).not.toHaveAttribute('aria-hidden', 'true');
-    await expect(previewFrame.contentFrame().locator('body')).toContainText('Paragraph 1.');
+    await expect(authoredPage.status()).toBeVisible();
+    await expect.poll(() => authoredPage.statusText()).toContain('line 5 took 2 pages');
+    expect(await authoredPage.renderedPageCount()).toBe(3);
+    expect(await authoredPage.previewText()).toContain('Paragraph 1.');
   });
 });
 
@@ -176,11 +172,100 @@ const A_PAGE_THAT_DOES_NOT_FIT_AND_IS_NEVER_CLOSED = [
 
 /**
  * The application half: what the author actually reads. Real CodeMirror, real
- * `renderBook`, real pagination adapter and real engine; only printing is
- * substituted, and only to have a standing status condition to hold the overflow
- * report against (see the harness for why).
+ * `renderBook`, real pagination adapter and real engine, observed through an
+ * Authored Page session that can only edit source and read status/preview state.
  */
 test.describe('what the author is told about a page that did not fit', () => {
+  let authoredPage: AuthoredPageSession;
+
+  test.beforeEach(async ({ page: browserPage }) => {
+    authoredPage = await openAuthoredPageSession(browserPage);
+    await expect
+      .poll(() => authoredPage.previewText())
+      .toContain('Start writing your book here.');
+  });
+
+  test('the overflow is reported by line, and the book it happened in is still on screen', async () => {
+    // #given: an author writing a card
+    // #when: they put six paragraphs on it
+    await authoredPage.replaceSource(A_PAGE_THAT_DOES_NOT_FIT);
+
+    // #then: the editor names the line the page was declared on and how many pages
+    // it took, the book the engine produced is still in the preview, and none of it
+    // is reported as the preview having failed -- a book was produced
+    await expect(authoredPage.status()).toBeVisible();
+    await expect
+      .poll(() => authoredPage.statusText())
+      .toContain('line 5 took 2 pages');
+    const status = (await authoredPage.statusText()) ?? '';
+    const preview = await authoredPage.previewText();
+    expect(status).not.toContain('Preview is out of date');
+    expect(preview).toContain('Paragraph 1.');
+    expect(preview).toContain('Short prose before the card.');
+  });
+
+  test('the report clears when the content fits again', async () => {
+    // #given: a page the author has been told does not fit
+    await authoredPage.replaceSource(A_PAGE_THAT_DOES_NOT_FIT);
+    await expect
+      .poll(() => authoredPage.statusText())
+      .toContain('line 5 took 2 pages');
+
+    // #when: they cut it back to something that fits
+    await authoredPage.replaceSource(A_PAGE_THAT_FITS);
+    await expect
+      .poll(() => authoredPage.previewText())
+      .toContain('A card that stands on its own.');
+
+    // #then: the editor stops telling them about a problem they have already solved
+    await expect(authoredPage.status()).toBeHidden();
+  });
+
+  test('a standing report survives a repaint that could not produce a book', async () => {
+    // #given: a page the author has been told does not fit
+    await authoredPage.replaceSource(A_PAGE_THAT_DOES_NOT_FIT);
+    await expect
+      .poll(() => authoredPage.statusText())
+      .toContain('line 5 took 2 pages');
+
+    // #when: their next keystroke leaves the page unclosed, so the repaint cannot
+    // produce a book and the preview keeps the one it produced last
+    await authoredPage.replaceSource(A_PAGE_THAT_DOES_NOT_FIT_AND_IS_NEVER_CLOSED);
+    await expect
+      .poll(() => authoredPage.statusText())
+      .toContain('Preview is out of date');
+
+    // #then: the overflow is still reported, because the book still on screen is
+    // the one it is true of -- clearing it would report a book nobody can see
+    const status = (await authoredPage.statusText()) ?? '';
+    const preview = await authoredPage.previewText();
+    expect(status).toContain('line 5 took 2 pages');
+    expect(preview).toContain('Paragraph 1.');
+  });
+
+  test('a later overflow replaces the one before it instead of joining it', async () => {
+    // #given: a page at line 5 the author has been told does not fit
+    await authoredPage.replaceSource(A_PAGE_THAT_DOES_NOT_FIT);
+    await expect
+      .poll(() => authoredPage.statusText())
+      .toContain('line 5 took 2 pages');
+
+    // #when: they rewrite the book into two different pages, both overrun
+    await authoredPage.replaceSource(TWO_PAGES_THAT_DO_NOT_FIT);
+    await expect
+      .poll(() => authoredPage.statusText())
+      .toContain('line 16 took 2 pages');
+
+    // #then: they read about the two pages in front of them and not about the one
+    // they have already replaced
+    const status = (await authoredPage.statusText()) ?? '';
+    expect(status).toContain('line 2 took 2 pages');
+    expect(status).toContain('line 16 took 2 pages');
+    expect(status).not.toContain('line 5 took');
+  });
+});
+
+test.describe('overflow and printing failures share the status surface independently', () => {
   let printing: PrintingSession;
 
   test.beforeEach(async ({ page: browserPage }) => {
@@ -190,152 +275,39 @@ test.describe('what the author is told about a page that did not fit', () => {
       .toContain('Start writing your book here.');
   });
 
-  test('the overflow is reported by line, and the book it happened in is still on screen', async ({
-    page: browserPage,
-  }) => {
-    // #given: an author writing a card
-    // #when: they put six paragraphs on it
-    await printing.replaceSource(A_PAGE_THAT_DOES_NOT_FIT);
-
-    // #then: the editor names the line the page was declared on and how many pages
-    // it took, the book the engine produced is still in the preview, and none of it
-    // is reported as the preview having failed -- a book was produced
-    await expect(browserPage.locator('#status')).toBeVisible();
-    await expect
-      .poll(() => browserPage.locator('#status').textContent())
-      .toContain('line 5 took 2 pages');
-    const status = (await browserPage.locator('#status').textContent()) ?? '';
-    const preview = (await browserPage.locator('#preview').textContent()) ?? '';
-    expect({
-      readsAsAPreviewFailure: status.includes('Preview is out of date'),
-      showsTheCard: preview.includes('Paragraph 1.'),
-      showsTheProseBeforeIt: preview.includes('Short prose before the card.'),
-    }).toEqual({ readsAsAPreviewFailure: false, showsTheCard: true, showsTheProseBeforeIt: true });
-  });
-
-  test('the report clears when the content fits again', async ({ page: browserPage }) => {
-    // #given: a page the author has been told does not fit
-    await printing.replaceSource(A_PAGE_THAT_DOES_NOT_FIT);
-    await expect
-      .poll(() => browserPage.locator('#status').textContent())
-      .toContain('line 5 took 2 pages');
-
-    // #when: they cut it back to something that fits
-    await printing.replaceSource(A_PAGE_THAT_FITS);
-    await expect
-      .poll(() => browserPage.locator('#preview').textContent())
-      .toContain('A card that stands on its own.');
-
-    // #then: the editor stops telling them about a problem they have already solved
-    await expect(browserPage.locator('#status')).toBeHidden();
-  });
-
-  test('a standing report survives a repaint that could not produce a book', async ({
-    page: browserPage,
-  }) => {
-    // #given: a page the author has been told does not fit
-    await printing.replaceSource(A_PAGE_THAT_DOES_NOT_FIT);
-    await expect
-      .poll(() => browserPage.locator('#status').textContent())
-      .toContain('line 5 took 2 pages');
-
-    // #when: their next keystroke leaves the page unclosed, so the repaint cannot
-    // produce a book and the preview keeps the one it produced last
-    await printing.replaceSource(A_PAGE_THAT_DOES_NOT_FIT_AND_IS_NEVER_CLOSED);
-    await expect
-      .poll(() => browserPage.locator('#status').textContent())
-      .toContain('Preview is out of date');
-
-    // #then: the overflow is still reported, because the book still on screen is
-    // the one it is true of -- clearing it would report a book nobody can see
-    const status = (await browserPage.locator('#status').textContent()) ?? '';
-    const preview = (await browserPage.locator('#preview').textContent()) ?? '';
-    expect({
-      overflowStillReported: status.includes('line 5 took 2 pages'),
-      showsTheBookItIsTrueOf: preview.includes('Paragraph 1.'),
-    }).toEqual({ overflowStillReported: true, showsTheBookItIsTrueOf: true });
-  });
-
-  test('a later overflow replaces the one before it instead of joining it', async ({
-    page: browserPage,
-  }) => {
-    // #given: a page at line 5 the author has been told does not fit
-    await printing.replaceSource(A_PAGE_THAT_DOES_NOT_FIT);
-    await expect
-      .poll(() => browserPage.locator('#status').textContent())
-      .toContain('line 5 took 2 pages');
-
-    // #when: they rewrite the book into two different pages, both overrun
-    await printing.replaceSource(TWO_PAGES_THAT_DO_NOT_FIT);
-    await expect
-      .poll(() => browserPage.locator('#status').textContent())
-      .toContain('line 16 took 2 pages');
-
-    // #then: they read about the two pages in front of them and not about the one
-    // they have already replaced
-    const status = (await browserPage.locator('#status').textContent()) ?? '';
-    expect({
-      namesTheFirstOfTheTwo: status.includes('line 2 took 2 pages'),
-      namesTheSecondOfTheTwo: status.includes('line 16 took 2 pages'),
-      stillNamesThePageThatIsGone: status.includes('line 5 took'),
-    }).toEqual({
-      namesTheFirstOfTheTwo: true,
-      namesTheSecondOfTheTwo: true,
-      stillNamesThePageThatIsGone: false,
-    });
-  });
-
-  test('a standing print failure survives an overflow appearing and clearing', async ({
-    page: browserPage,
-  }) => {
+  test('a standing print failure survives an overflow appearing and clearing', async () => {
     // #given: a print failure the author has not acknowledged
     await printing.print();
-    await expect
-      .poll(() => browserPage.locator('#status').textContent())
-      .toContain('Printing failed');
+    await expect.poll(() => printing.statusText()).toContain('Printing failed');
 
     // #when: a page overflows, and is then cut back until it fits
     await printing.replaceSource(A_PAGE_THAT_DOES_NOT_FIT);
-    await expect
-      .poll(() => browserPage.locator('#status').textContent())
-      .toContain('line 5 took 2 pages');
-    const whileOverflowing = (await browserPage.locator('#status').textContent()) ?? '';
+    await expect.poll(() => printing.statusText()).toContain('line 5 took 2 pages');
+    const whileOverflowing = (await printing.statusText()) ?? '';
 
     await printing.replaceSource(A_PAGE_THAT_FITS);
     await expect
-      .poll(() => browserPage.locator('#preview').textContent())
+      .poll(() => printing.previewText())
       .toContain('A card that stands on its own.');
-    const afterItFits = (await browserPage.locator('#status').textContent()) ?? '';
+    const afterItFits = (await printing.statusText()) ?? '';
 
     // #then: the print failure is still there throughout -- neither the overflow
     // report arriving nor its clearing took it away
-    expect({
-      printErrorWhileOverflowing: whileOverflowing.includes('Printing failed'),
-      printErrorAfterItFits: afterItFits.includes('Printing failed'),
-      overflowStillReported: afterItFits.includes('did not fit'),
-    }).toEqual({
-      printErrorWhileOverflowing: true,
-      printErrorAfterItFits: true,
-      overflowStillReported: false,
-    });
+    expect(whileOverflowing).toContain('Printing failed');
+    expect(afterItFits).toContain('Printing failed');
+    expect(afterItFits).not.toContain('did not fit');
   });
 
-  test('a standing overflow report survives a print failure arriving', async ({
-    page: browserPage,
-  }) => {
+  test('a standing overflow report survives a print failure arriving', async () => {
     // #given: a page the author has been told does not fit
     await printing.replaceSource(A_PAGE_THAT_DOES_NOT_FIT);
-    await expect
-      .poll(() => browserPage.locator('#status').textContent())
-      .toContain('line 5 took 2 pages');
+    await expect.poll(() => printing.statusText()).toContain('line 5 took 2 pages');
 
     // #when: they try to print, and printing fails
     await printing.print();
-    await expect
-      .poll(() => browserPage.locator('#status').textContent())
-      .toContain('Printing failed');
+    await expect.poll(() => printing.statusText()).toContain('Printing failed');
 
     // #then: the overflow is still reported alongside it
-    expect(await browserPage.locator('#status').textContent()).toContain('line 5 took 2 pages');
+    expect(await printing.statusText()).toContain('line 5 took 2 pages');
   });
 });

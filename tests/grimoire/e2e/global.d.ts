@@ -28,21 +28,6 @@ declare global {
     boxes: Record<string, PageBox | undefined>;
   }
 
-  /** What the pagination adapter reported about one page that did not fit: the
-   * source line it was declared on, and how many physical pages it took. */
-  interface OverflowingPageReport {
-    line: number;
-    pages: number;
-  }
-
-  interface OverflowInspection {
-    pageCount: number;
-    overflowingPages: OverflowingPageReport[];
-    /** How many physical pages the engine left in the preview container, so a
-     * test can see the book was still shown rather than withheld. */
-    renderedPages: number;
-  }
-
   interface HeaderInspection {
     pageIndex: number;
     header: string | undefined;
@@ -66,8 +51,6 @@ declare global {
     __paginateBook: (source: string) => Promise<number>;
     __paginateAndInspect: (source: string, extraThemeCss?: string) => Promise<PageInspection>;
     __paginateAndMeasure: (source: string) => Promise<PageMeasurement>;
-    __paginateAndReportOverflow: (source: string) => Promise<OverflowInspection>;
-    __paginateAndReportIsolatedOverflow: (source: string) => Promise<OverflowInspection>;
     __paginateAndInspectHeaders: (source: string, extraThemeCss?: string) => Promise<HeaderInspection[]>;
     __editor?: EditorHandle;
     __repaintCount: number;
