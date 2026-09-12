@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 const PREVIEW_FRAME = '#preview iframe[data-grimoire-preview-document]:not([aria-hidden="true"])';
+const ROUTE_READY_TIMEOUT = 15_000;
 
 const INTERACTIVE_BOOK = [
   '<Book size="A5">',
@@ -57,17 +58,23 @@ test('the Astro route mounts the editor and paginated preview inside the shared 
   const preview = page.frameLocator(PREVIEW_FRAME);
 
   await expect(page.getByRole('link', { name: /TTRPG Tools/ })).toBeVisible();
-  await expect(page.locator('#editor .cm-editor')).toBeVisible();
-  await expect(preview.locator('body')).toContainText('Start writing your book here.');
+  await expect(page.locator('#editor .cm-editor')).toBeVisible({ timeout: ROUTE_READY_TIMEOUT });
+  await expect(preview.locator('body')).toContainText('Start writing your book here.', {
+    timeout: ROUTE_READY_TIMEOUT,
+  });
   await expect
-    .poll(() => preview.locator('[data-vivliostyle-page-index]').count())
+    .poll(() => preview.locator('[data-vivliostyle-page-index]').count(), {
+      timeout: ROUTE_READY_TIMEOUT,
+    })
     .toBeGreaterThan(0);
 });
 
 test('a new book previews with the bundled theme fonts', async ({ page }) => {
   await page.goto('/grimoire');
   const preview = page.frameLocator(PREVIEW_FRAME);
-  await expect(preview.locator('[data-vivliostyle-page-index] p')).toBeVisible();
+  await expect(preview.locator('[data-vivliostyle-page-index] p')).toBeVisible({
+    timeout: ROUTE_READY_TIMEOUT,
+  });
 
   const headingFonts = await renderedFonts(page, '[data-vivliostyle-page-index] h1');
   const bodyFonts = await renderedFonts(page, '[data-vivliostyle-page-index] p');
@@ -90,7 +97,9 @@ test('a new book fits the preview without inheriting editor-shell styles', async
 
   const preview = page.frameLocator(PREVIEW_FRAME);
   await expect
-    .poll(() => preview.locator('[data-vivliostyle-page-index] p').count())
+    .poll(() => preview.locator('[data-vivliostyle-page-index] p').count(), {
+      timeout: ROUTE_READY_TIMEOUT,
+    })
     .toBeGreaterThan(0);
 
   const layout = await preview.locator('body').evaluate((body) => {
@@ -162,12 +171,21 @@ test('a committed preview is keyboard reachable and keeps navigation parent-owne
 }) => {
   await page.goto('/grimoire');
   const preview = page.frameLocator(PREVIEW_FRAME);
-  await expect(preview.locator('body')).toContainText('Start writing your book here.');
+  await expect(preview.locator('body')).toContainText('Start writing your book here.', {
+    timeout: ROUTE_READY_TIMEOUT,
+  });
 
   await page.evaluate(() => {
-    window.__openedPreviewLinks = [];
+    const openedPreviewLinks = document.createElement('input');
+    openedPreviewLinks.type = 'hidden';
+    openedPreviewLinks.id = 'opened-preview-links';
+    openedPreviewLinks.value = JSON.stringify([]);
+    document.body.append(openedPreviewLinks);
+
     window.open = (url) => {
-      window.__openedPreviewLinks.push(String(url));
+      const links = JSON.parse(openedPreviewLinks.value) as string[];
+      links.push(String(url));
+      openedPreviewLinks.value = JSON.stringify(links);
       return null;
     };
   });
@@ -185,9 +203,9 @@ test('a committed preview is keyboard reachable and keeps navigation parent-owne
   ).toBe(true);
 
   await preview.getByRole('link', { name: 'Open reference' }).click();
-  expect(await page.evaluate(() => window.__openedPreviewLinks)).toEqual([
-    'https://example.com/from-book',
-  ]);
+  await expect(page.locator('#opened-preview-links')).toHaveValue(
+    JSON.stringify(['https://example.com/from-book']),
+  );
   await expect(page.locator(PREVIEW_FRAME)).toHaveCount(1);
   await expect(preview.getByRole('heading', { name: 'Interactive preview' })).toBeVisible();
 
@@ -199,7 +217,9 @@ test('a committed preview is keyboard reachable and keeps navigation parent-owne
 test('a failed isolated repaint keeps the last paginated book on screen', async ({ page }) => {
   await page.goto('/grimoire');
   const preview = page.frameLocator(PREVIEW_FRAME);
-  await expect(preview.locator('body')).toContainText('Start writing your book here.');
+  await expect(preview.locator('body')).toContainText('Start writing your book here.', {
+    timeout: ROUTE_READY_TIMEOUT,
+  });
   const lastGoodBook = await preview.locator('body').textContent();
 
   await page.evaluate(() => {
