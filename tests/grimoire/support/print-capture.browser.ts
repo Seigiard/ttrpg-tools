@@ -24,8 +24,6 @@ function renderPrintReadyHtml(source: string): Promise<string> {
   });
 }
 
-export function mountPrintCaptureHost(): void {
-  mountBrowserTransport<PrintCaptureSurface>(() => ({
-    renderPrintReadyHtml: ({ source }) => renderPrintReadyHtml(source),
-  }));
-}
+mountBrowserTransport<PrintCaptureSurface>(() => ({
+  renderPrintReadyHtml: ({ source }) => renderPrintReadyHtml(source),
+}));

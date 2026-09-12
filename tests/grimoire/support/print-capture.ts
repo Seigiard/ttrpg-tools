@@ -2,7 +2,7 @@ import type { Page as BrowserPage } from '@playwright/test';
 
 import { connectBrowserTransport } from './browser-transport';
 
-export const PRINT_CAPTURE_HOST = '/tests/grimoire/fixtures/print-capture-harness.html';
+export const PRINT_CAPTURE_HOST = '/tests/grimoire/fixtures/print-capture-host.html';
 
 export interface PrintCaptureSurface {
   renderPrintReadyHtml(input: { readonly source: string }): Promise<string>;

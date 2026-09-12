@@ -38,7 +38,7 @@ export default defineConfig({
   webServer: [
     {
       command: `bunx vite --config vite.grimoire-fixtures.config.ts --host 127.0.0.1 --port ${fixturePort} --strictPort`,
-      url: `${fixtureBaseURL}/tests/grimoire/fixtures/harness.html`,
+      url: `${fixtureBaseURL}/tests/grimoire/fixtures/real-engine-host.html`,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
     },

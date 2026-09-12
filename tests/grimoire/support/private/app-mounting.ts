@@ -3,7 +3,7 @@ import { CoreViewer } from '@vivliostyle/core';
 import { createEditor } from '../../../../src/features/grimoire/adapters/editor';
 import { downloadBook, loadBookFile } from '../../../../src/features/grimoire/adapters/file';
 import { paginate } from '../../../../src/features/grimoire/adapters/pagination';
-import { draftStorage } from '../../../../src/features/grimoire/adapters/persistence';
+import { draftStorage, type DraftStorage } from '../../../../src/features/grimoire/adapters/persistence';
 import { printBook } from '../../../../src/features/grimoire/adapters/printing';
 import { createPagination } from '../../../../src/features/grimoire/adapters/private/create-pagination';
 import { createPrinting } from '../../../../src/features/grimoire/adapters/private/create-printing';
@@ -13,8 +13,6 @@ import {
   type AppAdapters,
   type AppElements,
 } from '../../../../src/features/grimoire/app/start-app';
-import { disabledDraftPersistence } from '../draft.browser';
-import { loadBookFileWithControlledTiming } from '../saved.browser';
 import type { AppScenarioName, AppTestSurface } from './app-session';
 
 /**
@@ -56,6 +54,21 @@ const deterministicPaginate: typeof paginate = (container, html) => {
 
 const failingPrint: typeof printBook = () =>
   Promise.reject(new Error('Vivliostyle failed to prepare the book for printing: boom'));
+
+const disabledDraftPersistence: DraftStorage = {
+  read: () => undefined,
+  write: () => {},
+};
+
+const loadBookFileWithControlledTiming: typeof loadBookFile = (file) => {
+  const delay = file.name.includes('slow') ? 300 : 0;
+  return new Promise((resolve, reject) => {
+    void loadBookFile(file).then(
+      (source) => setTimeout(() => resolve(source), delay),
+      (error: unknown) => setTimeout(() => reject(error), delay),
+    );
+  });
+};
 
 function installPrintObservers(controls: AppHostControls): void {
   let printDialoguesOpened = 0;
