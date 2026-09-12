@@ -1,7 +1,11 @@
-import type { loadBookFile } from '../../../src/features/grimoire/adapters/file';
+import { loadBookFile } from '../../../src/features/grimoire/adapters/file';
 
 export const loadBookFileWithControlledTiming: typeof loadBookFile = (file) => {
   const delay = file.name.includes('slow') ? 300 : 0;
-  const source = `# Loaded from ${file.name}\n\nContent from ${file.name}.\n`;
-  return new Promise((resolve) => setTimeout(() => resolve(source), delay));
+  return new Promise((resolve, reject) => {
+    void loadBookFile(file).then(
+      (source) => setTimeout(() => resolve(source), delay),
+      (error: unknown) => setTimeout(() => reject(error), delay),
+    );
+  });
 };

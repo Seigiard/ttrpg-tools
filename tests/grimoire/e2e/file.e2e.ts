@@ -295,19 +295,48 @@ test.describe("loading two files in quick succession", () => {
 
     const slowPath = testInfo.outputPath("slow-book.json");
     const fastPath = testInfo.outputPath("fast-book.json");
-    writeFileSync(slowPath, "{}");
-    writeFileSync(fastPath, "{}");
+    writeFileSync(
+      slowPath,
+      JSON.stringify({
+        format: FILE_FORMAT,
+        version: 1,
+        source: "# Slow saved book\n\nSlow content.",
+      }),
+    );
+    writeFileSync(
+      fastPath,
+      JSON.stringify({
+        format: FILE_FORMAT,
+        version: 1,
+        source: "# Fast saved book\n\nFast content.",
+      }),
+    );
 
     page.on("dialog", (dialog) => void dialog.accept());
 
     await saved.openFile(slowPath);
     await saved.openFile(fastPath);
 
-    await expect.poll(() => saved.source()).toContain("fast-book.json");
+    await expect.poll(() => saved.source()).toContain("Fast saved book");
     // The slow selection's 300ms delay has time to resolve and, if the bug is
     // present, clobber the editor after the fact.
     await page.waitForTimeout(400);
-    expect(await saved.source()).toContain("fast-book.json");
+    expect(await saved.source()).toContain("Fast saved book");
+  });
+
+  test("the controlled load race still rejects malformed saved files", async ({ page }, testInfo) => {
+    const saved = await openSavedFileSession(page, "saved-file-load-race");
+    await saved.replaceSource("Distinctive text the author was in the middle of writing.");
+    const before = await saved.source();
+
+    const missingSourcePath = testInfo.outputPath("fast-missing-source.json");
+    writeFileSync(missingSourcePath, JSON.stringify({ format: FILE_FORMAT, version: 1 }));
+
+    await saved.openFile(missingSourcePath);
+
+    await expect(page.locator("#status")).toBeVisible();
+    await expect.poll(() => saved.statusText()).toContain("Loading file failed");
+    expect(await saved.source()).toBe(before);
   });
 });
 
