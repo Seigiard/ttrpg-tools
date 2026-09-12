@@ -368,6 +368,7 @@ test.describe("a repaint the engine cannot finish", () => {
     await preview.replaceSource(GOOD_SOURCE);
     await expect.poll(() => preview.previewText()).toContain("A good paragraph appears here.");
     const goodPreview = await preview.previewText();
+    const goodPreviewAttributes = await preview.previewAttributes();
 
     // #when: the engine can no longer load what it is handed, and the author writes on
     await preview.makeEngineFail();
@@ -378,6 +379,7 @@ test.describe("a repaint the engine cannot finish", () => {
     await expect(preview.status()).toBeVisible();
     await expect.poll(() => preview.statusText()).toContain("the pagination engine could not lay out the book");
     expect(await preview.previewText()).toBe(goodPreview);
+    expect(await preview.previewAttributes()).toBe(goodPreviewAttributes);
     expect(goodPreview).toContain("A good paragraph appears here.");
   });
 
