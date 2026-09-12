@@ -49,7 +49,6 @@
       // engine itself (see print-error-harness.html), and the
       // print adapter is an explicit seam exactly so it can be substituted.
       const failingPrint = () => Promise.reject(new Error("Vivliostyle failed to prepare the book for printing: boom"));
-
       const app = startApp(
         {
           editorContainer: document.getElementById("editor"),

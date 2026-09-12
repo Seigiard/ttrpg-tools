@@ -1,4 +1,4 @@
-import type { DraftPersistence } from '../../../src/features/grimoire/adapters/persistence';
+import type { DraftStorage } from '../../../src/features/grimoire/adapters/persistence';
 
 /**
  * Draft persistence for application scenarios that are not about the Draft: nothing
@@ -9,9 +9,7 @@ import type { DraftPersistence } from '../../../src/features/grimoire/adapters/p
  * scenario needs it, so that "this scenario deliberately has no persistence" stays
  * readable at every use.
  */
-export const disabledDraftPersistence: DraftPersistence = {
+export const disabledDraftPersistence: DraftStorage = {
   read: () => undefined,
   write: () => {},
-  flush: () => {},
-  destroy: () => {},
 };

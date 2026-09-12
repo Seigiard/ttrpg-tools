@@ -1,7 +1,7 @@
 import { createEditor } from '../../../../src/features/grimoire/adapters/editor';
 import { downloadBook, loadBookFile } from '../../../../src/features/grimoire/adapters/file';
 import { paginate } from '../../../../src/features/grimoire/adapters/pagination';
-import { createDraftPersistence } from '../../../../src/features/grimoire/adapters/persistence';
+import { draftStorage } from '../../../../src/features/grimoire/adapters/persistence';
 import { printBook } from '../../../../src/features/grimoire/adapters/printing';
 import {
   startApp,
@@ -45,7 +45,7 @@ export function mountAppHost(scenario: string | null): AppTestSurface {
     editor: recipe.editor ?? { create: createEditor },
     preview: recipe.preview ?? { paginate },
     printing: recipe.printing ?? { printBook },
-    draft: recipe.draft ?? createDraftPersistence(),
+    draft: recipe.draft ?? draftStorage,
     savedFile: recipe.savedFile ?? { downloadBook, loadBookFile },
   });
 
