@@ -26,7 +26,8 @@ function appElements(): AppElements {
 describe("startApp", () => {
   test("owns all session resources through one idempotent handle", async () => {
     const elements = appElements();
-    const calls = { paginate: 0, print: 0, download: 0, load: 0, draftWrite: 0, draftDestroy: 0, editorDestroy: 0 };
+    const calls = { paginate: 0, print: 0, download: 0, load: 0, editorDestroy: 0 };
+    const drafts: string[] = [];
     let source = "INITIAL BOOK";
     let editorChanged: ((source: string) => void) | undefined;
     const editor: EditorHandle = {
@@ -59,12 +60,8 @@ describe("startApp", () => {
       },
       draft: {
         read: () => source,
-        write: () => {
-          calls.draftWrite += 1;
-        },
-        flush: () => undefined,
-        destroy: () => {
-          calls.draftDestroy += 1;
+        write: (next) => {
+          drafts.push(next);
         },
       },
       savedFile: {
@@ -84,6 +81,7 @@ describe("startApp", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(calls.paginate).toBe(2);
 
+    editorChanged?.("BEFORE DESTROY");
     app.destroy();
     app.destroy();
     elements.refreshControl.click();
@@ -103,8 +101,8 @@ describe("startApp", () => {
     expect(calls.print).toBe(0);
     expect(calls.download).toBe(0);
     expect(calls.load).toBe(0);
-    expect(calls.draftWrite).toBe(0);
-    expect(calls.draftDestroy).toBe(1);
+    // Disposal flushes the draft the author was still writing, and nothing after it.
+    expect(drafts).toEqual(["BEFORE DESTROY"]);
     expect(calls.editorDestroy).toBe(1);
   });
 });

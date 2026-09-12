@@ -62,7 +62,7 @@
           editor: { create: createEditor },
           preview: { paginate: fakePaginate },
           printing: { printBook: failingPrint },
-          draft: { read: () => undefined, write: () => {}, flush: () => {}, destroy: () => {} },
+          draft: { read: () => undefined, write: () => {} },
           savedFile: { downloadBook, loadBookFile },
         },
       );

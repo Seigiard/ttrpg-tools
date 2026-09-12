@@ -35,7 +35,7 @@
       import { downloadBook, loadBookFile } from "/src/features/grimoire/adapters/file.ts";
       import { paginate } from "/src/features/grimoire/adapters/pagination.ts";
       import { printBook } from "/src/features/grimoire/adapters/printing.ts";
-      import { createDraftPersistence } from "/src/features/grimoire/adapters/persistence.ts";
+      import { draftStorage } from "/src/features/grimoire/adapters/persistence.ts";
 
       // Initialize the app with persistence
       const editorContainer = document.getElementById("editor");
@@ -62,7 +62,7 @@
           editor: { create: createEditor },
           preview: { paginate },
           printing: { printBook },
-          draft: createDraftPersistence(),
+          draft: draftStorage,
           savedFile: { downloadBook, loadBookFile },
         },
       );
