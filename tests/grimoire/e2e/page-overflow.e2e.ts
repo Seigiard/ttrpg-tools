@@ -117,7 +117,7 @@ test.describe('the pagination adapter reports the pages that did not fit', () =>
     // two the card took -- and left every one of those pages in the container,
     // rather than rejecting over the overflow and restoring what was there before
     expect({
-      paginated: authoredPage.pageCount,
+      paginated: authoredPage.sheetCount,
       leftInThePreview: authoredPage.sheets.length,
     }).toEqual({
       paginated: 3,

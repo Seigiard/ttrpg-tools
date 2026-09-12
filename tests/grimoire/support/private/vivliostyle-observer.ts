@@ -118,7 +118,7 @@ export function observeAuthoredPageLayout(
   }
 
   return {
-    pageCount: pagination.pageCount,
+    sheetCount: pagination.pageCount,
     sheets,
     boxes,
     overflowingPages: pagination.overflowingPages ?? [],

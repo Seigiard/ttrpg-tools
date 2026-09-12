@@ -51,7 +51,7 @@ export interface OverflowingAuthoredPage {
 }
 
 export interface AuthoredPageObservation {
-  readonly pageCount: number;
+  readonly sheetCount: number;
   readonly sheets: readonly PhysicalSheetObservation[];
   /** Keyed `line-<data-line>` or `probe-<data-probe>`. */
   readonly boxes: Record<string, AuthoredPageBox | undefined>;

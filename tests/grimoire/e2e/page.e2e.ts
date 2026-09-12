@@ -122,11 +122,11 @@ test.describe('a page occupies one page of its own', () => {
 
     // #then: three pages, and the engine put each block on one of its own
     expect({
-      pageCount: authoredPage.pageCount,
+      sheetCount: authoredPage.sheetCount,
       proseBefore: box(authoredPage, 'line-3').sheetIndex,
       thePage: box(authoredPage, 'line-5').sheetIndex,
       proseAfter: box(authoredPage, 'line-9').sheetIndex,
-    }).toEqual({ pageCount: 3, proseBefore: 0, thePage: 1, proseAfter: 2 });
+    }).toEqual({ sheetCount: 3, proseBefore: 0, thePage: 1, proseAfter: 2 });
   });
 
   test('two pages written one after another are two pages', async ({ page: browserPage }) => {
@@ -138,10 +138,10 @@ test.describe('a page occupies one page of its own', () => {
 
     // #then: each card got a page, and the two did not run together into one
     expect({
-      pageCount: authoredPage.pageCount,
+      sheetCount: authoredPage.sheetCount,
       firstCard: box(authoredPage, 'line-5').sheetIndex,
       secondCard: box(authoredPage, 'line-8').sheetIndex,
-    }).toEqual({ pageCount: 4, firstCard: 1, secondCard: 2 });
+    }).toEqual({ sheetCount: 4, firstCard: 1, secondCard: 2 });
   });
 });
 
@@ -211,7 +211,7 @@ test.describe('a page is the frame of reference for what an author places on it'
       sheet: box(authoredPage, 'probe-strength').sheetIndex,
       playbookAboveTheFoot: toWholePixel(playbook.frameHeight - (playbook.y + playbook.height)),
     }).toEqual({
-      sheet: chapterAlone.pageCount,
+      sheet: chapterAlone.sheetCount,
       playbookAboveTheFoot: toWholePixel(mm(20)),
     });
     expect(strength.x).toBeCloseTo(mm(20), 0);
