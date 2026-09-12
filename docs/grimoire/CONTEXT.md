@@ -12,6 +12,8 @@ declares its sheet size and its theme. It is the root of a document.
 
 The editable copy of one book, saved automatically in the browser it is written in. A
 draft changes as the author edits, and is not the saved file an author chooses to keep.
+A browser holds one draft: opening a saved file replaces that draft's contents rather
+than adding a second one.
 
 ## Saved file
 
@@ -20,8 +22,8 @@ with its theme.
 
 ## Editor session
 
-One open instance of the editor, from opening it until it is closed. A session edits one
-draft at a time and may restore an existing draft or create a replacement draft by
+One open instance of the editor, from opening it until it is closed. A session edits the
+browser's draft: it restores whatever that draft holds, and may replace its contents by
 opening a saved file.
 
 ## Section
@@ -38,8 +40,9 @@ One numbered output surface produced by pagination; in print, one side of a phys
 A section may flow across any number of sheets; an author-declared page occupies exactly
 one.
 
-"Sheet" is the canonical term for this surface; earlier ADRs and the code following them
-still call it a physical page.
+"Sheet" is the canonical term for this surface. Earlier ADRs and the code written against
+them name the same surface a physical page; read those as sheets, and do not reach for
+"physical page" in new writing.
 
 ## Page
 
@@ -87,6 +90,10 @@ A book names one theme.
 
 A theme does not choose or override sheet size. Sheet size belongs to the book.
 
+"Sheet size" is the prose name for that declaration. CSS and the code spell it page size,
+because the mechanism is a `@page` rule and the pagination adapter reports `pageSizes`;
+those names stay as the platform writes them and mean the book's sheet size.
+
 ## Component
 
 A named block an author uses instead of describing its arrangement each time: a move, a
@@ -113,7 +120,9 @@ remains visible but no longer represents the draft's current contents.
 
 ## Preview refresh
 
-An attempt to paginate the book in the current draft. On success it replaces the preview;
-on failure any existing preview remains visible as a stale preview, while a first refresh
-has nothing to retain. "Refresh" is the author-facing term; avoid "repaint" for this
-operation.
+An attempt to paginate a book and show the result. A refresh the author asks for, and an
+automatic one, paginates the draft's current contents; a refresh the preview pane's own
+resize triggers repaginates the source the visible preview was built from, which is behind
+the draft whenever automatic refresh is off. On success it replaces the preview; on failure
+any existing preview remains visible as a stale preview, while a first refresh has nothing
+to retain. "Refresh" is the author-facing term; avoid "repaint" for this operation.
