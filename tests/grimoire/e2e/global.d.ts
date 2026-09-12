@@ -90,7 +90,6 @@ declare global {
     __printSequentiallyStartsFreshAttempts: (source: string) => Promise<boolean>;
     __finishSlowPagination: () => void;
     __editor?: EditorHandle;
-    __writeCount: number;
     __repaintCount: number;
     __openedPreviewLinks: string[];
   }

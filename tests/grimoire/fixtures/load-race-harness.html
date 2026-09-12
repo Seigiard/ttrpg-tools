@@ -19,6 +19,7 @@
       import { downloadBook } from "/src/features/grimoire/adapters/file.ts";
       import { paginate } from "/src/features/grimoire/adapters/pagination.ts";
       import { printBook } from "/src/features/grimoire/adapters/printing.ts";
+      import { disabledDraftPersistence } from "/tests/grimoire/support/draft.browser.ts";
 
       // A stand-in for the real file-load adapter, substituted at the exact seam
       // issue #1's architecture designed for this. Its delay is keyed off the
@@ -60,7 +61,7 @@
           editor: { create: createEditor },
           preview: { paginate },
           printing: { printBook },
-          draft: { read: () => undefined, write: () => {} },
+          draft: disabledDraftPersistence,
           savedFile: { downloadBook, loadBookFile: fakeLoadBookFile },
         },
       );
