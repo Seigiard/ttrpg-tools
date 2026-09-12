@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 
 import type { EditorHandle } from "../adapters/editor";
 import type { PaginationResult } from "../adapters/pagination";
@@ -8,9 +8,11 @@ const RESULT: PaginationResult = { pageCount: 1, pageSizes: [], overflowingPages
 const input = (): HTMLInputElement => document.createElement("input");
 const element = (): HTMLElement => document.createElement("div");
 const originalConfirm = window.confirm;
+const consoleErrors = spyOn(console, "error").mockImplementation(() => undefined);
 
 afterEach(() => {
   window.confirm = originalConfirm;
+  consoleErrors.mockClear();
 });
 
 function appElements(): AppElements {
@@ -434,6 +436,98 @@ describe("startApp", () => {
     expect(source).toBe("CURRENT BOOK");
     expect(elements.statusContainer.textContent).toBe("");
     window.confirm = confirm;
+  });
+
+  test("a successful pending draft flush during disposal does not mutate status UI", async () => {
+    const elements = appElements();
+    let source = "CURRENT BOOK";
+    let failWrites = true;
+    let editorChanged: ((source: string) => void) | undefined;
+    const drafts: string[] = [];
+    const adapters: AppAdapters = {
+      editor: {
+        create: (_container, _initialSource, onChange) => {
+          editorChanged = onChange;
+          return {
+            getSource: () => source,
+            setSource: (next) => {
+              source = next;
+            },
+            destroy: () => undefined,
+          };
+        },
+      },
+      preview: { paginate: () => Promise.resolve(RESULT) },
+      printing: { printBook: () => Promise.resolve() },
+      draft: {
+        read: () => source,
+        write: (next) => {
+          if (failWrites) throw new Error("Storage unavailable");
+          drafts.push(next);
+        },
+      },
+      savedFile: {
+        downloadBook: () => undefined,
+        loadBookFile: () => Promise.resolve("LOADED BOOK"),
+      },
+    };
+
+    const app = startApp(elements, adapters);
+    editorChanged?.("UNSAVED FIRST EDIT");
+    window.dispatchEvent(new Event("pagehide"));
+    await settle();
+    const statusBeforeDisposal = elements.statusContainer.textContent;
+
+    failWrites = false;
+    editorChanged?.("DISPOSAL FLUSHED EDIT");
+    app.dispose();
+    await settle();
+
+    expect(drafts).toEqual(["DISPOSAL FLUSHED EDIT"]);
+    expect(statusBeforeDisposal).toContain("This book is not being saved");
+    expect(elements.statusContainer.textContent).toBe(statusBeforeDisposal);
+  });
+
+  test("a failed pending draft flush during disposal does not mutate status UI", async () => {
+    const elements = appElements();
+    let source = "CURRENT BOOK";
+    let editorChanged: ((source: string) => void) | undefined;
+    const adapters: AppAdapters = {
+      editor: {
+        create: (_container, _initialSource, onChange) => {
+          editorChanged = onChange;
+          return {
+            getSource: () => source,
+            setSource: (next) => {
+              source = next;
+            },
+            destroy: () => undefined,
+          };
+        },
+      },
+      preview: { paginate: () => Promise.resolve(RESULT) },
+      printing: { printBook: () => Promise.resolve() },
+      draft: {
+        read: () => source,
+        write: () => {
+          throw new Error("Storage unavailable");
+        },
+      },
+      savedFile: {
+        downloadBook: () => undefined,
+        loadBookFile: () => Promise.resolve("LOADED BOOK"),
+      },
+    };
+
+    const app = startApp(elements, adapters);
+    const statusBeforeDisposal = elements.statusContainer.textContent;
+    editorChanged?.("DISPOSAL FAILED EDIT");
+
+    app.dispose();
+    await settle();
+
+    expect(statusBeforeDisposal).toBe("");
+    expect(elements.statusContainer.textContent).toBe(statusBeforeDisposal);
   });
 
   test("prints the current editor source independently of preview refresh", async () => {
