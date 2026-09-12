@@ -228,6 +228,8 @@ const APP_SCENARIOS = {
     ...savedFileBaseRecipe,
     savedFile: { downloadBook, loadBookFile: loadBookFileWithControlledTiming },
   }),
+  'authored-page': () => ({ draft: disabledDraftPersistence, isolatedPreview: false }),
+  'authored-page-isolated': () => ({ draft: disabledDraftPersistence }),
   preview: () => ({ draft: disabledDraftPersistence, isolatedPreview: false }),
   'preview-coalescing': createCoalescingPreviewRecipe,
   'preview-controlled-engine': createControlledEngineRecipe(false),

@@ -1,6 +1,7 @@
 import type { Page as BrowserPage } from '@playwright/test';
 
 import { connectAppHost, type AppScenarioName } from './private/app-session';
+import { activePreviewBody } from './private/preview-body';
 
 type PrintingAppScenarioName = Extract<
   AppScenarioName,
@@ -37,15 +38,7 @@ export async function openPrintingSession(
     statusText: () => browserPage.locator('#status').textContent(),
 
     async previewText() {
-      const frame = browserPage.locator(
-        '#preview > iframe[data-grimoire-preview-document]:not([aria-hidden])',
-      );
-      if ((await frame.count()) > 0) {
-        return frame.evaluate(
-          (previewFrame: HTMLIFrameElement) => previewFrame.contentDocument?.body.textContent ?? '',
-        );
-      }
-      return browserPage.locator('#preview').textContent().then((text) => text ?? '');
+      return (await activePreviewBody(browserPage)).textContent().then((text) => text ?? '');
     },
 
     advanceEngineClock: (ms) => transport.call('advanceEngineClock', { ms }),

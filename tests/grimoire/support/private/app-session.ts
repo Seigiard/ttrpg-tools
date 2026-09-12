@@ -14,6 +14,8 @@ export type AppScenarioName =
   | 'persistence-disabled'
   | 'saved-file'
   | 'saved-file-load-race'
+  | 'authored-page'
+  | 'authored-page-isolated'
   | 'preview'
   | 'preview-coalescing'
   | 'preview-controlled-engine'
