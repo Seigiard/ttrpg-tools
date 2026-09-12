@@ -24,20 +24,19 @@ const printWithBrowserScheduler = createPrinting(browserScheduler);
  * call's cleanup already ran. A call made while one is in flight joins that one
  * instead of starting a second, which is what makes this single-flight.
  *
- * A hung attempt rejects after 60 seconds, but the hidden iframe cannot be canceled.
- * New attempts stay blocked until that iframe eventually answers; if it never does,
- * the timeout message tells the author to reload. Starting a replacement sooner would
- * put two attempts onto Vivliostyle's one global print instance.
+ * A hung attempt rejects after 60 seconds, and an attempt the engine says it cannot
+ * lay out rejects at once, but neither hands that global instance back -- the hidden
+ * iframe cannot be canceled, and Vivliostyle releases the instance only on the path
+ * that ends in printing. New attempts therefore stay blocked until the given-up-on
+ * attempt eventually reports itself ready; if it never does, the timeout message
+ * tells the author to reload. Starting a replacement sooner would put two attempts
+ * onto Vivliostyle's one global print instance.
  *
- * The hidden iframe cannot be called off and may still call back for an attempt
- * already given up on. Settling a promise twice is a no-op, but `printCallback`
- * opens the browser's print dialogue *before* it resolves, and that is a real thing
- * happening to a real author -- a dialogue for a book they asked to print minutes
- * ago, over whatever they are doing now. `printHTML` offers no way to take its
- * callbacks back, so where `pagination.ts` can stop listening, this has to decline
- * to act instead: the bound marks the attempt abandoned, and both callbacks check
- * that before doing anything at all. A late callback only releases the separate
- * abandoned-attempt block after Vivliostyle has finished with its global instance.
+ * That abandoned iframe may still call back for a print the author gave up on
+ * minutes ago. Settling a promise twice is a no-op, but opening the browser's print
+ * dialogue over whatever they are doing now is not, and `printHTML` offers no way to
+ * take its callbacks back -- so where `pagination.ts` can stop listening, this
+ * declines to act instead: a late answer releases the engine and nothing more.
  */
 export function printBook(html: string): Promise<void> {
   return printWithBrowserScheduler(html);
