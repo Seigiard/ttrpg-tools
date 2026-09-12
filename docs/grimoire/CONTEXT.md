@@ -10,8 +10,8 @@ declares its sheet size and its theme. It is the root of a document.
 
 ## Draft
 
-The browser-local, automatically saved editable copy of one book. A draft changes as the
-author edits and is distinct from a saved file the author chooses to keep.
+The editable copy of one book, saved automatically in the browser it is written in. A
+draft changes as the author edits, and is not the saved file an author chooses to keep.
 
 ## Saved file
 
@@ -38,7 +38,8 @@ One numbered output surface produced by pagination; in print, one side of a phys
 A section may flow across any number of sheets; an author-declared page occupies exactly
 one.
 
-Avoid: physical page.
+"Sheet" is the canonical term for this surface; earlier ADRs and the code following them
+still call it a physical page.
 
 ## Page
 
@@ -66,6 +67,9 @@ printed number stays, because it is an address and the address is still true.
 
 A point where the author forces the current sheet to end, even though content would
 otherwise continue on it. Belongs inside a section.
+
+The name is inherited from CSS and word processors, where it is the term authors already
+know. Despite the word, a page break ends a sheet; it does not declare a page.
 
 ## Column break
 
@@ -98,11 +102,11 @@ may change them.
 
 ## Preview
 
-The paginated rendering of the book shown on the right-hand side of the editor. A current
-preview and the PDF are produced from the same marked-up book, so the current preview
-shows what will be printed.
+The paginated rendering of the book, shown in the preview pane on the right-hand side of
+the editor. A current preview and the PDF are produced from the same marked-up book, so
+the current preview shows what will be printed.
 
-## Stale Preview
+## Stale preview
 
 The last successfully generated preview retained after a preview refresh fails. It
 remains visible but no longer represents the draft's current contents.
