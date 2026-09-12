@@ -1,4 +1,5 @@
 import type { OverflowingPage, paginate } from "../adapters/pagination";
+import { browserScheduler, type Schedule, type Scheduler } from "../adapters/private/scheduler";
 import { renderBook } from "../core/render-book";
 import {
   toBookMarkupError,
@@ -26,6 +27,7 @@ interface PreviewWorkflowOptions {
   readonly paginate: typeof paginate;
   readonly status: PreviewStatus;
   readonly automaticRefresh?: boolean;
+  readonly scheduler?: Scheduler;
 }
 
 export function createPreviewWorkflow({
@@ -33,6 +35,7 @@ export function createPreviewWorkflow({
   paginate,
   status,
   automaticRefresh = true,
+  scheduler = browserScheduler,
 }: PreviewWorkflowOptions): PreviewWorkflow {
   let active = true;
   let automaticRefreshEnabled = automaticRefresh;
@@ -41,12 +44,12 @@ export function createPreviewWorkflow({
   let pendingAutomatic = false;
   let resizePending = false;
   let displayedSource: string | undefined;
-  let debounceId: ReturnType<typeof setTimeout> | undefined;
+  let debounce: Schedule | undefined;
 
   const clearScheduledRepaint = (): void => {
-    if (debounceId === undefined) return;
-    clearTimeout(debounceId);
-    debounceId = undefined;
+    if (debounce === undefined) return;
+    scheduler.cancel(debounce);
+    debounce = undefined;
   };
 
   const afterRun = (): void => {
@@ -85,7 +88,19 @@ export function createPreviewWorkflow({
       return;
     }
 
-    void paginate(container, html)
+    let pagination: Promise<Awaited<ReturnType<typeof paginate>>>;
+    try {
+      pagination = Promise.resolve(paginate(container, html));
+    } catch (error) {
+      try {
+        status.previewFailed(toPreviewRefreshError(error));
+      } finally {
+        afterRun();
+      }
+      return;
+    }
+
+    void pagination
       .then((result) => {
         if (!active) return;
         displayedSource = source;
@@ -109,8 +124,8 @@ export function createPreviewWorkflow({
 
   const scheduleRepaint = (source: string): void => {
     clearScheduledRepaint();
-    debounceId = setTimeout(() => {
-      debounceId = undefined;
+    debounce = scheduler.schedule(() => {
+      debounce = undefined;
       requestRepaint(source, true);
     }, REFRESH_DEBOUNCE_MS);
   };

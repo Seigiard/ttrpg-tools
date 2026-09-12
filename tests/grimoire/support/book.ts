@@ -27,23 +27,56 @@ export interface FlowingHeaderObservation {
   readonly pageNumber: string | undefined;
 }
 
+export type SheetOrientation = 'portrait' | 'landscape';
+
+export interface PhysicalSheetObservation extends PhysicalSheetSize {
+  readonly sheetIndex: number;
+  readonly orientation: SheetOrientation;
+  readonly runningHeader: string | undefined;
+  readonly pageNumber: string | undefined;
+}
+
+export interface AuthoredPageBox {
+  readonly sheetIndex: number;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly frameHeight: number;
+}
+
+export interface OverflowingAuthoredPage {
+  readonly line: number;
+  readonly pages: number;
+}
+
+export interface AuthoredPageObservation {
+  readonly sheetCount: number;
+  readonly sheets: readonly PhysicalSheetObservation[];
+  /** Keyed `line-<data-line>` or `probe-<data-probe>`. */
+  readonly boxes: Record<string, AuthoredPageBox | undefined>;
+  readonly overflowingPages: readonly OverflowingAuthoredPage[];
+}
+
 interface RenderInput {
   readonly source: string;
-  readonly extraThemeCss?: string;
+  readonly adversarialThemeCss?: string;
 }
 
 export interface BookTestSurface {
   pageCount(input: { readonly source: string }): Promise<number>;
   layout(input: RenderInput): Promise<BookLayoutObservation>;
+  authoredPage(input: RenderInput): Promise<AuthoredPageObservation>;
   flowingHeaders(input: RenderInput): Promise<readonly FlowingHeaderObservation[]>;
 }
 
 export interface BookDriver {
   pageCount(source: string): Promise<number>;
-  layout(source: string, extraThemeCss?: string): Promise<BookLayoutObservation>;
+  layout(source: string, adversarialThemeCss?: string): Promise<BookLayoutObservation>;
+  authoredPage(source: string, adversarialThemeCss?: string): Promise<AuthoredPageObservation>;
   flowingHeaders(
     source: string,
-    extraThemeCss?: string,
+    adversarialThemeCss?: string,
   ): Promise<readonly FlowingHeaderObservation[]>;
 }
 
@@ -52,8 +85,11 @@ export async function openBookDriver(browserPage: BrowserPage): Promise<BookDriv
 
   return {
     pageCount: (source) => transport.call('pageCount', { source }),
-    layout: (source, extraThemeCss) => transport.call('layout', { source, extraThemeCss }),
-    flowingHeaders: (source, extraThemeCss) =>
-      transport.call('flowingHeaders', { source, extraThemeCss }),
+    layout: (source, adversarialThemeCss) =>
+      transport.call('layout', { source, adversarialThemeCss }),
+    authoredPage: (source, adversarialThemeCss) =>
+      transport.call('authoredPage', { source, adversarialThemeCss }),
+    flowingHeaders: (source, adversarialThemeCss) =>
+      transport.call('flowingHeaders', { source, adversarialThemeCss }),
   };
 }
