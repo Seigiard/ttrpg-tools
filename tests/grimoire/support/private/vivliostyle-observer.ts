@@ -1,8 +1,15 @@
-import type { BookLayoutObservation, FlowingHeaderObservation, SourcePosition } from '../book';
+import type {
+  AuthoredPageBox,
+  AuthoredPageObservation,
+  BookLayoutObservation,
+  FlowingHeaderObservation,
+  SourcePosition,
+} from '../book';
 
 interface PaginationObservation {
   readonly pageCount: number;
   readonly pageSizes: BookLayoutObservation['pageSizes'];
+  readonly overflowingPages?: AuthoredPageObservation['overflowingPages'];
 }
 
 export function observeBookLayout(
@@ -51,4 +58,69 @@ export function observeFlowingHeaders(container: HTMLElement): FlowingHeaderObse
   }
 
   return pages.toSorted((left, right) => left.pageIndex - right.pageIndex);
+}
+
+export function observeAuthoredPageLayout(
+  container: HTMLElement,
+  pagination: PaginationObservation,
+): AuthoredPageObservation {
+  for (const pageContainer of container.querySelectorAll<HTMLElement>(
+    '[data-vivliostyle-page-container]',
+  )) {
+    pageContainer.style.display = 'block';
+  }
+
+  const headers = new Map(
+    observeFlowingHeaders(container).map((sheet) => [sheet.pageIndex, sheet]),
+  );
+  const sheets = pagination.pageSizes.map((sheet, sheetIndex) => {
+    const header = headers.get(sheetIndex);
+    return {
+      sheetIndex,
+      width: sheet.width,
+      height: sheet.height,
+      orientation: sheet.width > sheet.height ? 'landscape' : 'portrait',
+      runningHeader: header?.header,
+      pageNumber: header?.pageNumber,
+    } as const;
+  });
+
+  const boxes: Record<string, AuthoredPageBox | undefined> = {};
+  const record = (key: string, element: HTMLElement): void => {
+    if (boxes[key] !== undefined) return;
+
+    const rect = element.getClientRects()[0];
+    const sheetElement = element.closest<HTMLElement>('[data-vivliostyle-page-index]');
+    if (rect === undefined || sheetElement === null) return;
+
+    const sheet = sheetElement.getBoundingClientRect();
+    const authoredPage = element.closest<HTMLElement>('[data-grimoire-page]');
+    const pageArea = element.closest<HTMLElement>('[data-vivliostyle-page-area-container]');
+    const origin =
+      authoredPage === null || pageArea === null ? sheet : pageArea.getBoundingClientRect();
+    boxes[key] = {
+      sheetIndex: Number(sheetElement.dataset.vivliostylePageIndex),
+      x: rect.x - origin.x,
+      y: rect.y - origin.y,
+      width: rect.width,
+      height: rect.height,
+      frameHeight: origin.height,
+    };
+  };
+
+  for (const element of container.querySelectorAll<HTMLElement>('[data-line]')) {
+    const line = element.dataset.line;
+    if (line !== undefined) record(`line-${line}`, element);
+  }
+  for (const element of container.querySelectorAll<HTMLElement>('[data-probe]')) {
+    const probe = element.dataset.probe;
+    if (probe !== undefined) record(`probe-${probe}`, element);
+  }
+
+  return {
+    sheetCount: pagination.pageCount,
+    sheets,
+    boxes,
+    overflowingPages: pagination.overflowingPages ?? [],
+  };
 }

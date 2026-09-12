@@ -2,7 +2,11 @@ import { paginate } from '../../../src/features/grimoire/adapters/pagination';
 import { renderBook } from '../../../src/features/grimoire/core/render-book';
 import { defaultRuTheme } from '../../../src/features/grimoire/core/themes/default-ru/theme';
 import type { BookTestSurface } from './book';
-import { observeBookLayout, observeFlowingHeaders } from './private/vivliostyle-observer';
+import {
+  observeAuthoredPageLayout,
+  observeBookLayout,
+  observeFlowingHeaders,
+} from './private/vivliostyle-observer';
 
 function renderWithExtraThemeCss(source: string, extraThemeCss?: string): string {
   const html = renderBook({ source });
@@ -36,6 +40,11 @@ export function createBookTestSurface(container: HTMLElement): BookTestSurface {
       observe(async () => {
         const result = await paginate(container, renderWithExtraThemeCss(source, extraThemeCss));
         return observeBookLayout(container, result);
+      }),
+    authoredPage: ({ source, extraThemeCss }) =>
+      observe(async () => {
+        const result = await paginate(container, renderWithExtraThemeCss(source, extraThemeCss));
+        return observeAuthoredPageLayout(container, result);
       }),
     flowingHeaders: ({ source, extraThemeCss }) =>
       observe(async () => {
