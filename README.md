@@ -7,7 +7,6 @@
 ## Стек
 
 - [Astro 6](https://astro.build/) — статика по умолчанию, React islands там где нужен интерактив.
-- Grimoire Press (`/grimoire`) — vanilla TypeScript внутри Astro route; CodeMirror и Vivliostyle управляют редактором и печатным preview без React-обёртки.
 - React 19 + TypeScript (strict).
 - [Tailwind CSS v4](https://tailwindcss.com/) — токены через `@theme` в `src/styles/global.css`.
 - [shadcn/ui](https://ui.shadcn.com/) с Base UI как primitive layer.
@@ -25,14 +24,12 @@ bun run dev        # http://localhost:4321
 bun run build      # сборка в dist/
 bun run preview    # просмотр сборки
 bun test           # быстрые unit-тесты
-bun run test:e2e   # Chromium-тесты, включая Grimoire Press
-bun run check:pdf  # проверка PDF; нужны Chromium и Poppler
 bun run lint       # oxlint
 bun run lint:fix   # oxlint --fix
 bun run format     # oxfmt
 bun run format:check
 bun run format:astro
-bun run typecheck  # astro check + Grimoire core без DOM API
+bun run typecheck  # astro check
 ```
 
 ## Деплой
@@ -65,13 +62,11 @@ bun run deploy   # build + wrangler deploy
 
 **Если что-то отвалится:** проверь в Cloudflare → Project → Build logs. Чаще всего — несовместимость версий Node/Bun или забытый `BUN_VERSION`.
 
-CI на GitHub Actions проверяет lint + format + unit + Chromium e2e + typecheck + build на PR (`.github/workflows/ci.yml`) — Cloudflare сам деплоит, GA только страхует от слома `main`.
+CI на GitHub Actions проверяет lint + format + unit + typecheck + build на PR (`.github/workflows/ci.yml`) — Cloudflare сам деплоит, GA только страхует от слома `main`.
 
 ## Документация
 
 - `docs/DESIGN.md` — дизайн-токены и правила.
 - `CONTEXT-MAP.md` — карта предметных контекстов.
-- `docs/grimoire/` — словарь и ADR Grimoire Press.
-- `docs/adr/` — общие архитектурные решения платформы.
 - `docs/brainstorms/` — исходные брифы.
 - `docs/plans/` — планы реализации.

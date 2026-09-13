@@ -16,7 +16,7 @@ The five triage state roles use the default label strings. See `docs/agents/tria
 
 ### Domain docs
 
-Multi-context: `CONTEXT-MAP.md` points to each context, with system-wide decisions in `docs/adr/` and context-specific decisions beside that context. See `docs/agents/domain.md`.
+`CONTEXT-MAP.md` points to active contexts, with context-specific decisions stored beside each context. See `docs/agents/domain.md`.
 
 ## Команды
 
