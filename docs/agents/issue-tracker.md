@@ -23,10 +23,6 @@ queue unless this flag is changed deliberately.
 GitHub shares one number space across issues and pull requests. For a bare `#42`, try
 `gh pr view 42` and fall back to `gh issue view 42`.
 
-Bare issue references under `src/features/grimoire/` predate its migration into this
-repository and refer to `Seigiard/grimoire-press`. Resolve those explicitly with
-`gh issue view <number> --repo Seigiard/grimoire-press` rather than against this checkout.
-
 ## Skill operations
 
 When a skill says to publish to the issue tracker, create a GitHub issue. When it asks
