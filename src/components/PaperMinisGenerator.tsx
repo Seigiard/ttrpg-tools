@@ -10,6 +10,7 @@ import {
   HEIGHT_SLOT_ORDER,
   slotLabel,
   slotGeometryLabel,
+  slotName,
 } from '@/lib/paper-minis/sizes';
 import type { MiniSize, PreparedArtwork } from '@/lib/paper-minis/types';
 
@@ -26,6 +27,29 @@ function SizeOptions({ custom = false }: { custom?: boolean }) {
       ))}
       {custom && <option value="custom">{slotLabel('custom')}</option>}
     </>
+  );
+}
+
+function NamingHint() {
+  return (
+    <div data-testid="naming-hint" className="text-sm leading-relaxed text-text-muted">
+      <p>
+        В конце имени файла: <code className="font-mono text-text">имя-back</code> — оборот,{' '}
+        <code className="font-mono text-text">имя-large</code> — размер.
+      </p>
+      <details className="mt-1">
+        <summary className="cursor-pointer rounded-sm hover:text-text focus-visible:outline-2 focus-visible:outline-primary">
+          Размеры в имени файла
+        </summary>
+        <ul className="mt-2 space-y-1">
+          {HEIGHT_SLOT_ORDER.map((slot) => (
+            <li key={slot}>
+              <code className="font-mono text-text">{slot}</code> — {slotName(slot)}
+            </li>
+          ))}
+        </ul>
+      </details>
+    </div>
   );
 }
 
@@ -336,16 +360,20 @@ export default function PaperMinisGenerator() {
           </div>
 
           <div className="min-w-0 space-y-6">
-            <Button
-              variant="outline"
-              className="h-auto min-h-28 w-full flex-col whitespace-normal border-dashed p-6"
-              onClick={() => files.current?.click()}
-            >
-              <span className="text-base">Добавить изображения</span>
-              <span className="text-sm font-normal text-text-muted">
-                Перетащите файлы сюда или нажмите для выбора. PNG, JPG, WebP.
-              </span>
-            </Button>
+            <div className="space-y-2">
+              <Button
+                variant="outline"
+                className="h-auto min-h-28 w-full flex-col whitespace-normal border-dashed p-6"
+                onClick={() => files.current?.click()}
+              >
+                <span className="text-base">Добавить изображения</span>
+                <span className="text-sm font-normal text-text-muted">
+                  Перетащите файлы сюда или нажмите для выбора. PNG, JPG, WebP.
+                </span>
+              </Button>
+              {/* Outside the button: a <details> is interactive content, which a button may not contain. */}
+              <NamingHint />
+            </div>
             <input
               ref={files}
               type="file"
@@ -369,7 +397,7 @@ export default function PaperMinisGenerator() {
                 >
                   <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <h3 className="break-all text-xl text-text">
-                      {row.image?.name ?? `Миниатюра ${index + 1}`}
+                      {row.name || `Миниатюра ${index + 1}`}
                     </h3>
                     <div className="flex gap-2">
                       <Button

@@ -305,3 +305,64 @@ test('a failed front stays out of the print estimate and can be replaced', async
     },
   );
 });
+
+test('a dropped front and back pair loads into one row with both sides', async () => {
+  // #given
+  const store = setup();
+  const front = new File([png], 'goblin.png', { type: 'image/png' });
+  const back = new File([png], 'goblin-back.png', { type: 'image/png' });
+  const settled = new Promise<void>((resolve) => {
+    const unsubscribe = store.$preparing.listen((preparing) => {
+      if (!preparing) {
+        unsubscribe();
+        resolve();
+      }
+    });
+  });
+  // #when
+  store.ingest([front, back]);
+  await settled;
+  // #then
+  expect(
+    store.$rows.get().map((row) => ({
+      name: row.name,
+      front: row.image?.name,
+      back: row.backImage?.name,
+      backReady: row.backArtwork !== null && row.backArtwork !== undefined,
+    })),
+  ).toEqual([{ name: 'Goblin', front: 'goblin.png', back: 'goblin-back.png', backReady: true }]);
+});
+
+test('a batch row keeps its planned name through image replacement and duplication', async () => {
+  // #given
+  const store = setup();
+  store.ingest([new File([png], 'big-bad_wolf.PNG', { type: 'image/png' })]);
+  const id = store.$rows.get()[0].id;
+  // #when
+  await store.setImage(id, new File([png], 'retouched.png', { type: 'image/png' }));
+  await store.setImage(id, new File([png], 'wolf-back.png', { type: 'image/png' }), true);
+  store.duplicate(id);
+  // #then
+  expect(store.$rows.get().map((row) => row.name)).toEqual(['Big bad wolf', 'Big bad wolf']);
+});
+
+test('a batch row lands on the size its file name carries', () => {
+  // #given
+  const store = setup();
+  // #when
+  store.ingest([new File([png], 'ogre-large.png', { type: 'image/png' })]);
+  // #then
+  expect(store.$rows.get().map((row) => [row.name, row.heightSlot])).toEqual([['Ogre', 'large']]);
+});
+
+test('a single-slot upload ignores the size in its file name', async () => {
+  // #given
+  const store = setup();
+  store.ingest([new File([png], 'ogre.png', { type: 'image/png' })]);
+  const id = store.$rows.get()[0].id;
+  // #when
+  await store.setImage(id, new File([png], 'ogre-gargantuan.png', { type: 'image/png' }));
+  await store.setImage(id, new File([png], 'ogre-tiny-back.png', { type: 'image/png' }), true);
+  // #then
+  expect(store.$rows.get()[0].heightSlot).toBe('medium');
+});

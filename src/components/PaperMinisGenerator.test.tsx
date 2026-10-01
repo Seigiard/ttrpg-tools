@@ -18,7 +18,7 @@ afterEach(() => {
 async function addFront() {
   await act(async () => {
     fireEvent.change(screen.getByLabelText('Добавить изображения', { selector: 'input' }), {
-      target: { files: [new File([png], 'front.png', { type: 'image/png' })] },
+      target: { files: [new File([png], 'goblin.png', { type: 'image/png' })] },
     });
   });
 }
@@ -47,7 +47,7 @@ test('a thumbnail drop uses the first supported image even after an unsupported 
   await addFront();
   // #when
   await act(async () => {
-    fireEvent.drop(screen.getByRole('button', { name: 'Лицевая сторона' }), {
+    fireEvent.drop(screen.getByRole('button', { name: 'Оборот: отражение лицевой стороны' }), {
       dataTransfer: {
         files: [
           new File(['text'], 'notes.txt', { type: 'text/plain' }),
@@ -57,7 +57,58 @@ test('a thumbnail drop uses the first supported image even after an unsupported 
     });
   });
   // #then
-  expect(screen.getByRole('heading', { name: 'figure.png' })).toBeTruthy();
+  expect({
+    rejected: screen.queryByText('Выберите PNG, JPG или WebP.'),
+    back: screen.queryByRole('button', { name: 'Оборот: figure.png' }) !== null,
+  }).toEqual({ rejected: null, back: true });
+});
+
+test('the drop zone explains the naming convention with every size id outside the button', () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  // #when
+  const hint = screen.getByTestId('naming-hint');
+  const sizes = hint.querySelector('details');
+  // #then
+  expect({
+    hint: hint.querySelector('p')?.textContent,
+    insideButton: hint.closest('button') !== null,
+    sizes: Array.from(sizes?.querySelectorAll('li') ?? [], (item) => item.textContent),
+  }).toEqual({
+    hint: 'В конце имени файла: имя-back — оборот, имя-large — размер.',
+    insideButton: false,
+    sizes: [
+      'tiny — Крошечный',
+      'small — Маленький',
+      'medium-short — Средний, низкий',
+      'medium — Средний',
+      'medium-tall — Средний, высокий',
+      'large — Большой',
+      'large-tall — Большой, высокий',
+      'huge — Огромный',
+      'gargantuan — Громадный',
+    ],
+  });
+});
+
+test('a batch row is titled by its cleaned file name, or numbered when the name is empty', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  // #when
+  await act(async () => {
+    fireEvent.change(screen.getByLabelText('Добавить изображения', { selector: 'input' }), {
+      target: {
+        files: [
+          new File([png], 'big-bad_wolf.PNG', { type: 'image/png' }),
+          new File([png], '-.png', { type: 'image/png' }),
+        ],
+      },
+    });
+  });
+  // #then
+  expect(
+    screen.getAllByRole('article').map((row) => row.querySelector('h3')?.textContent),
+  ).toEqual(['Big bad wolf', 'Миниатюра 2']);
 });
 
 test('the back slot announces the selected file and returns to reflection after removal', async () => {
@@ -169,7 +220,10 @@ for (const action of ['Скачать PDF', 'Предпросмотр PDF']) {
           });
         });
         const summary = document.querySelector('[aria-live="polite"]')?.textContent;
-        const lateArtwork = screen.queryByText('late.png');
+        const lateBack = screen.queryByRole('button', { name: 'Оборот: late.png' }) !== null;
+        const lockedTitles = screen
+          .getAllByRole('article')
+          .map((row) => row.querySelector('h3')?.textContent);
         await act(async () => {
           if (outcome === 'success') resolve(new Uint8Array([1]));
           else reject(new Error('PDF failed'));
@@ -189,7 +243,8 @@ for (const action of ['Скачать PDF', 'Предпросмотр PDF']) {
           pageDrop,
           thumbnailDrop,
           summary,
-          lateArtwork,
+          lateBack,
+          lockedTitles,
           unlocked,
           rows: screen.getAllByRole('article').length,
           pdfCalls: generate.mock.calls.length,
@@ -201,7 +256,8 @@ for (const action of ['Скачать PDF', 'Предпросмотр PDF']) {
           pageDrop: false,
           thumbnailDrop: false,
           summary: 'Миниатюр: 1 → листов: 1 (A4)',
-          lateArtwork: null,
+          lateBack: false,
+          lockedTitles: ['Goblin'],
           unlocked: true,
           rows: 3,
           pdfCalls: 1,
