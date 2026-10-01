@@ -32,11 +32,15 @@ function SizeOptions({ custom = false }: { custom?: boolean }) {
 function ArtworkSlot({
   artwork,
   label,
+  displayLabel,
+  hint,
   loading,
   onFile,
 }: {
   artwork?: PreparedArtwork | null;
   label: string;
+  displayLabel?: string;
+  hint: string;
   loading: boolean;
   onFile: (file: File) => void;
 }) {
@@ -56,10 +60,13 @@ function ArtworkSlot({
     return () => URL.revokeObjectURL(next);
   }, [artwork]);
   return (
-    <div>
+    <div className="overflow-hidden rounded-lg border border-border bg-surface-elevated">
+      <div className="border-b border-border px-3 py-2">
+        <p className="truncate text-sm font-medium text-text">{displayLabel ?? label}</p>
+      </div>
       <Button
-        variant="outline"
-        className="h-28 w-full whitespace-normal"
+        variant="ghost"
+        className="h-40 w-full rounded-none whitespace-normal p-3"
         aria-label={label}
         onClick={() => input.current?.click()}
         onDragOver={(event) => {
@@ -75,9 +82,11 @@ function ArtworkSlot({
         }}
       >
         {url ? (
-          <img src={url} alt={label} className="h-full w-full object-contain p-1" />
+          <img src={url} alt={label} className="h-full w-full object-contain" />
         ) : (
-          <span className="text-xs text-text-muted">{loading ? 'Загрузка…' : label}</span>
+          <span className="max-w-44 text-sm font-normal leading-relaxed text-text-muted">
+            {loading ? 'Загрузка…' : hint}
+          </span>
         )}
       </Button>
       <input
@@ -141,7 +150,6 @@ export default function PaperMinisGenerator() {
       depth = Math.max(0, depth - 1);
       if (!depth) setDragging(false);
     };
-    // Capture clears the overlay even when a thumbnail consumes the drop.
     const clear = () => {
       depth = 0;
       setDragging(false);
@@ -198,240 +206,298 @@ export default function PaperMinisGenerator() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 lg:-mx-20">
       <fieldset
         aria-label="Редактор миниатюр"
         aria-busy={busy}
         disabled={busy}
-        className="min-w-0 space-y-6 disabled:opacity-60"
+        className="min-w-0 disabled:opacity-60"
       >
-        <section
-          aria-label="Настройки печати"
-          className="grid gap-4 rounded-lg border border-border bg-surface-elevated p-4 sm:grid-cols-2"
-        >
-          <label className="space-y-2 text-sm">
-            Размер бумаги
-            <select
-              className={field}
-              value={settings.pageSize}
-              onChange={(event) =>
-                store.settings({ pageSize: event.target.value as 'a4' | 'letter' })
-              }
-            >
-              <option value="a4">A4 (210 × 297 мм)</option>
-              <option value="letter">Letter (216 × 279 мм)</option>
-            </select>
-          </label>
-          <label className="space-y-2 text-sm">
-            Поля вокруг фигурки, мм
-            <input
-              className={field}
-              type="number"
-              min="0"
-              step="any"
-              required
-              value={margin}
-              aria-invalid={!marginValid}
-              onChange={(event) => {
-                if (store.$busy.get()) return;
-                setMargin(event.target.value);
-                const n = event.target.valueAsNumber;
-                if (Number.isFinite(n) && n >= 0) store.settings({ marginMm: n });
-              }}
-            />
-          </label>
-          <label className="flex min-h-11 items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={settings.numberDuplicates}
-              onChange={(event) => store.settings({ numberDuplicates: event.target.checked })}
-            />
-            Нумеровать копии
-          </label>
-          <label className="flex min-h-11 items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={settings.normalization}
-              onChange={(event) => store.settings({ normalization: event.target.checked })}
-            />
-            Обрезать пустые поля изображения
-          </label>
-        </section>
-        <Button
-          variant="outline"
-          className="h-auto min-h-28 w-full flex-col whitespace-normal border-dashed p-6"
-          onClick={() => files.current?.click()}
-        >
-          <span>Добавить изображения</span>
-          <span className="text-sm font-normal text-text-muted">
-            Перетащите файлы сюда или нажмите для выбора. PNG, JPG, WebP.
-          </span>
-        </Button>
-        <input
-          ref={files}
-          type="file"
-          multiple
-          accept="image/png,image/jpeg,image/webp"
-          className="hidden"
-          aria-label="Добавить изображения"
-          onChange={(event) => {
-            store.ingest(Array.from(event.target.files ?? []));
-            event.target.value = '';
-          }}
-        />
-        <div className="flex flex-wrap items-center gap-3">
-          <Button variant="outline" className="min-h-11" onClick={() => store.addBlank()}>
-            Добавить пустую строку
-          </Button>
-          {rows.length > 0 && (
-            <label className="min-w-0 flex-1 text-sm">
-              Высота всех фигурок
+        <div className="grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] lg:items-start">
+          <aside className="space-y-6 rounded-lg border border-border bg-surface-elevated p-4 lg:sticky lg:top-4">
+            <div>
+              <h2 className="text-2xl text-text">Настройки</h2>
+              <p className="mt-1 text-sm leading-relaxed text-text-muted">
+                Общие параметры печати.
+              </p>
+            </div>
+            <label className="block text-sm">
+              Размер бумаги
               <select
                 className={field}
-                value=""
-                onChange={(event) => {
-                  for (const row of rows)
-                    store.patch(row.id, { heightSlot: event.target.value as MiniSize });
-                }}
+                value={settings.pageSize}
+                onChange={(event) =>
+                  store.settings({ pageSize: event.target.value as 'a4' | 'letter' })
+                }
               >
-                <option value="" disabled>
-                  Выберите высоту…
-                </option>
-                <SizeOptions />
+                <option value="a4">A4 (210 × 297 мм)</option>
+                <option value="letter">Letter (216 × 279 мм)</option>
               </select>
             </label>
-          )}
-        </div>
-        <section aria-label="Миниатюры" className="space-y-4">
-          {rows.map((row, index) => (
-            <article
-              key={row.id}
-              aria-label={`Миниатюра ${index + 1}`}
-              className="space-y-3 rounded-lg border border-border bg-surface-elevated p-4"
-            >
-              <p className="break-all text-sm font-medium">
-                {row.image?.name ?? 'Добавьте лицевую сторону'}
-              </p>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-[6rem_6rem_1fr]">
-                <ArtworkSlot
-                  artwork={row.artwork}
-                  label="Лицевая сторона"
-                  loading={!!row.image && !row.artwork && !row.frontError}
-                  onFile={(file) => void store.setImage(row.id, file)}
+            <label className="block text-sm">
+              Поля, мм
+              <input
+                className={field}
+                type="number"
+                min="0"
+                step="any"
+                required
+                value={margin}
+                aria-invalid={!marginValid}
+                onChange={(event) => {
+                  if (store.$busy.get()) return;
+                  setMargin(event.target.value);
+                  const n = event.target.valueAsNumber;
+                  if (Number.isFinite(n) && n >= 0) store.settings({ marginMm: n });
+                }}
+              />
+            </label>
+            {rows.length > 0 && (
+              <label className="block text-sm">
+                Высота всех фигурок
+                <select
+                  className={field}
+                  value=""
+                  onChange={(event) => {
+                    for (const row of rows)
+                      store.patch(row.id, { heightSlot: event.target.value as MiniSize });
+                  }}
+                >
+                  <option value="" disabled>
+                    Выберите…
+                  </option>
+                  <SizeOptions />
+                </select>
+              </label>
+            )}
+            <div className="space-y-2 border-y border-border py-3">
+              <label className="flex min-h-11 items-center gap-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={settings.numberDuplicates}
+                  onChange={(event) => store.settings({ numberDuplicates: event.target.checked })}
                 />
-                <div>
-                  <ArtworkSlot
-                    artwork={row.backArtwork}
-                    label={
-                      row.backImage
-                        ? `Оборот: ${row.backImage.name}`
-                        : 'Оборот: отражение лицевой стороны'
-                    }
-                    loading={!!row.backImage && !row.backArtwork}
-                    onFile={(file) => void store.setImage(row.id, file, true)}
-                  />
-                  {(row.backImage || row.backWarning) && (
-                    <Button
-                      variant="ghost"
-                      className="min-h-11 w-full"
-                      onClick={() => store.clearBack(row.id)}
-                    >
-                      Убрать оборот
-                    </Button>
-                  )}
-                </div>
-                <div className="col-span-2 space-y-3 sm:col-span-1">
-                  <label className="block text-sm">
-                    Высота существа
-                    <select
-                      className={field}
-                      value={row.heightSlot}
-                      title={slotGeometryLabel(row.heightSlot)}
-                      onChange={(event) =>
-                        store.patch(row.id, {
-                          heightSlot: event.target.value as MiniSize,
-                          customHeightMm: row.customHeightMm ?? DEFAULT_CUSTOM_HEIGHT_MM,
-                          customWidthMm: row.customWidthMm ?? DEFAULT_CUSTOM_WIDTH_MM,
-                        })
-                      }
-                    >
-                      <SizeOptions custom />
-                    </select>
-                  </label>
-                  {row.heightSlot === 'custom' && (
-                    <div className="grid grid-cols-2 gap-2">
-                      {(['customWidthMm', 'customHeightMm'] as const).map((key, i) => (
-                        <label key={key} className="text-sm">
-                          {i === 0 ? 'Основание, мм' : 'Фигурка, мм'}
-                          <input
-                            className={field}
-                            type="number"
-                            min="1"
-                            step="0.5"
-                            value={row[key] ?? ''}
-                            onChange={(event) =>
-                              store.patch(row.id, {
-                                [key]:
-                                  Number.isFinite(event.target.valueAsNumber) &&
-                                  event.target.valueAsNumber > 0
-                                    ? event.target.valueAsNumber
-                                    : undefined,
-                              })
-                            }
-                          />
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                  <label className="block text-sm">
-                    Количество копий
-                    <input
-                      className={field}
-                      type="number"
-                      min="1"
-                      step="1"
-                      defaultValue={row.count}
-                      onChange={(event) =>
-                        store.patch(row.id, {
-                          count: Math.max(1, Math.floor(event.target.valueAsNumber) || 1),
-                        })
-                      }
-                      onBlur={(event) => {
-                        event.currentTarget.value = String(row.count);
-                      }}
-                    />
-                  </label>
-                </div>
-              </div>
-              {packed.oversizedEntryIndices.includes(index) && (
-                <p role="status" className="text-sm text-danger">
-                  Не помещается на лист. Уменьшите размер или поля. Эта миниатюра не попадёт в PDF.
+                Нумеровать копии
+              </label>
+              <label className="flex min-h-11 items-center gap-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={settings.normalization}
+                  onChange={(event) => store.settings({ normalization: event.target.checked })}
+                />
+                Обрезать пустые поля
+              </label>
+            </div>
+            <div className="space-y-3">
+              <h3 className="text-xl text-text">PDF</h3>
+              <p aria-live="polite" className="text-sm">
+                {rows.length
+                  ? `Миниатюр: ${packed.miniCount} → листов: ${packed.pageCount} (${settings.pageSize === 'a4' ? 'A4' : 'Letter'})`
+                  : 'Добавьте изображения для печати миниатюр.'}
+              </p>
+              {message && (
+                <p role="status" className="text-sm">
+                  {message}
                 </p>
               )}
-              {[row.frontError, row.normalizationWarning, row.backWarning]
-                .filter(Boolean)
-                .map((warning, i) => (
-                  <p key={i} role="status" className="text-sm text-warning">
-                    {warning}
-                  </p>
-                ))}
-              <div className="flex gap-2">
+              <p role="status" className="text-sm">
+                {busy
+                  ? 'Создаём PDF. Редактирование временно недоступно.'
+                  : preparing
+                    ? 'Обрабатываем изображения. PDF будет доступен после завершения.'
+                    : ''}
+              </p>
+              {!marginValid && (
+                <p role="status" className="text-sm text-danger">
+                  Поля должны быть числом от 0 мм.
+                </p>
+              )}
+              <div className="space-y-2">
+                <Button
+                  className="min-h-11 w-full"
+                  disabled={busy || preparing || !packed.miniCount || !marginValid}
+                  onClick={() => void generate(false)}
+                >
+                  {busy ? 'Подготовка PDF…' : 'Скачать PDF'}
+                </Button>
                 <Button
                   variant="outline"
-                  className="min-h-11"
-                  onClick={() => store.duplicate(row.id)}
+                  className="min-h-11 w-full"
+                  disabled={busy || preparing || !packed.miniCount || !marginValid}
+                  onClick={() => void generate(true)}
                 >
-                  Дублировать
-                </Button>
-                <Button variant="ghost" className="min-h-11" onClick={() => store.remove(row.id)}>
-                  Удалить
+                  {preview ? 'Обновить предпросмотр' : 'Предпросмотр PDF'}
                 </Button>
               </div>
-            </article>
-          ))}
-        </section>
+              <p className="text-xs leading-relaxed text-text-muted">
+                Печатайте в масштабе 100%, без подгонки под страницу. Контрольная линейка на листе
+                должна быть ровно 100 мм.
+              </p>
+            </div>
+          </aside>
+
+          <div className="min-w-0 space-y-6">
+            <Button
+              variant="outline"
+              className="h-auto min-h-28 w-full flex-col whitespace-normal border-dashed p-6"
+              onClick={() => files.current?.click()}
+            >
+              <span className="text-base">Добавить изображения</span>
+              <span className="text-sm font-normal text-text-muted">
+                Перетащите файлы сюда или нажмите для выбора. PNG, JPG, WebP.
+              </span>
+            </Button>
+            <input
+              ref={files}
+              type="file"
+              multiple
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              aria-label="Добавить изображения"
+              onChange={(event) => {
+                store.ingest(Array.from(event.target.files ?? []));
+                event.target.value = '';
+              }}
+            />
+
+            <section aria-label="Миниатюры" className="space-y-5">
+              {rows.map((row, index) => (
+                <article
+                  key={row.id}
+                  aria-label={`Миниатюра ${index + 1}`}
+                  className="border-y border-border py-5"
+                >
+                  <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <h3 className="break-all text-xl text-text">
+                      {row.image?.name ?? `Миниатюра ${index + 1}`}
+                    </h3>
+                    <div className="flex gap-2">
+                      <Button variant="ghost" className="min-h-11" onClick={() => store.duplicate(row.id)}>
+                        Дублировать
+                      </Button>
+                      <Button variant="ghost" className="min-h-11" onClick={() => store.remove(row.id)}>
+                        Удалить
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <ArtworkSlot
+                      artwork={row.artwork}
+                      label="Лицевая сторона"
+                      hint="Выбрать лицевую сторону"
+                      loading={!!row.image && !row.artwork && !row.frontError}
+                      onFile={(file) => void store.setImage(row.id, file)}
+                    />
+                    <div className="space-y-2">
+                      <ArtworkSlot
+                        artwork={row.backArtwork}
+                        label={
+                          row.backImage
+                            ? `Оборот: ${row.backImage.name}`
+                            : 'Оборот: отражение лицевой стороны'
+                        }
+                        displayLabel="Оборот"
+                        hint="Добавить свой оборот или оставить отражение"
+                        loading={!!row.backImage && !row.backArtwork}
+                        onFile={(file) => void store.setImage(row.id, file, true)}
+                      />
+                      {(row.backImage || row.backWarning) && (
+                        <Button variant="ghost" className="min-h-11 w-full" onClick={() => store.clearBack(row.id)}>
+                          Убрать оборот
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 rounded-lg bg-muted/50 p-3 sm:grid-cols-2">
+                    <label className="block text-sm">
+                      Высота существа
+                      <select
+                        className={field}
+                        value={row.heightSlot}
+                        title={slotGeometryLabel(row.heightSlot)}
+                        onChange={(event) =>
+                          store.patch(row.id, {
+                            heightSlot: event.target.value as MiniSize,
+                            customHeightMm: row.customHeightMm ?? DEFAULT_CUSTOM_HEIGHT_MM,
+                            customWidthMm: row.customWidthMm ?? DEFAULT_CUSTOM_WIDTH_MM,
+                          })
+                        }
+                      >
+                        <SizeOptions custom />
+                      </select>
+                    </label>
+                    <label className="block text-sm">
+                      Количество копий
+                      <input
+                        className={field}
+                        type="number"
+                        min="1"
+                        step="1"
+                        defaultValue={row.count}
+                        onChange={(event) =>
+                          store.patch(row.id, {
+                            count: Math.max(1, Math.floor(event.target.valueAsNumber) || 1),
+                          })
+                        }
+                        onBlur={(event) => {
+                          event.currentTarget.value = String(row.count);
+                        }}
+                      />
+                    </label>
+                    {row.heightSlot === 'custom' && (
+                      <div className="grid grid-cols-2 gap-2 sm:col-span-2">
+                        {(['customWidthMm', 'customHeightMm'] as const).map((key, i) => (
+                          <label key={key} className="text-sm">
+                            {i === 0 ? 'Основание, мм' : 'Фигурка, мм'}
+                            <input
+                              className={field}
+                              type="number"
+                              min="1"
+                              step="0.5"
+                              value={row[key] ?? ''}
+                              onChange={(event) =>
+                                store.patch(row.id, {
+                                  [key]:
+                                    Number.isFinite(event.target.valueAsNumber) &&
+                                    event.target.valueAsNumber > 0
+                                      ? event.target.valueAsNumber
+                                      : undefined,
+                                })
+                              }
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <p className="mt-3 text-xs leading-relaxed text-text-muted">
+                    {row.backImage
+                      ? 'В PDF попадёт отдельное изображение оборота.'
+                      : 'Без отдельного файла лицевая сторона будет отражена автоматически.'}
+                  </p>
+                  {packed.oversizedEntryIndices.includes(index) && (
+                    <p role="status" className="mt-3 border-l-2 border-danger pl-3 text-sm text-danger">
+                      Не помещается на лист. Уменьшите размер или поля. Эта миниатюра не попадёт в PDF.
+                    </p>
+                  )}
+                  {[row.frontError, row.normalizationWarning, row.backWarning]
+                    .filter(Boolean)
+                    .map((warning, i) => (
+                      <p key={i} role="status" className="mt-3 border-l-2 border-warning pl-3 text-sm text-warning">
+                        {warning}
+                      </p>
+                    ))}
+                </article>
+              ))}
+            </section>
+          </div>
+        </div>
       </fieldset>
-      <aside className="space-y-2 text-sm text-text-muted">
+
+      <aside className="space-y-2 border-t border-border pt-6 text-sm text-text-muted lg:mx-20">
         <p>
           Изображения обрабатываются в браузере и не отправляются на сервер. Сохраняются только
           настройки печати.
@@ -452,7 +518,7 @@ export default function PaperMinisGenerator() {
         </p>
       </aside>
       {preview && (
-        <section aria-label="Предпросмотр PDF" className="space-y-2">
+        <section aria-label="Предпросмотр PDF" className="space-y-2 lg:mx-20">
           {preview.revision !== revision && (
             <p role="status" className="text-sm text-warning">
               Настройки или изображения изменились. Обновите предпросмотр.
@@ -468,51 +534,6 @@ export default function PaperMinisGenerator() {
           </a>
         </section>
       )}
-      <div className="sticky bottom-0 space-y-3 border-t border-border bg-surface p-4">
-        <p aria-live="polite">
-          {rows.length
-            ? `Миниатюр: ${packed.miniCount} → листов: ${packed.pageCount} (${settings.pageSize === 'a4' ? 'A4' : 'Letter'})`
-            : 'Добавьте изображения для печати миниатюр.'}
-        </p>
-        {message && (
-          <p role="status" className="text-sm">
-            {message}
-          </p>
-        )}
-        <p role="status" className="text-sm">
-          {busy
-            ? 'Создаём PDF. Редактирование временно недоступно.'
-            : preparing
-              ? 'Обрабатываем изображения. PDF будет доступен после завершения.'
-              : ''}
-        </p>
-        {!marginValid && (
-          <p role="status" className="text-sm text-danger">
-            Поля должны быть числом от 0 мм.
-          </p>
-        )}
-        <div className="flex flex-wrap gap-2">
-          <Button
-            className="min-h-11"
-            disabled={busy || preparing || !packed.miniCount || !marginValid}
-            onClick={() => void generate(false)}
-          >
-            {busy ? 'Подготовка PDF…' : 'Скачать PDF'}
-          </Button>
-          <Button
-            variant="outline"
-            className="min-h-11"
-            disabled={busy || preparing || !packed.miniCount || !marginValid}
-            onClick={() => void generate(true)}
-          >
-            {preview ? 'Обновить предпросмотр' : 'Предпросмотр PDF'}
-          </Button>
-        </div>
-        <p className="text-xs text-text-muted">
-          Печатайте в масштабе 100%, без подгонки под страницу. Контрольная линейка на листе должна
-          быть ровно 100 мм.
-        </p>
-      </div>
       {dragging && (
         <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center border-4 border-primary bg-surface/90 text-2xl text-primary">
           Отпустите файлы, чтобы добавить миниатюры
