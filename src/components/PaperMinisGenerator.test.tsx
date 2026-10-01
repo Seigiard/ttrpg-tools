@@ -47,7 +47,7 @@ test('a thumbnail drop uses the first supported image even after an unsupported 
   await addFront();
   // #when
   await act(async () => {
-    fireEvent.drop(screen.getByRole('button', { name: 'Лицевая сторона' }), {
+    fireEvent.drop(screen.getByRole('button', { name: 'Оборот: отражение лицевой стороны' }), {
       dataTransfer: {
         files: [
           new File(['text'], 'notes.txt', { type: 'text/plain' }),
@@ -59,8 +59,8 @@ test('a thumbnail drop uses the first supported image even after an unsupported 
   // #then
   expect({
     rejected: screen.queryByText('Выберите PNG, JPG или WebP.'),
-    title: screen.getByRole('article', { name: 'Миниатюра 1' }).querySelector('h3')?.textContent,
-  }).toEqual({ rejected: null, title: 'Goblin' });
+    back: screen.queryByRole('button', { name: 'Оборот: figure.png' }) !== null,
+  }).toEqual({ rejected: null, back: true });
 });
 
 test('the drop zone explains the naming convention with every size id outside the button', () => {
@@ -220,7 +220,10 @@ for (const action of ['Скачать PDF', 'Предпросмотр PDF']) {
           });
         });
         const summary = document.querySelector('[aria-live="polite"]')?.textContent;
-        const lateArtwork = screen.queryByText('late.png');
+        const lateBack = screen.queryByRole('button', { name: 'Оборот: late.png' }) !== null;
+        const lockedTitles = screen
+          .getAllByRole('article')
+          .map((row) => row.querySelector('h3')?.textContent);
         await act(async () => {
           if (outcome === 'success') resolve(new Uint8Array([1]));
           else reject(new Error('PDF failed'));
@@ -240,7 +243,8 @@ for (const action of ['Скачать PDF', 'Предпросмотр PDF']) {
           pageDrop,
           thumbnailDrop,
           summary,
-          lateArtwork,
+          lateBack,
+          lockedTitles,
           unlocked,
           rows: screen.getAllByRole('article').length,
           pdfCalls: generate.mock.calls.length,
@@ -252,7 +256,8 @@ for (const action of ['Скачать PDF', 'Предпросмотр PDF']) {
           pageDrop: false,
           thumbnailDrop: false,
           summary: 'Миниатюр: 1 → листов: 1 (A4)',
-          lateArtwork: null,
+          lateBack: false,
+          lockedTitles: ['Goblin'],
           unlocked: true,
           rows: 3,
           pdfCalls: 1,
