@@ -206,15 +206,15 @@ export default function PaperMinisGenerator() {
   }
 
   return (
-    <div className="space-y-8 lg:-mx-20">
+    <div className="space-y-8">
       <fieldset
         aria-label="Редактор миниатюр"
         aria-busy={busy}
         disabled={busy}
         className="min-w-0 disabled:opacity-60"
       >
-        <div className="grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] lg:items-start">
-          <aside className="space-y-6 rounded-lg border border-border bg-surface-elevated p-4 lg:sticky lg:top-4">
+        <div className="grid gap-6 xl:block">
+          <aside className="xl:absolute xl:right-full xl:h-full xl:w-60 xl:top-4 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto space-y-6 rounded-lg border border-border bg-surface-elevated p-4">
             <div>
               <h2 className="text-2xl text-text">Настройки</h2>
               <p className="mt-1 text-sm leading-relaxed text-text-muted">
@@ -329,10 +329,6 @@ export default function PaperMinisGenerator() {
                   {preview ? 'Обновить предпросмотр' : 'Предпросмотр PDF'}
                 </Button>
               </div>
-              <p className="text-xs leading-relaxed text-text-muted">
-                Печатайте в масштабе 100%, без подгонки под страницу. Контрольная линейка на листе
-                должна быть ровно 100 мм.
-              </p>
             </div>
           </aside>
 
@@ -372,10 +368,18 @@ export default function PaperMinisGenerator() {
                       {row.image?.name ?? `Миниатюра ${index + 1}`}
                     </h3>
                     <div className="flex gap-2">
-                      <Button variant="ghost" className="min-h-11" onClick={() => store.duplicate(row.id)}>
+                      <Button
+                        variant="ghost"
+                        className="min-h-11"
+                        onClick={() => store.duplicate(row.id)}
+                      >
                         Дублировать
                       </Button>
-                      <Button variant="ghost" className="min-h-11" onClick={() => store.remove(row.id)}>
+                      <Button
+                        variant="ghost"
+                        className="min-h-11"
+                        onClick={() => store.remove(row.id)}
+                      >
                         Удалить
                       </Button>
                     </div>
@@ -403,7 +407,11 @@ export default function PaperMinisGenerator() {
                         onFile={(file) => void store.setImage(row.id, file, true)}
                       />
                       {(row.backImage || row.backWarning) && (
-                        <Button variant="ghost" className="min-h-11 w-full" onClick={() => store.clearBack(row.id)}>
+                        <Button
+                          variant="ghost"
+                          className="min-h-11 w-full"
+                          onClick={() => store.clearBack(row.id)}
+                        >
                           Убрать оборот
                         </Button>
                       )}
@@ -479,14 +487,22 @@ export default function PaperMinisGenerator() {
                       : 'Без отдельного файла лицевая сторона будет отражена автоматически.'}
                   </p>
                   {packed.oversizedEntryIndices.includes(index) && (
-                    <p role="status" className="mt-3 border-l-2 border-danger pl-3 text-sm text-danger">
-                      Не помещается на лист. Уменьшите размер или поля. Эта миниатюра не попадёт в PDF.
+                    <p
+                      role="status"
+                      className="mt-3 border-l-2 border-danger pl-3 text-sm text-danger"
+                    >
+                      Не помещается на лист. Уменьшите размер или поля. Эта миниатюра не попадёт в
+                      PDF.
                     </p>
                   )}
                   {[row.frontError, row.normalizationWarning, row.backWarning]
                     .filter(Boolean)
                     .map((warning, i) => (
-                      <p key={i} role="status" className="mt-3 border-l-2 border-warning pl-3 text-sm text-warning">
+                      <p
+                        key={i}
+                        role="status"
+                        className="mt-3 border-l-2 border-warning pl-3 text-sm text-warning"
+                      >
                         {warning}
                       </p>
                     ))}
@@ -497,28 +513,39 @@ export default function PaperMinisGenerator() {
         </div>
       </fieldset>
 
-      <aside className="space-y-2 border-t border-border pt-6 text-sm text-text-muted lg:mx-20">
-        <p>
-          Изображения обрабатываются в браузере и не отправляются на сервер. Сохраняются только
-          настройки печати.
-        </p>
-        <p>
-          Высота задаёт размер фигурки на бумаге. Очень широкие изображения уменьшаются целиком.
-          Основание зависит от категории размера; у самых крупных фигурок оно более плоское, чтобы
-          развёртка помещалась на лист.
-        </p>
-        <p>
-          Обрезка убирает прозрачные или одноцветные поля. Она может затронуть детали, близкие к
-          цвету фона: отключите её, чтобы печатать оригинал. Без отдельного изображения оборот
-          отражает лицевую сторону. Для своего оборота загрузите вид существа сзади.
-        </p>
-        <p>
-          Вырежьте развёртку по внешним меткам, согните пополам между изображениями, отогните оба
-          язычка наружу и приклейте их к полоске основания.
-        </p>
+      <aside className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 border-t border-border pt-6 text-sm text-text-muted">
+        <div className="space-y-2">
+          <p>
+            <b>Изображения обрабатываются в браузере</b> и не отправляются на сервер. Сохраняются
+            только настройки печати.
+          </p>
+          <p>
+            <b>Печатайте в масштабе 100%</b>, без подгонки под страницу. Контрольная линейка на
+            листе должна быть ровно 100 мм.
+          </p>
+          <p>
+            <b>Вырежьте развёртку</b> по внешним меткам, согните пополам между изображениями,
+            отогните оба язычка наружу и приклейте их к полоске основания.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <p>
+            Высота задаёт размер фигурки на бумаге. Очень широкие изображения уменьшаются целиком.
+            Основание зависит от категории размера; у самых крупных фигурок оно более широкое, чтобы
+            развёртка помещалась на лист.
+          </p>
+          <p>
+            Обрезка убирает прозрачные или одноцветные поля. Она может затронуть детали, близкие к
+            цвету фона: отключите её, чтобы печатать оригинал.
+          </p>
+          <p>
+            Для своего оборота загрузите вид существа сзади. Без отдельного изображения оборот
+            отражает лицевую сторону.
+          </p>
+        </div>
       </aside>
       {preview && (
-        <section aria-label="Предпросмотр PDF" className="space-y-2 lg:mx-20">
+        <section aria-label="Предпросмотр PDF" className="space-y-2">
           {preview.revision !== revision && (
             <p role="status" className="text-sm text-warning">
               Настройки или изображения изменились. Обновите предпросмотр.
