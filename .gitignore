@@ -35,3 +35,7 @@ pnpm-debug.log*
 # playwright test artifacts
 playwright-report/
 test-results/
+
+# Keep the project review profile; ignore local revmux state and overrides.
+.revmux/*
+!.revmux/profile.md
