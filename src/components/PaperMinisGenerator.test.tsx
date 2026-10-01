@@ -44,7 +44,7 @@ test('clearing copies keeps the field empty until a new count is entered', async
 test('a thumbnail drop uses the first supported image even after an unsupported file', async () => {
   // #given
   render(<PaperMinisGenerator />);
-  fireEvent.click(screen.getByRole('button', { name: 'Добавить пустую строку' }));
+  await addFront();
   // #when
   await act(async () => {
     fireEvent.drop(screen.getByRole('button', { name: 'Лицевая сторона' }), {
@@ -57,9 +57,7 @@ test('a thumbnail drop uses the first supported image even after an unsupported 
     });
   });
   // #then
-  expect(document.querySelector('[aria-live="polite"]')?.textContent).toBe(
-    'Миниатюр: 1 → листов: 1 (A4)',
-  );
+  expect(screen.getByRole('heading', { name: 'figure.png' })).toBeTruthy();
 });
 
 test('the back slot announces the selected file and returns to reflection after removal', async () => {
@@ -90,7 +88,7 @@ test('the back slot announces the selected file and returns to reflection after 
 test('rendered dwarf and bugbear choices retain distinct heights on the same base', async () => {
   // #given
   render(<PaperMinisGenerator />);
-  fireEvent.click(screen.getByRole('button', { name: 'Добавить пустую строку' }));
+  await addFront();
   const select = screen.getByRole<HTMLSelectElement>('combobox', { name: 'Высота существа' });
   // #when
   fireEvent.change(select, { target: { value: 'medium-short' } });
