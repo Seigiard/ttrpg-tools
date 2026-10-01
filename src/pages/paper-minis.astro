@@ -1,0 +1,20 @@
+---
+import ToolLayout from '../layouts/ToolLayout.astro';
+import PaperMinisGenerator from '../components/PaperMinisGenerator';
+import AttributionFooter from '../components/AttributionFooter.astro';
+---
+
+<ToolLayout
+  title="Бумажные миниатюры"
+  description="Загрузите изображения, выберите высоту и получите PDF с раскладкой складных миниатюр для печати."
+>
+  <PaperMinisGenerator client:load />
+  <AttributionFooter
+    slot="footer"
+    author="Garrit Franke и участников проекта"
+    source="Printable Mini Maker"
+    sourceUrl="https://github.com/Seigiard/printableminimaker"
+    license="MIT (исходный генератор)"
+    licenseUrl="/paper-minis-LICENSE.txt"
+  />
+</ToolLayout>
