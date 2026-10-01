@@ -57,9 +57,7 @@ test('a thumbnail drop uses the first supported image even after an unsupported 
     });
   });
   // #then
-  expect(document.querySelector('[aria-live="polite"]')?.textContent).toBe(
-    'Миниатюр: 1 → листов: 1 (A4)',
-  );
+  expect(screen.getByRole('heading', { name: 'figure.png' })).toBeTruthy();
 });
 
 test('the back slot announces the selected file and returns to reflection after removal', async () => {

@@ -66,7 +66,7 @@ function ArtworkSlot({
       </div>
       <Button
         variant="ghost"
-        className="h-40 w-full rounded-none whitespace-normal p-3"
+        className="h-40 w-full rounded-none whitespace-normal p-3 focus-visible:ring-inset"
         aria-label={label}
         onClick={() => input.current?.click()}
         onDragOver={(event) => {
@@ -150,6 +150,7 @@ export default function PaperMinisGenerator() {
       depth = Math.max(0, depth - 1);
       if (!depth) setDragging(false);
     };
+    // Capture clears the overlay even when a thumbnail consumes the drop.
     const clear = () => {
       depth = 0;
       setDragging(false);
@@ -214,7 +215,8 @@ export default function PaperMinisGenerator() {
         className="min-w-0 disabled:opacity-60"
       >
         <div className="grid gap-6 xl:block">
-          <aside className="xl:absolute xl:right-full xl:h-full xl:w-60 xl:top-4 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto space-y-6 rounded-lg border border-border bg-surface-elevated p-4">
+          <div className="xl:absolute xl:right-full xl:h-full xl:w-60">
+            <aside className="space-y-6 rounded-lg border border-border bg-surface-elevated p-4 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
             <div>
               <h2 className="text-2xl text-text">Настройки</h2>
               <p className="mt-1 text-sm leading-relaxed text-text-muted">
@@ -330,7 +332,8 @@ export default function PaperMinisGenerator() {
                 </Button>
               </div>
             </div>
-          </aside>
+            </aside>
+          </div>
 
           <div className="min-w-0 space-y-6">
             <Button
@@ -357,6 +360,7 @@ export default function PaperMinisGenerator() {
             />
 
             <section aria-label="Миниатюры" className="space-y-5">
+              <h2 className="sr-only">Миниатюры</h2>
               {rows.map((row, index) => (
                 <article
                   key={row.id}
@@ -531,7 +535,7 @@ export default function PaperMinisGenerator() {
         <div className="space-y-2">
           <p>
             Высота задаёт размер фигурки на бумаге. Очень широкие изображения уменьшаются целиком.
-            Основание зависит от категории размера; у самых крупных фигурок оно более широкое, чтобы
+            Основание зависит от категории размера; у самых крупных фигурок оно более плоское, чтобы
             развёртка помещалась на лист.
           </p>
           <p>
