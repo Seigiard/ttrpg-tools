@@ -345,3 +345,24 @@ test('a batch row keeps its planned name through image replacement and duplicati
   // #then
   expect(store.$rows.get().map((row) => row.name)).toEqual(['Big bad wolf', 'Big bad wolf']);
 });
+
+test('a batch row lands on the size its file name carries', () => {
+  // #given
+  const store = setup();
+  // #when
+  store.ingest([new File([png], 'ogre-large.png', { type: 'image/png' })]);
+  // #then
+  expect(store.$rows.get().map((row) => [row.name, row.heightSlot])).toEqual([['Ogre', 'large']]);
+});
+
+test('a single-slot upload ignores the size in its file name', async () => {
+  // #given
+  const store = setup();
+  store.ingest([new File([png], 'ogre.png', { type: 'image/png' })]);
+  const id = store.$rows.get()[0].id;
+  // #when
+  await store.setImage(id, new File([png], 'ogre-gargantuan.png', { type: 'image/png' }));
+  await store.setImage(id, new File([png], 'ogre-tiny-back.png', { type: 'image/png' }), true);
+  // #then
+  expect(store.$rows.get()[0].heightSlot).toBe('medium');
+});

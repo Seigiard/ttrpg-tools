@@ -63,6 +63,34 @@ test('a thumbnail drop uses the first supported image even after an unsupported 
   }).toEqual({ rejected: null, title: 'Goblin' });
 });
 
+test('the drop zone explains the naming convention with every size id outside the button', () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  // #when
+  const hint = screen.getByTestId('naming-hint');
+  const sizes = hint.querySelector('details');
+  // #then
+  expect({
+    hint: hint.querySelector('p')?.textContent,
+    insideButton: hint.closest('button') !== null,
+    sizes: Array.from(sizes?.querySelectorAll('li') ?? [], (item) => item.textContent),
+  }).toEqual({
+    hint: 'В конце имени файла: имя-back — оборот, имя-large — размер.',
+    insideButton: false,
+    sizes: [
+      'tiny — Крошечный',
+      'small — Маленький',
+      'medium-short — Средний, низкий',
+      'medium — Средний',
+      'medium-tall — Средний, высокий',
+      'large — Большой',
+      'large-tall — Большой, высокий',
+      'huge — Огромный',
+      'gargantuan — Громадный',
+    ],
+  });
+});
+
 test('a batch row is titled by its cleaned file name, or numbered when the name is empty', async () => {
   // #given
   render(<PaperMinisGenerator />);

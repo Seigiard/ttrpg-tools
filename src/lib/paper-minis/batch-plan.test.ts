@@ -118,3 +118,110 @@ test('every dropped file lands in the plan, as a front or as a back', () => {
 test('a back named only by its marker becomes a row with an empty name', () => {
   expect(rows('back.png')).toEqual([['', 'back.png', undefined]]);
 });
+
+test.each([
+  ['ogre-large.png', 'Ogre', 'large'],
+  ['ogre-large-back.png', 'Ogre', 'large'],
+  ['ogre-back-large.png', 'Ogre', 'large'],
+  ['ogre-large-tall.png', 'Ogre', 'large-tall'],
+  ['ogre_large_tall_back.png', 'Ogre', 'large-tall'],
+  ['ogre-back-large-tall.png', 'Ogre', 'large-tall'],
+  ['dwarf-medium_short.png', 'Dwarf', 'medium-short'],
+  ['dwarf medium short.png', 'Dwarf', 'medium-short'],
+  ['bugbear-Medium-TALL.PNG', 'Bugbear', 'medium-tall'],
+  ['imp-tiny.png', 'Imp', 'tiny'],
+  ['wolf-small.png', 'Wolf', 'small'],
+  ['knight-medium.png', 'Knight', 'medium'],
+  ['giant-huge.png', 'Giant', 'huge'],
+  ['kraken-gargantuan.png', 'Kraken', 'gargantuan'],
+  ['dragon-large.png', 'Dragon', 'large'],
+  ['large.png', '', 'large'],
+])('%s reads as %p on the %s slot', (fileName, name, slot) => {
+  // #given
+  const files = [file(fileName)];
+  // #when
+  const [row] = planBatch(files);
+  // #then
+  expect([row.name, row.heightSlot]).toEqual([name, slot]);
+});
+
+test.each([
+  ['goblin-custom.png', 'Goblin custom'],
+  ['goblin-tall.png', 'Goblin tall'],
+  ['goblin-short.png', 'Goblin short'],
+  ['goblin-large-small.png', 'Goblin large'],
+  ['goblin-back-back.png', 'Goblin back'],
+])('%s strips only slot ids, each marker kind once, and is named %p', (fileName, name) => {
+  expect(names(fileName)).toEqual([name]);
+});
+
+// Rows with their size, so the size cases read like the acceptance table.
+const sizedRows = (...fileNames: string[]) =>
+  planBatch(fileNames.map(file)).map((row) => [row.name, row.front.name, row.back?.name, row.heightSlot]);
+
+test('a side and a size pair the same way in both files', () => {
+  expect(sizedRows('ogre-large-tall-front.png', 'ogre-large-tall-back.png')).toEqual([
+    ['Ogre', 'ogre-large-tall-front.png', 'ogre-large-tall-back.png', 'large-tall'],
+  ]);
+});
+
+test('an unsized back goes to every sized front with the same name', () => {
+  expect(sizedRows('goblin-small-front.png', 'goblin-large-front.png', 'goblin-back.png')).toEqual([
+    ['Goblin', 'goblin-small-front.png', 'goblin-back.png', 'small'],
+    ['Goblin', 'goblin-large-front.png', 'goblin-back.png', 'large'],
+  ]);
+});
+
+test('sized backs go only to fronts of their own size', () => {
+  expect(
+    sizedRows('goblin-small-front.png', 'goblin-large-front.png', 'goblin-small-back.png', 'goblin-large-back.png'),
+  ).toEqual([
+    ['Goblin', 'goblin-small-front.png', 'goblin-small-back.png', 'small'],
+    ['Goblin', 'goblin-large-front.png', 'goblin-large-back.png', 'large'],
+  ]);
+});
+
+test('an unsized front takes the size of its back', () => {
+  expect(sizedRows('goblin.png', 'goblin-large-back.png')).toEqual([
+    ['Goblin', 'goblin.png', 'goblin-large-back.png', 'large'],
+  ]);
+});
+
+test('an unsized front that two sized backs match stays unpaired', () => {
+  expect(sizedRows('goblin.png', 'goblin-small-back.png', 'goblin-large-back.png')).toEqual([
+    ['Goblin', 'goblin.png', undefined, undefined],
+    ['Goblin', 'goblin-small-back.png', undefined, 'small'],
+    ['Goblin', 'goblin-large-back.png', undefined, 'large'],
+  ]);
+});
+
+test('a back of another size does not pair and becomes its own row at its size', () => {
+  expect(sizedRows('goblin-small-front.png', 'goblin-large-back.png')).toEqual([
+    ['Goblin', 'goblin-small-front.png', undefined, 'small'],
+    ['Goblin', 'goblin-large-back.png', undefined, 'large'],
+  ]);
+});
+
+test('a back is never attached to a front of another size', () => {
+  // #given
+  const sizeByFile: Record<string, string | undefined> = {
+    'goblin-small.png': 'small',
+    'goblin-large.png': 'large',
+    'goblin-small-back.png': 'small',
+    'ogre-huge.png': 'huge',
+    'ogre-tiny-back.png': 'tiny',
+    'troll.png': undefined,
+    'troll-large-back.png': 'large',
+  };
+  const files = Object.keys(sizeByFile).map(file);
+  // #when
+  const plan = planBatch(files);
+  // #then
+  const clashes = plan.filter((row) => {
+    if (!row.back) return false;
+    const frontSize = sizeByFile[row.front.name];
+    const backSize = sizeByFile[row.back.name];
+    return frontSize !== undefined && backSize !== undefined && frontSize !== backSize;
+  });
+  expect(clashes).toEqual([]);
+});
