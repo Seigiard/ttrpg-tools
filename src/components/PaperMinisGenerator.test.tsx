@@ -57,7 +57,30 @@ test('a thumbnail drop uses the first supported image even after an unsupported 
     });
   });
   // #then
-  expect(screen.getByRole('heading', { name: 'figure.png' })).toBeTruthy();
+  expect({
+    rejected: screen.queryByText('Выберите PNG, JPG или WebP.'),
+    title: screen.getByRole('article', { name: 'Миниатюра 1' }).querySelector('h3')?.textContent,
+  }).toEqual({ rejected: null, title: 'Front' });
+});
+
+test('a batch row is titled by its cleaned file name, or numbered when the name is empty', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  // #when
+  await act(async () => {
+    fireEvent.change(screen.getByLabelText('Добавить изображения', { selector: 'input' }), {
+      target: {
+        files: [
+          new File([png], 'big-bad_wolf.PNG', { type: 'image/png' }),
+          new File([png], '-.png', { type: 'image/png' }),
+        ],
+      },
+    });
+  });
+  // #then
+  expect(
+    screen.getAllByRole('article').map((row) => row.querySelector('h3')?.textContent),
+  ).toEqual(['Big bad wolf', 'Миниатюра 2']);
 });
 
 test('the back slot announces the selected file and returns to reflection after removal', async () => {

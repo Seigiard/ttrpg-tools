@@ -369,7 +369,7 @@ export default function PaperMinisGenerator() {
                 >
                   <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <h3 className="break-all text-xl text-text">
-                      {row.image?.name ?? `Миниатюра ${index + 1}`}
+                      {row.name || `Миниатюра ${index + 1}`}
                     </h3>
                     <div className="flex gap-2">
                       <Button

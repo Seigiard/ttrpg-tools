@@ -1,9 +1,10 @@
 import { atom } from 'nanostores';
 import { prepareArtwork, isSupportedArtwork } from '@/lib/paper-minis/artwork';
+import { planBatch } from '@/lib/paper-minis/batch-plan';
 import { normalizeArtwork } from '@/lib/paper-minis/normalization';
 import { DEFAULT_FIGURE_MARGIN_MM, packEntries, type PageSizeKey } from '@/lib/paper-minis/packing';
 import { DEFAULT_HEIGHT_SLOT } from '@/lib/paper-minis/sizes';
-import type { Entry } from '@/lib/paper-minis/types';
+import type { Entry, HeightSlot } from '@/lib/paper-minis/types';
 
 export type MiniRow = Entry & { id: number; frontError?: string };
 type Settings = {
@@ -37,13 +38,14 @@ export function createPaperMinisStore() {
     $rows.set($rows.get().map((row) => (row.id === id ? { ...row, ...fields } : row)));
     changed();
   }
-  function addBlank() {
+  function addBlank({ name, heightSlot }: { name?: string; heightSlot?: HeightSlot } = {}) {
     if ($busy.get()) return;
     const row: MiniRow = {
       id: nextId++,
+      ...(name === undefined ? {} : { name }),
       image: null,
       artwork: null,
-      heightSlot: DEFAULT_HEIGHT_SLOT,
+      heightSlot: heightSlot ?? DEFAULT_HEIGHT_SLOT,
       count: 1,
     };
     $rows.set([...$rows.get(), row]);
@@ -110,9 +112,11 @@ export function createPaperMinisStore() {
         ? 'Некоторые файлы пропущены: поддерживаются PNG, JPG и WebP.'
         : '',
     );
-    for (const file of valid) {
-      const id = addBlank();
-      if (id !== undefined) void setImage(id, file);
+    for (const planned of planBatch(valid)) {
+      const id = addBlank({ name: planned.name, heightSlot: planned.heightSlot });
+      if (id === undefined) continue;
+      void setImage(id, planned.front);
+      if (planned.back) void setImage(id, planned.back, true);
     }
   }
   function settings(fields: Partial<Settings>) {

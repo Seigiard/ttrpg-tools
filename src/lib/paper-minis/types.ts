@@ -19,6 +19,9 @@ export type HeightSlot =
 export type MiniSize = HeightSlot | 'custom';
 
 export type Entry = {
+  // Set only by a batch upload and never touched by replacing an image. Empty or
+  // missing means the view shows its numbered fallback title.
+  name?: string;
   image: File | null;
   artwork: PreparedArtwork | null;
   normalizationWarning?: string;

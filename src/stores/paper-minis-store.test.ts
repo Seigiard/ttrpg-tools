@@ -305,3 +305,16 @@ test('a failed front stays out of the print estimate and can be replaced', async
     },
   );
 });
+
+test('a batch row keeps its planned name through image replacement and duplication', async () => {
+  // #given
+  const store = setup();
+  store.ingest([new File([png], 'big-bad_wolf.PNG', { type: 'image/png' })]);
+  const id = store.$rows.get()[0].id;
+  // #when
+  await store.setImage(id, new File([png], 'retouched.png', { type: 'image/png' }));
+  await store.setImage(id, new File([png], 'wolf-back.png', { type: 'image/png' }), true);
+  store.duplicate(id);
+  // #then
+  expect(store.$rows.get().map((row) => row.name)).toEqual(['Big bad wolf', 'Big bad wolf']);
+});
