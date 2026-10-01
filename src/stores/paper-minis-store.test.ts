@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'bun:test';
+import { afterEach, expect, spyOn, test } from 'bun:test';
 import { createPaperMinisStore } from './paper-minis-store';
 
 const png = Buffer.from(
@@ -26,11 +26,52 @@ function deferredFile() {
 }
 afterEach(() => localStorage.removeItem('pmg-settings'));
 
+test('generation holds rows and settings stable until the lock is released', async () => {
+  // #given
+  const store = setup();
+  const id = store.addBlank()!;
+  const file = new File([png], 'front.png', { type: 'image/png' });
+  await store.setImage(id, file);
+  await store.setImage(id, file, true);
+  const before = {
+    rows: store.$rows.get(),
+    settings: store.$settings.get(),
+    revision: store.$revision.get(),
+  };
+  // #when
+  const started = store.beginGeneration();
+  const repeated = store.beginGeneration();
+  store.patch(id, { count: 7 });
+  store.settings({ pageSize: 'letter', normalization: true });
+  store.addBlank();
+  store.ingest([file]);
+  store.duplicate(id);
+  store.clearBack(id);
+  store.remove(id);
+  await store.setImage(id, file);
+  await store.setImage(id, file, true);
+  const during = {
+    rows: store.$rows.get(),
+    settings: store.$settings.get(),
+    revision: store.$revision.get(),
+  };
+  store.endGeneration();
+  store.patch(id, { count: 3 });
+  // #then
+  expect({
+    started,
+    repeated,
+    during,
+    busy: store.$busy.get(),
+    count: store.pack().miniCount,
+  }).toEqual({ started: true, repeated: false, during: before, busy: false, count: 3 });
+});
+
 test('a removed row’s late load neither restores it nor invalidates the preview', async () => {
   // #given
   const store = setup();
   const slow = deferredFile();
-  const id = store.addBlank();
+  const id = store.addBlank()!;
   const pending = store.setImage(id, slow.file);
   // #when
   store.remove(id);
@@ -44,11 +85,160 @@ test('a removed row’s late load neither restores it nor invalidates the previe
   });
 });
 
+test('generation waits for artwork preparation even when another row is printable', async () => {
+  // #given
+  const store = setup();
+  await store.setImage(store.addBlank()!, new File([png], 'front.png', { type: 'image/png' }));
+  const slow = deferredFile();
+  const pending = store.setImage(store.addBlank()!, slow.file);
+  // #when
+  const during = {
+    preparing: store.$preparing.get(),
+    started: store.beginGeneration(),
+    count: store.pack().miniCount,
+  };
+  slow.release();
+  await pending;
+  const after = {
+    preparing: store.$preparing.get(),
+    started: store.beginGeneration(),
+    count: store.pack().miniCount,
+  };
+  store.endGeneration();
+  // #then
+  expect({ during, after }).toEqual({
+    during: { preparing: true, started: false, count: 1 },
+    after: { preparing: false, started: true, count: 2 },
+  });
+});
+
+test('a normalization job keeps generation unavailable until its failure fallback is published', async () => {
+  // #given
+  const store = setup();
+  await store.setImage(store.addBlank()!, new File([png], 'front.png', { type: 'image/png' }));
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'createImageBitmap');
+  const errors = spyOn(console, 'error').mockImplementation(() => {});
+  let reject!: (reason: Error) => void;
+  let started!: () => void;
+  const decoding = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  Object.defineProperty(globalThis, 'createImageBitmap', {
+    configurable: true,
+    value: () => {
+      started();
+      return new Promise<ImageBitmap>((_, no) => {
+        reject = no;
+      });
+    },
+  });
+  try {
+    // #when
+    store.settings({ normalization: true });
+    await decoding;
+    const during = store.beginGeneration();
+    const settled = new Promise<void>((resolve) => {
+      const unsubscribe = store.$preparing.listen((preparing) => {
+        if (!preparing) {
+          unsubscribe();
+          resolve();
+        }
+      });
+    });
+    reject(new Error('Bitmap decoding failed'));
+    await settled;
+    const after = store.beginGeneration();
+    store.endGeneration();
+    // #then
+    expect({
+      during,
+      after,
+      count: store.pack().miniCount,
+      warning: store.$rows.get()[0].normalizationWarning,
+    }).toEqual({
+      during: false,
+      after: true,
+      count: 1,
+      warning: 'Не удалось обрезать изображение. Будет напечатан оригинал.',
+    });
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, 'createImageBitmap', descriptor);
+    else Reflect.deleteProperty(globalThis, 'createImageBitmap');
+    errors.mockRestore();
+  }
+});
+
+test.each(['remove', 'clearBack', 'replace'])(
+  '%s releases preparation without waiting for obsolete artwork',
+  async (action) => {
+    // #given
+    const store = setup();
+    const id = store.addBlank()!;
+    const front = new File([png], 'front.png', { type: 'image/png' });
+    await store.setImage(id, front);
+    const slow = deferredFile();
+    const target = action === 'remove' ? store.addBlank()! : id;
+    const pending = store.setImage(target, slow.file, action === 'clearBack');
+    // #when
+    if (action === 'remove') store.remove(target);
+    else if (action === 'clearBack') store.clearBack(target);
+    else await store.setImage(target, front);
+    const preparing = store.$preparing.get();
+    const started = store.beginGeneration();
+    const revision = store.$revision.get();
+    slow.release();
+    await pending;
+    store.endGeneration();
+    // #then
+    expect({
+      preparing,
+      started,
+      rows: store.$rows
+        .get()
+        .map((row) => [row.image?.name, row.artwork?.width, row.artwork?.height]),
+      count: store.pack().miniCount,
+      revisionChanged: store.$revision.get() !== revision,
+    }).toEqual({
+      preparing: false,
+      started: true,
+      rows: [['front.png', 1, 1]],
+      count: 1,
+      revisionChanged: false,
+    });
+  },
+);
+
+test.each([false, true])(
+  'a file selected while locked cannot publish after unlock (back=%s)',
+  async (back) => {
+    // #given
+    const store = setup();
+    const id = store.addBlank()!;
+    const original = new File([png], 'original.png', { type: 'image/png' });
+    await store.setImage(id, original);
+    await store.setImage(id, original, true);
+    const slow = deferredFile();
+    store.beginGeneration();
+    // #when
+    const pending = store.setImage(id, slow.file, back);
+    store.endGeneration();
+    slow.release();
+    await pending;
+    const row = store.$rows.get()[0];
+    // #then
+    expect({
+      front: [row.image?.name, row.artwork?.width, row.artwork?.height],
+      back: [row.backImage?.name, row.backArtwork?.width, row.backArtwork?.height],
+      preparing: store.$preparing.get(),
+    }).toEqual({ front: ['original.png', 1, 1], back: ['original.png', 1, 1], preparing: false });
+  },
+);
+
 test('a late image cannot replace the newer selection', async () => {
   // #given
   const store = setup();
   const slow = deferredFile();
-  const id = store.addBlank();
+  const id = store.addBlank()!;
   const pending = store.setImage(id, slow.file);
   const replacement = new File([png], 'new.png', { type: 'image/png' });
   // #when
@@ -64,7 +254,7 @@ test('a late image cannot replace the newer selection', async () => {
 test('clearing a loading back keeps the reflection and restores print readiness', async () => {
   // #given
   const store = setup();
-  const id = store.addBlank();
+  const id = store.addBlank()!;
   await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
   const slow = deferredFile();
   const pending = store.setImage(id, slow.file, true);
@@ -82,7 +272,7 @@ test('clearing a loading back keeps the reflection and restores print readiness'
 test('a broken back falls back to the front with a warning', async () => {
   // #given
   const store = setup();
-  const id = store.addBlank();
+  const id = store.addBlank()!;
   await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
   // #when
   await store.setImage(id, new File(['broken'], 'back.png', { type: 'image/png' }), true);
@@ -101,7 +291,7 @@ test('a broken back falls back to the front with a warning', async () => {
 test('a failed front stays out of the print estimate and can be replaced', async () => {
   // #given
   const store = setup();
-  const id = store.addBlank();
+  const id = store.addBlank()!;
   await store.setImage(id, new File(['broken'], 'bad.png', { type: 'image/png' }));
   const failed = { count: store.pack().miniCount, error: store.$rows.get()[0].frontError };
   // #when

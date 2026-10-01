@@ -103,8 +103,8 @@ export default function PaperMinisGenerator() {
   const message = useStore(store.$message);
   const revision = useStore(store.$revision);
   const [margin, setMargin] = useState(String(settings.marginMm));
-  const [busy, setBusy] = useState(false);
-  const busyRef = useRef(false);
+  const busy = useStore(store.$busy);
+  const preparing = useStore(store.$preparing);
   const [preview, setPreview] = useState<{ url: string; revision: number }>();
   const previewUrl = useRef<string | undefined>(undefined);
   const [dragging, setDragging] = useState(false);
@@ -131,7 +131,7 @@ export default function PaperMinisGenerator() {
       if (hasFiles(event)) {
         event.preventDefault();
         depth++;
-        setDragging(true);
+        if (!store.$busy.get()) setDragging(true);
       }
     };
     const over = (event: DragEvent) => {
@@ -167,14 +167,13 @@ export default function PaperMinisGenerator() {
   }, [store]);
 
   async function generate(showPreview: boolean) {
-    if (busyRef.current || !marginValid || !packed.miniCount) return;
-    busyRef.current = true;
-    setBusy(true);
-    store.$message.set('');
-    const snapshot = store.$rows.get().map((row) => ({ ...row }));
-    const options = { ...store.$settings.get() };
-    const seq = store.$revision.get();
+    if (!marginValid || !packed.miniCount || !store.beginGeneration()) return;
     try {
+      setDragging(false);
+      store.$message.set('');
+      const snapshot = store.$rows.get().map((row) => ({ ...row }));
+      const options = { ...store.$settings.get() };
+      const seq = store.$revision.get();
       const bytes = await generatePDF(snapshot, options);
       const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' }));
       if (showPreview) {
@@ -194,237 +193,244 @@ export default function PaperMinisGenerator() {
     } catch {
       store.$message.set('Не удалось создать PDF. Попробуйте ещё раз или уменьшите изображения.');
     } finally {
-      busyRef.current = false;
-      setBusy(false);
+      store.endGeneration();
     }
   }
 
   return (
     <div className="space-y-6">
-      <section
-        aria-label="Настройки печати"
-        className="grid gap-4 rounded-lg border border-border bg-surface-elevated p-4 sm:grid-cols-2"
+      <fieldset
+        aria-label="Редактор миниатюр"
+        aria-busy={busy}
+        disabled={busy}
+        className="min-w-0 space-y-6 disabled:opacity-60"
       >
-        <label className="space-y-2 text-sm">
-          Размер бумаги
-          <select
-            className={field}
-            value={settings.pageSize}
-            onChange={(event) =>
-              store.settings({ pageSize: event.target.value as 'a4' | 'letter' })
-            }
-          >
-            <option value="a4">A4 (210 × 297 мм)</option>
-            <option value="letter">Letter (216 × 279 мм)</option>
-          </select>
-        </label>
-        <label className="space-y-2 text-sm">
-          Поля вокруг фигурки, мм
-          <input
-            className={field}
-            type="number"
-            min="0"
-            step="any"
-            required
-            value={margin}
-            aria-invalid={!marginValid}
-            onChange={(event) => {
-              setMargin(event.target.value);
-              const n = event.target.valueAsNumber;
-              if (Number.isFinite(n) && n >= 0) store.settings({ marginMm: n });
-            }}
-          />
-        </label>
-        <label className="flex min-h-11 items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={settings.numberDuplicates}
-            onChange={(event) => store.settings({ numberDuplicates: event.target.checked })}
-          />
-          Нумеровать копии
-        </label>
-        <label className="flex min-h-11 items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={settings.normalization}
-            onChange={(event) => store.settings({ normalization: event.target.checked })}
-          />
-          Обрезать пустые поля изображения
-        </label>
-      </section>
-      <Button
-        variant="outline"
-        className="h-auto min-h-28 w-full flex-col whitespace-normal border-dashed p-6"
-        onClick={() => files.current?.click()}
-      >
-        <span>Добавить изображения</span>
-        <span className="text-sm font-normal text-text-muted">
-          Перетащите файлы сюда или нажмите для выбора. PNG, JPG, WebP.
-        </span>
-      </Button>
-      <input
-        ref={files}
-        type="file"
-        multiple
-        accept="image/png,image/jpeg,image/webp"
-        className="hidden"
-        aria-label="Добавить изображения"
-        onChange={(event) => {
-          store.ingest(Array.from(event.target.files ?? []));
-          event.target.value = '';
-        }}
-      />
-      <div className="flex flex-wrap items-center gap-3">
-        <Button variant="outline" className="min-h-11" onClick={() => store.addBlank()}>
-          Добавить пустую строку
-        </Button>
-        {rows.length > 0 && (
-          <label className="min-w-0 flex-1 text-sm">
-            Высота всех фигурок
+        <section
+          aria-label="Настройки печати"
+          className="grid gap-4 rounded-lg border border-border bg-surface-elevated p-4 sm:grid-cols-2"
+        >
+          <label className="space-y-2 text-sm">
+            Размер бумаги
             <select
               className={field}
-              value=""
-              onChange={(event) => {
-                for (const row of rows)
-                  store.patch(row.id, { heightSlot: event.target.value as MiniSize });
-              }}
+              value={settings.pageSize}
+              onChange={(event) =>
+                store.settings({ pageSize: event.target.value as 'a4' | 'letter' })
+              }
             >
-              <option value="" disabled>
-                Выберите высоту…
-              </option>
-              <SizeOptions />
+              <option value="a4">A4 (210 × 297 мм)</option>
+              <option value="letter">Letter (216 × 279 мм)</option>
             </select>
           </label>
-        )}
-      </div>
-      <section aria-label="Миниатюры" className="space-y-4">
-        {rows.map((row, index) => (
-          <article
-            key={row.id}
-            aria-label={`Миниатюра ${index + 1}`}
-            className="space-y-3 rounded-lg border border-border bg-surface-elevated p-4"
-          >
-            <p className="break-all text-sm font-medium">
-              {row.image?.name ?? 'Добавьте лицевую сторону'}
-            </p>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-[6rem_6rem_1fr]">
-              <ArtworkSlot
-                artwork={row.artwork}
-                label="Лицевая сторона"
-                loading={!!row.image && !row.artwork && !row.frontError}
-                onFile={(file) => void store.setImage(row.id, file)}
-              />
-              <div>
-                <ArtworkSlot
-                  artwork={row.backArtwork}
-                  label={
-                    row.backImage
-                      ? `Оборот: ${row.backImage.name}`
-                      : 'Оборот: отражение лицевой стороны'
-                  }
-                  loading={!!row.backImage && !row.backArtwork}
-                  onFile={(file) => void store.setImage(row.id, file, true)}
-                />
-                {(row.backImage || row.backWarning) && (
-                  <Button
-                    variant="ghost"
-                    className="min-h-11 w-full"
-                    onClick={() => store.clearBack(row.id)}
-                  >
-                    Убрать оборот
-                  </Button>
-                )}
-              </div>
-              <div className="col-span-2 space-y-3 sm:col-span-1">
-                <label className="block text-sm">
-                  Высота существа
-                  <select
-                    className={field}
-                    value={row.heightSlot}
-                    title={slotGeometryLabel(row.heightSlot)}
-                    onChange={(event) =>
-                      store.patch(row.id, {
-                        heightSlot: event.target.value as MiniSize,
-                        customHeightMm: row.customHeightMm ?? DEFAULT_CUSTOM_HEIGHT_MM,
-                        customWidthMm: row.customWidthMm ?? DEFAULT_CUSTOM_WIDTH_MM,
-                      })
-                    }
-                  >
-                    <SizeOptions custom />
-                  </select>
-                </label>
-                {row.heightSlot === 'custom' && (
-                  <div className="grid grid-cols-2 gap-2">
-                    {(['customWidthMm', 'customHeightMm'] as const).map((key, i) => (
-                      <label key={key} className="text-sm">
-                        {i === 0 ? 'Основание, мм' : 'Фигурка, мм'}
-                        <input
-                          className={field}
-                          type="number"
-                          min="1"
-                          step="0.5"
-                          value={row[key] ?? ''}
-                          onChange={(event) =>
-                            store.patch(row.id, {
-                              [key]:
-                                Number.isFinite(event.target.valueAsNumber) &&
-                                event.target.valueAsNumber > 0
-                                  ? event.target.valueAsNumber
-                                  : undefined,
-                            })
-                          }
-                        />
-                      </label>
-                    ))}
-                  </div>
-                )}
-                <label className="block text-sm">
-                  Количество копий
-                  <input
-                    className={field}
-                    type="number"
-                    min="1"
-                    step="1"
-                    defaultValue={row.count}
-                    onChange={(event) =>
-                      store.patch(row.id, {
-                        count: Math.max(1, Math.floor(event.target.valueAsNumber) || 1),
-                      })
-                    }
-                    onBlur={(event) => {
-                      event.currentTarget.value = String(row.count);
-                    }}
-                  />
-                </label>
-              </div>
-            </div>
-            {packed.oversizedEntryIndices.includes(index) && (
-              <p role="status" className="text-sm text-danger">
-                Не помещается на лист. Уменьшите размер или поля. Эта миниатюра не попадёт в PDF.
-              </p>
-            )}
-            {[row.frontError, row.normalizationWarning, row.backWarning]
-              .filter(Boolean)
-              .map((warning, i) => (
-                <p key={i} role="status" className="text-sm text-warning">
-                  {warning}
-                </p>
-              ))}
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                className="min-h-11"
-                onClick={() => store.duplicate(row.id)}
+          <label className="space-y-2 text-sm">
+            Поля вокруг фигурки, мм
+            <input
+              className={field}
+              type="number"
+              min="0"
+              step="any"
+              required
+              value={margin}
+              aria-invalid={!marginValid}
+              onChange={(event) => {
+                if (store.$busy.get()) return;
+                setMargin(event.target.value);
+                const n = event.target.valueAsNumber;
+                if (Number.isFinite(n) && n >= 0) store.settings({ marginMm: n });
+              }}
+            />
+          </label>
+          <label className="flex min-h-11 items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={settings.numberDuplicates}
+              onChange={(event) => store.settings({ numberDuplicates: event.target.checked })}
+            />
+            Нумеровать копии
+          </label>
+          <label className="flex min-h-11 items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={settings.normalization}
+              onChange={(event) => store.settings({ normalization: event.target.checked })}
+            />
+            Обрезать пустые поля изображения
+          </label>
+        </section>
+        <Button
+          variant="outline"
+          className="h-auto min-h-28 w-full flex-col whitespace-normal border-dashed p-6"
+          onClick={() => files.current?.click()}
+        >
+          <span>Добавить изображения</span>
+          <span className="text-sm font-normal text-text-muted">
+            Перетащите файлы сюда или нажмите для выбора. PNG, JPG, WebP.
+          </span>
+        </Button>
+        <input
+          ref={files}
+          type="file"
+          multiple
+          accept="image/png,image/jpeg,image/webp"
+          className="hidden"
+          aria-label="Добавить изображения"
+          onChange={(event) => {
+            store.ingest(Array.from(event.target.files ?? []));
+            event.target.value = '';
+          }}
+        />
+        <div className="flex flex-wrap items-center gap-3">
+          <Button variant="outline" className="min-h-11" onClick={() => store.addBlank()}>
+            Добавить пустую строку
+          </Button>
+          {rows.length > 0 && (
+            <label className="min-w-0 flex-1 text-sm">
+              Высота всех фигурок
+              <select
+                className={field}
+                value=""
+                onChange={(event) => {
+                  for (const row of rows)
+                    store.patch(row.id, { heightSlot: event.target.value as MiniSize });
+                }}
               >
-                Дублировать
-              </Button>
-              <Button variant="ghost" className="min-h-11" onClick={() => store.remove(row.id)}>
-                Удалить
-              </Button>
-            </div>
-          </article>
-        ))}
-      </section>
+                <option value="" disabled>
+                  Выберите высоту…
+                </option>
+                <SizeOptions />
+              </select>
+            </label>
+          )}
+        </div>
+        <section aria-label="Миниатюры" className="space-y-4">
+          {rows.map((row, index) => (
+            <article
+              key={row.id}
+              aria-label={`Миниатюра ${index + 1}`}
+              className="space-y-3 rounded-lg border border-border bg-surface-elevated p-4"
+            >
+              <p className="break-all text-sm font-medium">
+                {row.image?.name ?? 'Добавьте лицевую сторону'}
+              </p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-[6rem_6rem_1fr]">
+                <ArtworkSlot
+                  artwork={row.artwork}
+                  label="Лицевая сторона"
+                  loading={!!row.image && !row.artwork && !row.frontError}
+                  onFile={(file) => void store.setImage(row.id, file)}
+                />
+                <div>
+                  <ArtworkSlot
+                    artwork={row.backArtwork}
+                    label={
+                      row.backImage
+                        ? `Оборот: ${row.backImage.name}`
+                        : 'Оборот: отражение лицевой стороны'
+                    }
+                    loading={!!row.backImage && !row.backArtwork}
+                    onFile={(file) => void store.setImage(row.id, file, true)}
+                  />
+                  {(row.backImage || row.backWarning) && (
+                    <Button
+                      variant="ghost"
+                      className="min-h-11 w-full"
+                      onClick={() => store.clearBack(row.id)}
+                    >
+                      Убрать оборот
+                    </Button>
+                  )}
+                </div>
+                <div className="col-span-2 space-y-3 sm:col-span-1">
+                  <label className="block text-sm">
+                    Высота существа
+                    <select
+                      className={field}
+                      value={row.heightSlot}
+                      title={slotGeometryLabel(row.heightSlot)}
+                      onChange={(event) =>
+                        store.patch(row.id, {
+                          heightSlot: event.target.value as MiniSize,
+                          customHeightMm: row.customHeightMm ?? DEFAULT_CUSTOM_HEIGHT_MM,
+                          customWidthMm: row.customWidthMm ?? DEFAULT_CUSTOM_WIDTH_MM,
+                        })
+                      }
+                    >
+                      <SizeOptions custom />
+                    </select>
+                  </label>
+                  {row.heightSlot === 'custom' && (
+                    <div className="grid grid-cols-2 gap-2">
+                      {(['customWidthMm', 'customHeightMm'] as const).map((key, i) => (
+                        <label key={key} className="text-sm">
+                          {i === 0 ? 'Основание, мм' : 'Фигурка, мм'}
+                          <input
+                            className={field}
+                            type="number"
+                            min="1"
+                            step="0.5"
+                            value={row[key] ?? ''}
+                            onChange={(event) =>
+                              store.patch(row.id, {
+                                [key]:
+                                  Number.isFinite(event.target.valueAsNumber) &&
+                                  event.target.valueAsNumber > 0
+                                    ? event.target.valueAsNumber
+                                    : undefined,
+                              })
+                            }
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  <label className="block text-sm">
+                    Количество копий
+                    <input
+                      className={field}
+                      type="number"
+                      min="1"
+                      step="1"
+                      defaultValue={row.count}
+                      onChange={(event) =>
+                        store.patch(row.id, {
+                          count: Math.max(1, Math.floor(event.target.valueAsNumber) || 1),
+                        })
+                      }
+                      onBlur={(event) => {
+                        event.currentTarget.value = String(row.count);
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+              {packed.oversizedEntryIndices.includes(index) && (
+                <p role="status" className="text-sm text-danger">
+                  Не помещается на лист. Уменьшите размер или поля. Эта миниатюра не попадёт в PDF.
+                </p>
+              )}
+              {[row.frontError, row.normalizationWarning, row.backWarning]
+                .filter(Boolean)
+                .map((warning, i) => (
+                  <p key={i} role="status" className="text-sm text-warning">
+                    {warning}
+                  </p>
+                ))}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="min-h-11"
+                  onClick={() => store.duplicate(row.id)}
+                >
+                  Дублировать
+                </Button>
+                <Button variant="ghost" className="min-h-11" onClick={() => store.remove(row.id)}>
+                  Удалить
+                </Button>
+              </div>
+            </article>
+          ))}
+        </section>
+      </fieldset>
       <aside className="space-y-2 text-sm text-text-muted">
         <p>
           Изображения обрабатываются в браузере и не отправляются на сервер. Сохраняются только
@@ -473,6 +479,13 @@ export default function PaperMinisGenerator() {
             {message}
           </p>
         )}
+        <p role="status" className="text-sm">
+          {busy
+            ? 'Создаём PDF. Редактирование временно недоступно.'
+            : preparing
+              ? 'Обрабатываем изображения. PDF будет доступен после завершения.'
+              : ''}
+        </p>
         {!marginValid && (
           <p role="status" className="text-sm text-danger">
             Поля должны быть числом от 0 мм.
@@ -481,7 +494,7 @@ export default function PaperMinisGenerator() {
         <div className="flex flex-wrap gap-2">
           <Button
             className="min-h-11"
-            disabled={busy || !packed.miniCount || !marginValid}
+            disabled={busy || preparing || !packed.miniCount || !marginValid}
             onClick={() => void generate(false)}
           >
             {busy ? 'Подготовка PDF…' : 'Скачать PDF'}
@@ -489,7 +502,7 @@ export default function PaperMinisGenerator() {
           <Button
             variant="outline"
             className="min-h-11"
-            disabled={busy || !packed.miniCount || !marginValid}
+            disabled={busy || preparing || !packed.miniCount || !marginValid}
             onClick={() => void generate(true)}
           >
             {preview ? 'Обновить предпросмотр' : 'Предпросмотр PDF'}
