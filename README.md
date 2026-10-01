@@ -67,6 +67,6 @@ CI на GitHub Actions проверяет lint + format + unit + typecheck + bui
 ## Документация
 
 - `docs/DESIGN.md` — дизайн-токены и правила.
-- `CONTEXT-MAP.md` — карта предметных контекстов.
+- `GLOSSARY.md` — глоссарий предметной области.
 - `docs/brainstorms/` — исходные брифы.
 - `docs/plans/` — планы реализации.

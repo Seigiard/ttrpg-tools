@@ -8,15 +8,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Issue tracker
 
-Issues live as GitHub issues in `Seigiard/ttrpg-tools`, managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
+Issues live in GitHub Issues for `Seigiard/ttrpg-tools`, managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
-The five triage state roles use the default label strings. See `docs/agents/triage-labels.md`.
+The five canonical triage roles use the default label strings (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
-`CONTEXT-MAP.md` points to active contexts, with context-specific decisions stored beside each context. See `docs/agents/domain.md`.
+Single-context: one `GLOSSARY.md` at the repo root and ADRs in `docs/adr/`. See `docs/agents/domain.md`.
 
 ## Команды
 
