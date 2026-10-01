@@ -306,6 +306,33 @@ test('a failed front stays out of the print estimate and can be replaced', async
   );
 });
 
+test('a dropped front and back pair loads into one row with both sides', async () => {
+  // #given
+  const store = setup();
+  const front = new File([png], 'goblin.png', { type: 'image/png' });
+  const back = new File([png], 'goblin-back.png', { type: 'image/png' });
+  const settled = new Promise<void>((resolve) => {
+    const unsubscribe = store.$preparing.listen((preparing) => {
+      if (!preparing) {
+        unsubscribe();
+        resolve();
+      }
+    });
+  });
+  // #when
+  store.ingest([front, back]);
+  await settled;
+  // #then
+  expect(
+    store.$rows.get().map((row) => ({
+      name: row.name,
+      front: row.image?.name,
+      back: row.backImage?.name,
+      backReady: row.backArtwork !== null && row.backArtwork !== undefined,
+    })),
+  ).toEqual([{ name: 'Goblin', front: 'goblin.png', back: 'goblin-back.png', backReady: true }]);
+});
+
 test('a batch row keeps its planned name through image replacement and duplication', async () => {
   // #given
   const store = setup();

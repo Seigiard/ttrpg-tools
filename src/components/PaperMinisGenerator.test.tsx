@@ -18,7 +18,7 @@ afterEach(() => {
 async function addFront() {
   await act(async () => {
     fireEvent.change(screen.getByLabelText('Добавить изображения', { selector: 'input' }), {
-      target: { files: [new File([png], 'front.png', { type: 'image/png' })] },
+      target: { files: [new File([png], 'goblin.png', { type: 'image/png' })] },
     });
   });
 }
@@ -60,7 +60,7 @@ test('a thumbnail drop uses the first supported image even after an unsupported 
   expect({
     rejected: screen.queryByText('Выберите PNG, JPG или WebP.'),
     title: screen.getByRole('article', { name: 'Миниатюра 1' }).querySelector('h3')?.textContent,
-  }).toEqual({ rejected: null, title: 'Front' });
+  }).toEqual({ rejected: null, title: 'Goblin' });
 });
 
 test('a batch row is titled by its cleaned file name, or numbered when the name is empty', async () => {
