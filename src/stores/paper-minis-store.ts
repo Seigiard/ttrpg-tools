@@ -24,6 +24,8 @@ export function createPaperMinisStore() {
   });
   const $message = atom('');
   const $revision = atom(0);
+  const $busy = atom(false);
+  const $preparing = atom(false);
   let nextId = 0;
   const loads = new Map<string, object>();
 
@@ -31,10 +33,12 @@ export function createPaperMinisStore() {
     $revision.set($revision.get() + 1);
   }
   function patch(id: number, fields: Partial<Entry> & { frontError?: string }) {
+    if ($busy.get()) return;
     $rows.set($rows.get().map((row) => (row.id === id ? { ...row, ...fields } : row)));
     changed();
   }
   function addBlank() {
+    if ($busy.get()) return;
     const row: MiniRow = {
       id: nextId++,
       image: null,
@@ -47,6 +51,7 @@ export function createPaperMinisStore() {
     return row.id;
   }
   async function setImage(id: number, file: File, back = false) {
+    if ($busy.get()) return;
     if (!isSupportedArtwork(file)) {
       $message.set('Выберите PNG, JPG или WebP.');
       return;
@@ -54,6 +59,7 @@ export function createPaperMinisStore() {
     const key = `${id}:${back}`;
     const token = {};
     loads.set(key, token);
+    $preparing.set(true);
     const normalization = $settings.get().normalization;
     patch(
       id,
@@ -93,18 +99,24 @@ export function createPaperMinisStore() {
       );
     } finally {
       if (loads.get(key) === token) loads.delete(key);
+      $preparing.set(loads.size > 0);
     }
   }
   function ingest(files: File[]) {
+    if ($busy.get()) return;
     const valid = files.filter(isSupportedArtwork);
     $message.set(
       valid.length < files.length
         ? 'Некоторые файлы пропущены: поддерживаются PNG, JPG и WebP.'
         : '',
     );
-    for (const file of valid) void setImage(addBlank(), file);
+    for (const file of valid) {
+      const id = addBlank();
+      if (id !== undefined) void setImage(id, file);
+    }
   }
   function settings(fields: Partial<Settings>) {
+    if ($busy.get()) return;
     const previous = $settings.get();
     const next = { ...previous, ...fields };
     $settings.set(next);
@@ -122,6 +134,7 @@ export function createPaperMinisStore() {
     }
   }
   function loadSettings() {
+    if ($busy.get()) return;
     try {
       const value = JSON.parse(localStorage.getItem(storageKey) ?? 'null');
       if (!value || typeof value !== 'object') return;
@@ -146,6 +159,16 @@ export function createPaperMinisStore() {
     $settings,
     $message,
     $revision,
+    $busy,
+    $preparing,
+    beginGeneration() {
+      if ($busy.get() || $preparing.get()) return false;
+      $busy.set(true);
+      return true;
+    },
+    endGeneration() {
+      $busy.set(false);
+    },
     patch,
     addBlank,
     setImage,
@@ -154,16 +177,21 @@ export function createPaperMinisStore() {
     loadSettings,
     pack: () => packEntries($rows.get(), $settings.get()),
     clearBack(id: number) {
+      if ($busy.get()) return;
       loads.delete(`${id}:true`);
       patch(id, { backImage: null, backArtwork: null, backWarning: undefined });
+      $preparing.set(loads.size > 0);
     },
     remove(id: number) {
+      if ($busy.get()) return;
       loads.delete(`${id}:true`);
       loads.delete(`${id}:false`);
       $rows.set($rows.get().filter((row) => row.id !== id));
       changed();
+      $preparing.set(loads.size > 0);
     },
     duplicate(id: number) {
+      if ($busy.get()) return;
       const rows = $rows.get();
       const index = rows.findIndex((row) => row.id === id);
       if (index < 0) return;
