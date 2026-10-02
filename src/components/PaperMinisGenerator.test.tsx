@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, setSystemTime, spyOn, test } from 'bun:test';
 import { act, cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react';
+import * as pdf from '@/lib/paper-minis/pdf';
 import PaperMinisGenerator from './PaperMinisGenerator';
 
 const png = Buffer.from(
