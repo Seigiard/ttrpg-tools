@@ -84,6 +84,8 @@ const successMessage = 'PDF готов.';
 const failureMessage = 'Не удалось создать PDF. Попробуйте ещё раз или уменьшите изображения.';
 const exportSuccessMessage = 'Архив готов.';
 export const exportFailureMessage = 'Не удалось создать архив. Попробуйте ещё раз.';
+const unzipFailureMessage =
+  'Не удалось распаковать архив. Добавьте изображения вручную или попробуйте другой файл.';
 const skippedFilesMessage = 'Некоторые файлы пропущены: поддерживаются PNG, JPG и WebP.';
 const artworkTypesByExtension: Record<string, string> = {
   jpg: 'image/jpeg',
@@ -100,7 +102,7 @@ function parseNumericInput(text: string, accepts: (value: number) => boolean) {
     : { input: { text, valid: false } };
 }
 
-const nameSeparators = /[-_\s]+/;
+const nameSeparators = /[-_\s\\/:*?"<>|]+/;
 
 function exportName(row: MiniRow, index: number): string {
   const name = row.name?.trim() ?? '';
@@ -162,9 +164,11 @@ function artworkTypeFromName(name: string): string | undefined {
 
 async function artworkAsPng(artwork: PreparedArtwork): Promise<Uint8Array> {
   if (artwork.format === 'png') return artwork.bytes;
-  const bitmap = await createImageBitmap(new Blob([artwork.bytes as BlobPart], { type: 'image/jpeg' }));
+  const bitmap = await createImageBitmap(new Blob([artwork.bytes as BlobPart], { type: 'image/jpeg' }), {
+    imageOrientation: 'none',
+  });
+  const canvas = document.createElement('canvas');
   try {
-    const canvas = document.createElement('canvas');
     canvas.width = bitmap.width;
     canvas.height = bitmap.height;
     const ctx = canvas.getContext('2d');
@@ -173,6 +177,7 @@ async function artworkAsPng(artwork: PreparedArtwork): Promise<Uint8Array> {
     return canvasToPngBytes(canvas);
   } finally {
     bitmap.close();
+    canvas.width = canvas.height = 0;
   }
 }
 
@@ -217,6 +222,7 @@ export function createPaperMinisStore({
     (preview, revision) => preview !== undefined && preview.revision !== revision,
   );
   let nextId = 0;
+  let nextLoadId = 0;
   const loads = new Map<string, object>();
   let packedRows: MiniRow[] | undefined;
   let packedSettings: PaperMinisSettings | undefined;
@@ -259,7 +265,7 @@ export function createPaperMinisStore({
   }
 
   function openCalibration(id: number) {
-    if ($busy.get()) return false;
+    if ($busy.get() || $preparing.get()) return false;
     const row = $rows.get().find((candidate) => candidate.id === id);
     if (!row) return false;
     initialCalibration = calibrationGap(row.calibration) === undefined ? undefined : row.calibration;
@@ -545,38 +551,57 @@ export function createPaperMinisStore({
       ingestArtworkFiles(valid);
       return;
     }
-    const { unzipSync } = await import('fflate');
-    const expanded = await Promise.all(
-      files.map(async (file): Promise<{ files: File[]; skipped: boolean }> => {
-        if (!isZipFile(file)) {
-          return isSupportedArtwork(file)
-            ? { files: [file], skipped: false }
-            : { files: [], skipped: true };
-        }
-        try {
-          const entries = unzipSync(new Uint8Array(await file.arrayBuffer()));
-          const extracted: File[] = [];
-          let skipped = false;
-          for (const [path, bytes] of Object.entries(entries)) {
-            if (isIgnoredZipEntry(path)) continue;
-            const name = flattenedFileName(path);
-            const type = name && artworkTypeFromName(name);
-            if (!name || !type) {
-              if (name) skipped = true;
-              continue;
-            }
-            extracted.push(new File([bytes], name, { type }));
+    const key = `zip:${nextLoadId++}`;
+    const token = {};
+    loads.set(key, token);
+    $preparing.set(true);
+    try {
+      const { unzipSync } = await import('fflate');
+      const expanded = await Promise.all(
+        files.map(async (file): Promise<{ files: File[]; skipped: boolean; failed: boolean }> => {
+          if (!isZipFile(file)) {
+            return isSupportedArtwork(file)
+              ? { files: [file], skipped: false, failed: false }
+              : { files: [], skipped: true, failed: false };
           }
-          return { files: extracted, skipped };
-        } catch {
-          return { files: [], skipped: true };
-        }
-      }),
-    );
-    const valid = expanded.flatMap((item) => item.files);
-    const skipped = expanded.some((item) => item.skipped);
-    $message.set(skipped ? skippedFilesMessage : '');
-    ingestArtworkFiles(valid);
+          try {
+            const entries = unzipSync(new Uint8Array(await file.arrayBuffer()));
+            const extracted: File[] = [];
+            let skipped = false;
+            for (const [path, bytes] of Object.entries(entries)) {
+              if (isIgnoredZipEntry(path)) continue;
+              const name = flattenedFileName(path);
+              const type = name && artworkTypeFromName(name);
+              if (!name || !type) {
+                if (name) skipped = true;
+                continue;
+              }
+              extracted.push(new File([bytes], name, { type }));
+            }
+            return { files: extracted, skipped, failed: false };
+          } catch {
+            return { files: [], skipped: false, failed: true };
+          }
+        }),
+      );
+      if (!$acceptsFiles.get()) {
+        $message.set(unzipFailureMessage);
+        return;
+      }
+      const valid = expanded.flatMap((item) => item.files);
+      const failed = expanded.some((item) => item.failed);
+      const skipped = expanded.some((item) => item.skipped);
+      $message.set(failed ? unzipFailureMessage : skipped ? skippedFilesMessage : '');
+      ingestArtworkFiles(valid);
+    } catch {
+      if (!$acceptsFiles.get()) return;
+      const valid = files.filter((file) => !isZipFile(file) && isSupportedArtwork(file));
+      $message.set(unzipFailureMessage);
+      ingestArtworkFiles(valid);
+    } finally {
+      if (loads.get(key) === token) loads.delete(key);
+      $preparing.set(loads.size > 0);
+    }
   }
   function ingestArtworkFiles(files: File[]) {
     for (const planned of planBatch(files)) {
@@ -700,12 +725,12 @@ export function createPaperMinisStore({
         let suffix = 1;
         let collisionKeys = sides.map((side) => `${base}-${size}-${side}.png`);
         let names = sides.map((side) => `${base}-${size}-${side}${count}${calibration}.png`);
-        while (collisionKeys.some((name) => used.has(name))) {
+        while (collisionKeys.some((name) => used.has(name.toLowerCase()))) {
           suffix += 1;
           collisionKeys = sides.map((side) => `${base}-${suffix}-${size}-${side}.png`);
           names = sides.map((side) => `${base}-${suffix}-${size}-${side}${count}${calibration}.png`);
         }
-        for (const name of collisionKeys) used.add(name);
+        for (const name of collisionKeys) used.add(name.toLowerCase());
         entries[names[0]] = await artworkAsPng(row.artwork!);
         if (row.backArtwork) entries[names[1]] = await artworkAsPng(row.backArtwork);
       }
