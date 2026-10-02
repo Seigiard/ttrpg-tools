@@ -349,6 +349,24 @@ test('a printer measurement resolves to the scale used for layout and PDF genera
   });
 });
 
+test('a printer measurement updates the estimated page count', async () => {
+  // #given  this batch fits one A4 page at 95% but needs two at the 91% default
+  const store = setup();
+  const id = store.addBlank()!;
+  store.setMargin('0');
+  store.setSize(id, 'custom');
+  store.setCustomDimensions(id, { width: '5', height: '35' });
+  store.setCount(id, '25');
+  await store.setImage(id, artworkFile(10, 20));
+
+  // #when
+  const defaultPages = store.$layout.get().pageCount;
+  store.setPrinterMeasurement('95');
+
+  // #then
+  expect([defaultPages, store.$layout.get().pageCount]).toEqual([2, 1]);
+});
+
 test.each(['79.9', '100.1', 'not a number'])(
   'an invalid printer measurement %j keeps the previous scale',
   (measurement) => {
