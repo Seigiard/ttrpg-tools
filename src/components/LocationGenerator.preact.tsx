@@ -1,11 +1,12 @@
-import { useStore } from '@nanostores/react';
-import { RefreshCw } from 'lucide-react';
-import { useEffect, useMemo } from 'react';
-import { ReferenceList } from '@/components/ReferenceList';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+/** @jsxImportSource preact */
+import { useStore } from '@nanostores/preact';
+import { useEffect, useMemo } from 'preact/hooks';
+import { ReferenceList } from '@/components/ReferenceList.preact';
+import { RefreshCw } from '@/components/icons.preact';
+import { Button } from '@/components/ui/button.preact';
+import { Card, CardContent, CardHeader } from '@/components/ui/card.preact';
+import { Skeleton } from '@/components/ui/skeleton.preact';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs.preact';
 import type { LocationTable } from '@/data/types';
 import { createLocationStore, type Roll } from '@/stores/location-store';
 
@@ -28,8 +29,7 @@ export function LocationGenerator<Biome extends string>({ table }: Props<Biome>)
     }
   }, [store]);
 
-  const handleBiomeChange = (next: string | number | null) => {
-    if (next === null) return;
+  const handleBiomeChange = (next: string | number) => {
     store.setBiome(next as Biome);
   };
 
@@ -144,9 +144,7 @@ function ResultRow({
     <div className="flex items-start justify-between gap-4" data-testid={testId}>
       <div className="flex-1">
         <div className="flex items-baseline gap-3">
-          <span className="font-mono text-xs uppercase tracking-wider text-text-muted">
-            {label}
-          </span>
+          <span className="font-mono text-xs uppercase tracking-wider text-text-muted">{label}</span>
           <span className="font-mono text-xs text-text-muted">
             <Skeleton loading={loading}>{rollLabel}</Skeleton>
           </span>
@@ -182,11 +180,7 @@ interface ReferenceTablesProps<Biome extends string> {
   roll: Roll<Biome> | null;
 }
 
-function ReferenceTables<Biome extends string>({
-  table,
-  biome,
-  roll,
-}: ReferenceTablesProps<Biome>) {
+function ReferenceTables<Biome extends string>({ table, biome, roll }: ReferenceTablesProps<Biome>) {
   const highlightLandmark = roll && roll.biome === biome ? roll.landmarkIndex : null;
   const highlightDetail = roll ? roll.detailIndex : null;
   return (

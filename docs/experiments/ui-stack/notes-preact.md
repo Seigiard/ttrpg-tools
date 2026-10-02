@@ -17,6 +17,14 @@
 - `Tabs` is a small native controlled/uncontrolled primitive with `role="tablist"`, `role="tab"`, `role="tabpanel"`, `aria-selected`, `data-active` and arrow/Home/End focus movement.
 - `Dialog` is a small native modal primitive with `role="dialog"`, `aria-modal`, title labelling, Escape close, basic Tab focus loop and `finalFocus` restore. It does not use a portal in P2.
 
+## P3: Weather, Locations, Encounters And Prices
+
+- Migrated the four non-paper generator islands to native Preact files: `WeatherGenerator.preact.tsx`, `LocationGenerator.preact.tsx`, `EncounterGenerator.preact.tsx` and `BlackHackPricesGenerator.preact.tsx`.
+- Switched their Astro pages to import the `.preact` islands directly, while `PaperMinisGenerator` remains React for P4.
+- Replaced the four React component test files with Preact test files using `@testing-library/preact`. The assertions keep the same intent: first client roll after mount, click routing, tab switching, `data-testid`s, `data-*` flags, highlighted reference rows and prices URL/localStorage behavior.
+- The migrated islands use `@nanostores/preact`, `preact/hooks`, Preact primitives and `lucide-preact` via `icons.preact.ts`. They do not import React, `@nanostores/react`, `@testing-library/react` or `lucide-react`.
+- Known P2 Dialog defect is deferred to P4 because P3 does not migrate the paper-minis dialog user. The P4 fix should make the open/close effect depend on open-state transitions only. Native `<dialog>.showModal()` is a candidate because it gives top-layer modality and inert background behavior; validate it against SSR, happy-dom tests and existing styling before choosing it.
+
 ## Compatibility Decisions
 
 - `@base-ui/react`: keep it only for unmigrated React islands. For Preact, use native primitives instead of routing Base UI through `preact/compat`.

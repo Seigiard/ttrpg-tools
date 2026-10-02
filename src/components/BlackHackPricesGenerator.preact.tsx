@@ -1,8 +1,9 @@
-import { useStore } from '@nanostores/react';
-import { useEffect, useMemo, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+/** @jsxImportSource preact */
+import { useStore } from '@nanostores/preact';
+import { useEffect, useMemo, useState } from 'preact/hooks';
+import { Button } from '@/components/ui/button.preact';
+import { Skeleton } from '@/components/ui/skeleton.preact';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs.preact';
 import { parse, serialize, type PricesState } from '@/data/the-black-hack/prices-codec';
 import type { PriceCategory, PriceItem, PriceTable, SettlementType } from '@/data/types';
 import {
@@ -60,8 +61,7 @@ export function BlackHackPricesGenerator({ table }: Props) {
     }
   }, [initialized, settlement, seed, table]);
 
-  const handleSettlementChange = (next: string | number | null) => {
-    if (next === null) return;
+  const handleSettlementChange = (next: string | number) => {
     store.setSettlement(next as SettlementType);
   };
 
@@ -152,14 +152,10 @@ function PriceRow({ category, item, faces }: PriceRowProps) {
     <tr className="border-b border-border last:border-0">
       <td className="px-2 py-1.5 text-text">
         {item.ru}
-        {item.note ? (
-          <span className="ml-2 font-mono text-xs text-text-muted">{item.note}</span>
-        ) : null}
+        {item.note ? <span className="ml-2 font-mono text-xs text-text-muted">{item.note}</span> : null}
       </td>
       <td className="px-2 py-1.5 text-right font-mono" data-testid="item-price">
-        <Skeleton loading={faces === null}>
-          {faces ? itemPrice(faces, category, item) : 0} мон.
-        </Skeleton>
+        <Skeleton loading={faces === null}>{faces ? itemPrice(faces, category, item) : 0} мон.</Skeleton>
       </td>
     </tr>
   );
