@@ -147,15 +147,12 @@ function drawMini(
   const yBottom = mm(yBottomMm);
   const iw = mm(mini.imageWidthMm);
   const offX = mm(mini.imageOffsetXMm);
-  const tab = mm(mini.tabHeightMm);
   const imgH = mm(mini.imageHeightMm);
-  const faceH = mm(mini.faceHeightMm);
-  const margin = mm(mini.marginMm);
 
   // Bottom-up: floor strip (two tabs deep), front tab, front face, margin,
   // fold, margin, back face, back tab. The figures stand straight on their
   // tabs, so a figure shorter than its face leaves paper by the fold instead.
-  const frontBottom = yBottom + tab * 3;
+  const frontBottom = yBottom + mm(mini.levels.frontTabTopMm);
 
   pdfPage.drawImage(images.front, {
     x: x + offX,
@@ -167,7 +164,7 @@ function drawMini(
   // Either way the back image fills (x + backOffX, backTop - h) to
   // (x + backOffX + backW, backTop), right under the back tab, so the figure's
   // feet touch it.
-  const backTop = frontBottom + faceH * 2 + margin * 2;
+  const backTop = yBottom + mm(mini.levels.backFaceTopMm);
   // Packing sets `mini.back` exactly when the entry has back artwork, and
   // `images.back` comes from the same artwork.
   const back: BackFace = mini.back ?? mini;
@@ -203,16 +200,13 @@ function drawMini(
   if (mini.label) {
     pdfPage.pushOperators(pushGraphicsState());
     pdfPage.pushOperators(concatTransformationMatrix(-1, 0, 0, -1, x + backOffX + backW, backTop));
-    // The same centring as `baseOffsetXMm`, but measured from the back image's
-    // own origin, which is where the rotated frame puts zero.
-    const baseFromImageX = mm((back.imageWidthMm - mini.baseWidthMm) / 2);
     drawLabelBadge(
       pdfPage,
       mini.label,
       font,
       mini.baseWidthMm,
       mini.tabHeightMm,
-      baseFromImageX,
+      mm(mini.backBadgeOffsetXMm),
       0,
     );
     pdfPage.pushOperators(popGraphicsState());
@@ -228,14 +222,11 @@ function drawMini(
 // All of it is one stroked path, drawn last, which is how pdf.test.ts finds
 // where one mini ends.
 function drawCutMarks(pdfPage: PDFPage, mini: PackedMini, x: number, yBottom: number) {
-  const tab = mm(mini.tabHeightMm);
   const arm = mm(CUT_MARK_ARM_MM);
   const left = x;
   const right = x + mm(mini.totalWidthMm);
-  const fold = yBottom + tab * 3 + mm(mini.faceHeightMm + mini.marginMm);
-  const top = yBottom + mm(mini.totalHeightMm);
-  const crosses = [yBottom, fold, top];
-  const halves = [yBottom + tab * 2, yBottom + tab * 3, top - tab];
+  const crosses = mini.levels.cutMarks.crossesMm.map((level) => yBottom + mm(level));
+  const halves = mini.levels.cutMarks.halvesMm.map((level) => yBottom + mm(level));
 
   const ops = [
     pushGraphicsState(),
