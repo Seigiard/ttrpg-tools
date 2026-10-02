@@ -6,10 +6,10 @@
 
 ## Стек
 
-- [Astro 6](https://astro.build/) — статика по умолчанию, React islands там где нужен интерактив.
-- React 19 + TypeScript (strict).
+- [Astro 7](https://astro.build/) — статика по умолчанию, Svelte islands там где нужен интерактив.
+- Svelte 5 + TypeScript (strict).
 - [Tailwind CSS v4](https://tailwindcss.com/) — токены через `@theme` в `src/styles/global.css`.
-- [shadcn/ui](https://ui.shadcn.com/) с Base UI как primitive layer.
+- Локальные UI-примитивы в `src/components/ui/`.
 - [oxlint](https://oxc.rs/docs/guide/usage/linter.html) — линт TS/TSX (Rust, быстро).
 - [oxfmt](https://oxc.rs/docs/guide/usage/formatter.html) — форматтер TS/TSX/CSS (Prettier-совместимый).
 - [Prettier + prettier-plugin-astro](https://github.com/withastro/prettier-plugin-astro) — форматирование `.astro` файлов.
@@ -24,7 +24,7 @@ bun install
 bun run dev        # http://localhost:4321
 bun run build      # сборка в dist/
 bun run preview    # просмотр сборки
-bun test           # быстрые unit-тесты
+bun run test       # быстрые unit-тесты (`bun test --parallel=1`)
 bun run test:browser # browser-тесты Paper minis
 bun run lint       # oxlint
 bun run lint:fix   # oxlint --fix

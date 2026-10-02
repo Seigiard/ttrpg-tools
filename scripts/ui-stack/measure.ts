@@ -88,11 +88,9 @@ async function versions() {
   const lock = await readFile('bun.lock', 'utf8');
   const wanted = [
     'astro',
-    '@astrojs/react',
-    'react',
-    'react-dom',
-    '@base-ui/react',
-    '@nanostores/react',
+    '@astrojs/svelte',
+    'svelte',
+    '@lucide/svelte',
     'nanostores',
     '@playwright/test',
     'pdf-lib',

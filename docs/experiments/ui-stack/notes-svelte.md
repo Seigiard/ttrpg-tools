@@ -1,5 +1,20 @@
 # Svelte UI Stack Notes
 
+## S5 · React removal and final measurement
+
+- Removed the React renderer and runtime packages from `package.json`/`bun.lock`: `@astrojs/react`, `react`, `react-dom`, `@types/react`, `@types/react-dom`, `@base-ui/react`, `lucide-react`, `@nanostores/react` and `@testing-library/react`. Removed `shadcn` and `components.json`; no current source/config still uses shadcn.
+- Removed Astro React integration and TypeScript React JSX settings. `astro.config.mjs` now only registers the Svelte integration.
+- Removed the remaining React primitive files and tests: `button.tsx`, `card.tsx`, `dialog.tsx`, `skeleton.tsx`, `tabs.tsx` and `skeleton.test.tsx`. Also removed the temporary Svelte probe route and fixture directory.
+- Preserved probe coverage through test-only Svelte beds beside the components: `PrimitiveTestBed.svelte` and `ReferenceListTestBed.svelte`. This keeps tests on real primitives without shipping probe routes.
+- LOC evidence excluding generated measurement artifacts: `git diff --stat` for tracked files reports `57 insertions / 1184 deletions`; the two new Svelte test beds add 79 lines, for a source/test net of about `-1048` lines. There are no `*.tsx`/`*.jsx` files left.
+- First full check before the fixture fix failed as requested evidence: `bun run lint && bun run format:check && bun run typecheck && bun run test && bun run build` reached `bun test --parallel=1`, then failed because `ReferenceList.svelte.test.ts` still imported deleted `./svelte-fixtures/ReferenceListProbe.svelte`. After moving that test bed, `bun run test` passed with `523 pass / 0 fail`.
+- Final CI-equivalent check passed: `bun run lint && bun run format:check && bun run typecheck && bun run test && bun run build`. Unit evidence: `523 pass / 0 fail`. Build evidence: 6 pages built. Existing non-blocking warnings remain: oxlint warnings in legacy loops/sorts/shadowing and one `svelte-check` warning in `src/components/ui/dialog.svelte` about the initial `open` value capture.
+- Required browser suite passed: `PORT=4402 bun run test:browser` -> `11 passed`.
+- Required measurement passed: `PORT=4412 bun run measure -- --out docs/experiments/ui-stack/results/svelte`. It generated `payload`, `network`, `timings`, `versions` and screenshots under `docs/experiments/ui-stack/results/svelte/`.
+- Measurement highlights: payload external JS gzip is `/` 0 B, weather 2584 B, locations 4083 B, encounters 2279 B, prices 4146 B and paper minis 198206 B. Cold transferred bytes are `/` 10395 B, weather 53590 B, locations 57449 B, encounters 52206 B, prices 54100 B and paper minis 243842 B.
+- React-runtime grep evidence after the measurement rebuild: `rg -n "react-dom|react\.production|jsx-runtime" dist` produced no output, so the built `dist/` contains none of those strings.
+- Remaining React words are historical docs/React baseline measurement records or the payload script's detection heuristic. They are not runtime dependencies or imports.
+
 ## S1 · Toolchain beside React
 
 - Added `@astrojs/svelte` and `svelte` beside the existing React integration.
@@ -32,7 +47,7 @@ No changes to `src/data`, `src/lib` or `src/stores` were needed.
 - `ReferenceList.svelte` uses Svelte snippets for the label and row content slots. Its tests keep the previous DOM contract: row order, `data-hit`, `data-row-index` and the non-colour left border marker.
 - `Tabs` is implemented without Base UI. It keeps `role="tablist"`, `role="tab"`, `aria-selected`, roving focus and arrow-key selection.
 - `Dialog` uses native `<dialog>`, with Escape handling, focus trap and focus restore. Happy DOM does not expose native dialog semantics exactly like a browser, so the test dispatches keyboard events on the `<dialog>` element directly.
-- Added `@lucide/svelte` and a local `src/components/icons.ts` facade for Svelte icons. `lucide-react` remains until the React islands are migrated.
+- Added `@lucide/svelte` and a local `src/components/icons.ts` facade for Svelte icons. `lucide-react` is removed in S5 after the React islands are migrated.
 - `astro check` alone did not catch a deliberate `.svelte` type error. The `typecheck` script now runs `astro check && svelte-check --tsconfig ./tsconfig.json`.
 - `svelte-check` also caught real S2 issues that `astro check` missed: an invalid Svelte element type import, dialog props being spread onto the wrong element type and a possibly undefined bound dialog element.
 

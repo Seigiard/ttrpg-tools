@@ -1,11 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
-import ButtonProbe from '../svelte-fixtures/ButtonProbe.svelte';
-import CardProbe from '../svelte-fixtures/CardProbe.svelte';
-import DialogProbe from '../svelte-fixtures/DialogProbe.svelte';
-import SkeletonProbe from '../svelte-fixtures/SkeletonProbe.svelte';
-import TabsProbe from '../svelte-fixtures/TabsProbe.svelte';
-import { RefreshCw } from '../icons';
+import PrimitiveTestBed from './PrimitiveTestBed.svelte';
 
 beforeEach(() => {
   cleanup();
@@ -24,7 +19,7 @@ describe('Svelte Skeleton', () => {
   test('loading=false: children are readable and the node has no masking classes', () => {
     // #given readable content
     // #when the skeleton is not loading
-    render(SkeletonProbe, { loading: false, text: 'Результат' });
+    render(PrimitiveTestBed, { mode: 'skeleton', loading: false, text: 'Результат' });
     const node = screen.getByText('Результат');
     // #then the node stays visible and unmasked
     expect({
@@ -45,7 +40,7 @@ describe('Svelte Skeleton', () => {
   test('loading=true: children stay in DOM, masked and hidden from a11y', () => {
     // #given placeholder content
     // #when the skeleton is loading
-    render(SkeletonProbe, { loading: true, text: 'Плейсхолдер' });
+    render(PrimitiveTestBed, { mode: 'skeleton', loading: true, text: 'Плейсхолдер' });
     const node = screen.getByText('Плейсхолдер');
     // #then the same content sets box size while the wrapper is masked
     expect({
@@ -59,7 +54,7 @@ describe('Svelte Skeleton', () => {
   test('loading=true: interactivity is disabled by classes', () => {
     // #given a loading skeleton
     // #when it renders
-    render(SkeletonProbe, { loading: true });
+    render(PrimitiveTestBed, { mode: 'skeleton', loading: true });
     const node = screen.getByText('x');
     // #then pointer and selection interaction are suppressed
     expect({
@@ -70,11 +65,11 @@ describe('Svelte Skeleton', () => {
 
   test('node type is stable across loading states', () => {
     // #given the same skeleton content
-    const loaded = render(SkeletonProbe, { loading: false });
+    const loaded = render(PrimitiveTestBed, { mode: 'skeleton', loading: false });
     const loadedTag = loaded.getByText('x').tagName;
     cleanup();
     // #when the loading state changes
-    const loading = render(SkeletonProbe, { loading: true });
+    const loading = render(PrimitiveTestBed, { mode: 'skeleton', loading: true });
     const loadingTag = loading.getByText('x').tagName;
     // #then layout is anchored by the same element type
     expect({ loadedTag, loadingTag }).toEqual({ loadedTag: 'SPAN', loadingTag: 'SPAN' });
@@ -83,7 +78,7 @@ describe('Svelte Skeleton', () => {
   test('caller classes are merged while base loading classes remain', () => {
     // #given a caller class
     // #when the loading skeleton renders
-    render(SkeletonProbe, { loading: true, class: 'block' });
+    render(PrimitiveTestBed, { mode: 'skeleton', loading: true, class: 'block' });
     const node = screen.getByText('x');
     // #then both caller and base classes are present
     expect({ block: node.className.includes('block'), pulse: node.className.includes('animate-pulse') }).toEqual({
@@ -96,7 +91,7 @@ describe('Svelte Skeleton', () => {
 test('Svelte Button keeps the button slot and caller classes', () => {
   // #given caller content and a class
   // #when the button renders
-  render(ButtonProbe);
+  render(PrimitiveTestBed, { mode: 'button' });
   const button = screen.getByRole('button', { name: 'Roll' });
   // #then it exposes the same slot contract and merged classes
   expect({ slot: button.getAttribute('data-slot'), callerClass: button.className.includes('min-h-11') }).toEqual({
@@ -108,7 +103,7 @@ test('Svelte Button keeps the button slot and caller classes', () => {
 test('Svelte Card parts expose the same data slots', () => {
   // #given card content split into header and body
   // #when card parts render
-  render(CardProbe);
+  render(PrimitiveTestBed, { mode: 'card' });
   // #then each public card slot is present
   expect([
     screen.getByTestId('card').getAttribute('data-slot'),
@@ -119,7 +114,7 @@ test('Svelte Card parts expose the same data slots', () => {
 
 test('Svelte tabs click and arrow keys move the selected tab', async () => {
   // #given three tabs
-  render(TabsProbe);
+  render(PrimitiveTestBed, { mode: 'tabs' });
   const tabs = screen.getAllByRole('tab');
   // #when the second tab is clicked and ArrowRight is pressed
   await fireEvent.click(tabs[1]!);
@@ -136,7 +131,7 @@ test('Svelte tabs click and arrow keys move the selected tab', async () => {
 
 test('Svelte Dialog traps Tab, closes on Escape and restores focus', async () => {
   // #given a dialog opener
-  render(DialogProbe);
+  render(PrimitiveTestBed, { mode: 'dialog' });
   const opener = screen.getByTestId('dialog-opener');
   // #when the dialog opens and keyboard navigation reaches its edges
   opener.focus();
@@ -165,7 +160,7 @@ test('Svelte Dialog traps Tab, closes on Escape and restores focus', async () =>
 test('Svelte icon export renders an SVG icon', () => {
   // #given the migration icon facade
   // #when the refresh icon renders
-  render(RefreshCw, { 'aria-label': 'Refresh' });
+  render(PrimitiveTestBed, { mode: 'icon' });
   // #then the accessible SVG is available to Svelte components
   expect(screen.getByLabelText('Refresh').tagName).toBe('svg');
 });

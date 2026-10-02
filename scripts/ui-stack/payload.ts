@@ -132,7 +132,7 @@ function libraries(path: string, code: string) {
   if (/base-ui|floating-ui/.test(name) || /Base UI|useRender/.test(code)) libs.add('base-ui');
   if (/nanostores/.test(name) || /atom\(|listenKeys|STORE_UNMOUNT_DELAY/.test(code))
     libs.add('nanostores');
-  if (/lucide/.test(name) || /RefreshCw/.test(code)) libs.add('lucide-react');
+  if (/lucide/.test(name) || /RefreshCw/.test(code)) libs.add('lucide-svelte');
   if (/pdf|fontkit/.test(name) || /PDFDocument|%PDF-/.test(code)) libs.add('pdf-lib');
   return [...libs];
 }
