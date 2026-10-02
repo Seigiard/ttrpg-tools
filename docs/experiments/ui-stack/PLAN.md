@@ -87,5 +87,5 @@ Review base: 48c587c626dba17990da59ea1ccb475054d36c35
 - [ ] S4 · Svelte paper minis with its tests. Done: CI checks green.
 - [ ] S5 · React removed; no React runtime in any bundle; parity suite green; measurements saved. Done: CI checks and e2e green, `results/svelte/` filled.
 - [ ] S6 · Follow-up change in Svelte. Done: own commit, CI checks and e2e green.
-- [ ] R1 · `REPORT.md` with numbers, diffs, compatibility findings, limitations and a recommendation. Done: same report in both candidate branches.
+- [x] R1 · `REPORT.md` with numbers, diffs, compatibility findings, limitations and a recommendation. Done: same report in both candidate branches.
 - [ ] R2 · Code review of each branch and two PRs. Done: PRs open.
