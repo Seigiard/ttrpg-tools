@@ -256,10 +256,12 @@ test('a valid count marker plans the row count', () => {
   ]);
 });
 
-test.each([
+const xPrefixedNameCases = [
   ['xorn-small-front.png', 'Xorn', 'small'],
   ['goblin-xbow-front.png', 'Goblin xbow', undefined],
-])('%s keeps an x-prefixed name token', (fileName, name, heightSlot) => {
+] as const;
+
+test.each(xPrefixedNameCases)('%s keeps an x-prefixed name token', (fileName, name, heightSlot) => {
   // #given
   const files = [fileName];
   // #when
