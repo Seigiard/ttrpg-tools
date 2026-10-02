@@ -1,6 +1,7 @@
 import type { Entry, MiniSize, PackingEntry } from './types';
 import {
   type FigureFitLimit,
+  type FigureFitMm,
   fitFigure,
   hasPackableDimensions,
   resolveSizeDimensionsMm,
@@ -78,6 +79,62 @@ export type PackOptions = {
   marginMm?: number;
 };
 
+// Resolve both faces together for packing and the calibration preview. An unset
+// back inherits the calibrated front's height; its width cap shrinks both faces
+// by the same factor so their heights still match and neither artwork distorts.
+export function fitMiniFaces(
+  e: PackingEntry & { naturalWidth: number; naturalHeight: number },
+  opts: PackOptions,
+): { front: FigureFitMm; back?: FigureFitMm } {
+  const dimensions = resolveSizeDimensionsMm(e);
+  const usableHeightMm = PAGE_SIZES_MM[opts.pageSize].h - MARGIN_MM * 2;
+  const marginMm = opts.marginMm ?? DEFAULT_FIGURE_MARGIN_MM;
+  const maxImageHeightMm = Math.max(
+    0,
+    (usableHeightMm - marginMm * 2 - resolveTabHeightMm(e) * 4) / 2,
+  );
+  if (
+    e.backNaturalWidth &&
+    e.backNaturalHeight &&
+    validCalibrationGap(e.frontCalibration) &&
+    !validCalibrationGap(e.backCalibration)
+  ) {
+    const frontAspect = e.naturalWidth / e.naturalHeight;
+    const backAspect = e.backNaturalWidth / e.backNaturalHeight;
+    // Fit the wider face first so width still precedes page in the cap order.
+    const shared = fitFigure(
+      dimensions,
+      Math.max(frontAspect, backAspect),
+      1,
+      e.frontCalibration,
+      maxImageHeightMm,
+    );
+    return {
+      front: { ...shared, imageWidthMm: frontAspect * shared.imageHeightMm },
+      back: { ...shared, imageWidthMm: backAspect * shared.imageHeightMm },
+    };
+  }
+  return {
+    front: fitFigure(
+      dimensions,
+      e.naturalWidth,
+      e.naturalHeight,
+      e.frontCalibration,
+      maxImageHeightMm,
+    ),
+    back:
+      e.backNaturalWidth && e.backNaturalHeight
+        ? fitFigure(
+            dimensions,
+            e.backNaturalWidth,
+            e.backNaturalHeight,
+            e.backCalibration,
+            maxImageHeightMm,
+          )
+        : undefined,
+  };
+}
+
 // A back file is chosen but not prepared yet. Such an entry is not ready, so
 // it does not print reflected for a moment and then jump to its own back.
 export function isBackArtworkLoading(entry: Entry): boolean {
@@ -131,32 +188,11 @@ export function packMinis(entries: PackingEntry[], opts: PackOptions): PackResul
       return; // not packable yet
     }
     const tabHMm = resolveTabHeightMm(e);
-    const maxImageHeightMm = Math.max(0, (usableHmm - marginMm * 2 - tabHMm * 4) / 2);
-    const { imageWidthMm, imageHeightMm, limits } = fitFigure(
-      dimensions,
-      e.naturalWidth,
-      e.naturalHeight,
-      e.frontCalibration,
-      maxImageHeightMm,
+    const { front, back: rawBackFit } = fitMiniFaces(
+      { ...e, naturalWidth: e.naturalWidth, naturalHeight: e.naturalHeight },
+      opts,
     );
-    const rawBackFit =
-      e.backNaturalWidth && e.backNaturalHeight
-        ? validCalibrationGap(e.backCalibration)
-          ? fitFigure(
-              dimensions,
-              e.backNaturalWidth,
-              e.backNaturalHeight,
-              e.backCalibration,
-              maxImageHeightMm,
-            )
-          : validCalibrationGap(e.frontCalibration)
-            ? {
-                imageHeightMm,
-                imageWidthMm: (e.backNaturalWidth / e.backNaturalHeight) * imageHeightMm,
-                limits: [],
-              }
-            : fitFigure(dimensions, e.backNaturalWidth, e.backNaturalHeight)
-        : undefined;
+    const { imageWidthMm, imageHeightMm, limits } = front;
     const backFit = rawBackFit && {
       imageWidthMm: rawBackFit.imageWidthMm,
       imageHeightMm: rawBackFit.imageHeightMm,

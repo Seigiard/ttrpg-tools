@@ -258,12 +258,14 @@ export function hasPackableDimensions(
 // here — the number is a judgement about how far a figure may spread, not a
 // limit the paper forces.
 export const MAX_WIDTH_TO_SLOT_HEIGHT = 1.5;
+// Leave room for raised weapons without letting a short marked gap make a giant mini.
 export const MAX_CALIBRATED_HEIGHT_TO_SLOT_HEIGHT = 2;
 
-// The one place a height slot becomes millimetres of artwork. Fits a figure to
-// its slot's height, letting width follow the artwork's proportions, then scales
-// the whole figure down if it passes the width cap. Aspect ratio is preserved
-// throughout and nothing is cropped.
+// Convert the slot height to artwork millimetres, dividing by a valid marked gap.
+// Then apply the 2× height cap, width cap, and supplied page-height cap, in order.
+// Each cap only shrinks the whole image; proportions stay intact, without cropping.
+// Height/page caps and limit reporting require valid calibration. Without it,
+// only the existing width cap applies; oversized uncalibrated minis stay skippable.
 export function fitFigure(
   { figureHeightMm }: SizeDimensionsMm,
   imgWidthPx: number,

@@ -1,25 +1,25 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
 import { useStore } from '@nanostores/react';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { createPaperMinisStore } from '@/stores/paper-minis-store';
 import { isSupportedArtwork } from '@/lib/paper-minis/artwork';
 import { generatePDF, buildFilename } from '@/lib/paper-minis/pdf';
-import { MARGIN_MM, PAGE_SIZES_MM } from '@/lib/paper-minis/packing';
+import { fitMiniFaces } from '@/lib/paper-minis/packing';
 import {
   DEFAULT_CUSTOM_HEIGHT_MM,
   DEFAULT_CUSTOM_WIDTH_MM,
   HEIGHT_SLOT_ORDER,
   type FigureFitLimit,
-  type FigureFitMm,
-  fitFigure,
   resolveFigureHeightMm,
-  resolveSizeDimensionsMm,
-  resolveTabHeightMm,
   slotLabel,
   slotGeometryLabel,
   slotName,
 } from '@/lib/paper-minis/sizes';
-import type { HeightCalibration, MiniSize, PreparedArtwork } from '@/lib/paper-minis/types';
+import type { Entry, HeightCalibration, MiniSize, PreparedArtwork } from '@/lib/paper-minis/types';
+
+type CalibrationDraft = Pick<Entry, 'frontCalibration' | 'backCalibration'>;
 
 const field =
   'min-h-11 w-full rounded-lg border border-border bg-surface-elevated px-3 text-text focus-visible:outline-2 focus-visible:outline-primary';
@@ -49,6 +49,37 @@ function clamp(v: number, lo: number, hi: number) {
 
 function lineStyle(value: number) {
   return { top: `${value * 100}%` };
+}
+
+// The overlay and image share an exact aspect-ratio box inside the available
+// space. Container units keep it fitted on both axes, including row thumbnails.
+function ArtworkFrame({
+  artwork,
+  url,
+  label,
+  imageRef,
+  children,
+}: {
+  artwork: PreparedArtwork;
+  url: string;
+  label: string;
+  imageRef?: Ref<HTMLImageElement>;
+  children?: ReactNode;
+}) {
+  return (
+    <span className="relative block h-full w-full [container-type:size]">
+      <span
+        className="absolute left-1/2 top-1/2 block -translate-x-1/2 -translate-y-1/2"
+        style={{
+          width: `min(100cqw, ${(100 * artwork.width) / artwork.height}cqh)`,
+          aspectRatio: `${artwork.width} / ${artwork.height}`,
+        }}
+      >
+        <img ref={imageRef} src={url} alt={label} className="block h-full w-full" />
+        {children}
+      </span>
+    </span>
+  );
 }
 
 const fitLimitLabels: Record<FigureFitLimit, string> = {
@@ -139,11 +170,10 @@ function ArtworkSlot({
           if (file) onFile(file);
         }}
       >
-        {url ? (
-          <span className="relative h-full w-full">
-            <img src={url} alt={label} className="h-full w-full object-contain" />
+        {url && artwork ? (
+          <ArtworkFrame artwork={artwork} url={url} label={label}>
             {calibration && (
-              <span className="pointer-events-none absolute inset-y-0 left-1/2 aspect-square h-full -translate-x-1/2">
+              <span className="pointer-events-none absolute inset-0">
                 {(['head', 'feet'] as const).map((key) => (
                   <span
                     key={key}
@@ -153,7 +183,7 @@ function ArtworkSlot({
                 ))}
               </span>
             )}
-          </span>
+          </ArtworkFrame>
         ) : (
           <span className="max-w-44 text-sm font-normal leading-relaxed text-text-muted">
             {loading ? 'Загрузка…' : hint}
@@ -186,31 +216,34 @@ function HeightCalibrationDialog({
   initialBack,
   onApply,
   onCancel,
+  returnFocus,
 }: {
   artwork: PreparedArtwork;
   backArtwork?: PreparedArtwork | null;
   rowLabel: string;
   slotHeightMm: number;
   initial?: HeightCalibration;
-  previewFit: (side: 'front' | 'back', calibration: HeightCalibration) => FigureFitMm;
+  previewFit: (draft: CalibrationDraft) => ReturnType<typeof fitMiniFaces>;
   initialBack?: HeightCalibration;
-  onApply: (side: 'front' | 'back', calibration: HeightCalibration) => void;
+  onApply: (changes: CalibrationDraft) => void;
   onCancel: () => void;
+  returnFocus: React.RefObject<HTMLButtonElement | null>;
 }) {
   const [side, setSide] = useState<'front' | 'back'>('front');
   const currentArtwork = side === 'front' ? artwork : (backArtwork ?? artwork);
   const url = useArtworkUrl(currentArtwork);
-  const artworkRef = useRef<HTMLDivElement>(null);
+  const artworkRef = useRef<HTMLImageElement>(null);
   const dragging = useRef<'head' | 'feet' | null>(null);
-  const [frontLines, setFrontLines] = useState<HeightCalibration>(initial ?? { head: 0, feet: 1 });
-  const [backLines, setBackLines] = useState<HeightCalibration>(
-    initialBack ?? { head: 0, feet: 1 },
-  );
-  const lines = side === 'front' ? frontLines : backLines;
+  const [frontLines, setFrontLines] = useState(initial);
+  const [backLines, setBackLines] = useState(initialBack);
+  const lines = (side === 'front' ? frontLines : backLines) ?? { head: 0, feet: 1 };
   const setLines = side === 'front' ? setFrontLines : setBackLines;
-  const fit = previewFit(side, lines);
+  const fits = previewFit({ frontCalibration: frontLines, backCalibration: backLines });
+  const fit = side === 'back' ? (fits.back ?? fits.front) : fits.front;
   const printedHeightMm = fit.imageHeightMm;
-  const warning = fitLimitWarning(fit.limits);
+  const warning = fitLimitWarning([
+    ...new Set([...fits.front.limits, ...(fits.back?.limits ?? [])]),
+  ]);
   const hasBack = !!backArtwork;
 
   function setLineFromClientY(which: 'head' | 'feet', clientY: number) {
@@ -221,7 +254,8 @@ function HeightCalibrationDialog({
   }
 
   function setLine(which: 'head' | 'feet', position: (current: number) => number) {
-    setLines((current) => {
+    setLines((previous) => {
+      const current = previous ?? { head: 0, feet: 1 };
       const fraction = position(current[which]);
       if (which === 'head')
         return { ...current, head: clamp(fraction, 0, current.feet - minCalibrationGap) };
@@ -230,16 +264,19 @@ function HeightCalibrationDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={side === 'front' ? 'Задать рост лицевой стороны' : 'Задать рост оборота'}
-        className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-xl border border-border bg-surface p-4 shadow-xl"
-      >
+    <Dialog
+      defaultOpen
+      onOpenChange={(open) => {
+        if (!open) onCancel();
+      }}
+    >
+      <DialogContent finalFocus={returnFocus}>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="text-2xl text-text">Задать рост</h2>
+            <DialogTitle className="text-2xl text-text">
+              Задать рост
+              <span className="sr-only">{side === 'front' ? ' лицевой стороны' : ' оборота'}</span>
+            </DialogTitle>
             <p className="text-sm text-text-muted">
               {rowLabel}: перетащите линии головы и стоп или используйте ↑/↓ — 1 пиксель, с Shift —
               10.
@@ -254,82 +291,91 @@ function HeightCalibrationDialog({
             {warning}
           </p>
         )}
-        {hasBack && (
-          <div role="tablist" aria-label="Сторона" className="mt-4 flex gap-2">
-            {(['front', 'back'] as const).map((key) => (
-              <Button
-                key={key}
-                role="tab"
-                variant={side === key ? 'default' : 'outline'}
-                aria-selected={side === key}
-                className="min-h-11"
-                onClick={() => setSide(key)}
-              >
-                {key === 'front' ? 'Перед' : 'Зад'}
-              </Button>
-            ))}
-          </div>
-        )}
-        <div
-          ref={artworkRef}
-          data-testid="height-calibration-artwork"
-          className="relative mt-4 h-[min(65vh,640px)] touch-none overflow-hidden rounded-lg border border-border bg-surface-elevated"
-          onPointerMove={(event) => {
-            if (dragging.current) setLineFromClientY(dragging.current, event.clientY);
-          }}
-          onPointerUp={(event) => {
-            dragging.current = null;
-            event.currentTarget.releasePointerCapture?.(event.pointerId);
-          }}
-        >
-          {url && (
-            <img
-              src={url}
-              alt={side === 'front' ? 'Лицевая сторона' : 'Оборот'}
-              className="h-full w-full object-contain"
-            />
+        <Tabs value={side} onValueChange={(value) => setSide(value as 'front' | 'back')}>
+          {hasBack && (
+            <TabsList aria-label="Сторона" className="mt-4 min-h-11">
+              {(['front', 'back'] as const).map((key) => (
+                <TabsTrigger key={key} value={key} className="min-h-11">
+                  {key === 'front' ? 'Перед' : 'Зад'}
+                </TabsTrigger>
+              ))}
+            </TabsList>
           )}
-          {(['head', 'feet'] as const).map((key) => (
-            <button
-              key={key}
-              type="button"
-              role="slider"
-              aria-label={key === 'head' ? 'Голова' : 'Ступни'}
-              aria-orientation="vertical"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={lines[key] * 100}
-              aria-valuetext={`${Number((lines[key] * currentArtwork.height).toFixed(2))} пикселей от верха`}
-              className="absolute left-0 right-0 h-8 -translate-y-1/2 cursor-row-resize border-y-2 border-primary bg-primary/10 text-left text-xs font-bold text-primary focus-visible:outline-2 focus-visible:outline-primary"
-              style={lineStyle(lines[key])}
-              onKeyDown={(event) => {
-                if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
-                event.preventDefault();
-                const step = (event.shiftKey ? 10 : 1) / currentArtwork.height;
-                setLine(key, (current) => current + (event.key === 'ArrowUp' ? -step : step));
+          <TabsContent value={side}>
+            <div
+              data-testid="height-calibration-artwork"
+              className="relative mt-4 h-[min(65vh,640px)] touch-none overflow-hidden rounded-lg border border-border bg-surface-elevated"
+              onPointerMove={(event) => {
+                if (dragging.current) setLineFromClientY(dragging.current, event.clientY);
               }}
-              onPointerDown={(event) => {
-                dragging.current = key;
-                event.currentTarget.setPointerCapture?.(event.pointerId);
-                setLineFromClientY(key, event.clientY);
+              onPointerUp={(event) => {
+                dragging.current = null;
+                event.currentTarget.releasePointerCapture?.(event.pointerId);
               }}
             >
-              <span className="ml-2 rounded bg-surface/90 px-1">
-                {key === 'head' ? 'Голова' : 'Ступни'}
-              </span>
-            </button>
-          ))}
-        </div>
+              {url && (
+                <ArtworkFrame
+                  artwork={currentArtwork}
+                  url={url}
+                  label={side === 'front' ? 'Лицевая сторона' : 'Оборот'}
+                  imageRef={artworkRef}
+                >
+                  {(['head', 'feet'] as const).map((key) => (
+                    <button
+                      key={key}
+                      type="button"
+                      role="slider"
+                      aria-label={key === 'head' ? 'Голова' : 'Ступни'}
+                      aria-orientation="vertical"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={lines[key] * 100}
+                      aria-valuetext={`${Number((lines[key] * currentArtwork.height).toFixed(2))} пикселей от верха`}
+                      className="absolute left-0 right-0 h-8 -translate-y-1/2 cursor-row-resize border-y-2 border-primary bg-primary/10 text-left text-xs font-bold text-primary focus-visible:outline-2 focus-visible:outline-primary"
+                      style={lineStyle(lines[key])}
+                      onKeyDown={(event) => {
+                        if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+                        event.preventDefault();
+                        const step = (event.shiftKey ? 10 : 1) / currentArtwork.height;
+                        setLine(
+                          key,
+                          (current) => current + (event.key === 'ArrowUp' ? -step : step),
+                        );
+                      }}
+                      onPointerDown={(event) => {
+                        dragging.current = key;
+                        event.currentTarget.setPointerCapture?.(event.pointerId);
+                        setLineFromClientY(key, event.clientY);
+                      }}
+                    >
+                      <span className="ml-2 rounded bg-surface/90 px-1">
+                        {key === 'head' ? 'Голова' : 'Ступни'}
+                      </span>
+                    </button>
+                  ))}
+                </ArtworkFrame>
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
         <div className="mt-4 flex justify-end gap-2">
           <Button variant="ghost" className="min-h-11" onClick={onCancel}>
             Отмена
           </Button>
-          <Button className="min-h-11" onClick={() => onApply(side, lines)}>
+          <Button
+            className="min-h-11"
+            onClick={() =>
+              onApply({
+                ...(frontLines !== initial && { frontCalibration: frontLines }),
+                ...(backLines !== initialBack && { backCalibration: backLines }),
+              })
+            }
+          >
             Применить
           </Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -344,6 +390,7 @@ export default function PaperMinisGenerator() {
   const preparing = useStore(store.$preparing);
   const [preview, setPreview] = useState<{ url: string; revision: number }>();
   const [calibratingId, setCalibratingId] = useState<number>();
+  const calibrationOpener = useRef<HTMLButtonElement>(null);
   const previewUrl = useRef<string | undefined>(undefined);
   const [dragging, setDragging] = useState(false);
   const files = useRef<HTMLInputElement>(null);
@@ -351,28 +398,6 @@ export default function PaperMinisGenerator() {
   const marginValid =
     margin.trim() !== '' && Number.isFinite(Number(margin)) && Number(margin) >= 0;
   const calibratingRow = rows.find((row) => row.id === calibratingId && row.artwork);
-
-  function previewFit(
-    row: typeof calibratingRow,
-    side: 'front' | 'back',
-    calibration: HeightCalibration,
-  ) {
-    if (!row?.artwork) return { imageWidthMm: 0, imageHeightMm: 0, limits: [] };
-    const artwork = side === 'back' ? (row.backArtwork ?? row.artwork) : row.artwork;
-    const tabHeightMm = resolveTabHeightMm(row);
-    const usableHeightMm = PAGE_SIZES_MM[settings.pageSize].h - MARGIN_MM * 2;
-    const maxImageHeightMm = Math.max(
-      0,
-      (usableHeightMm - settings.marginMm * 2 - tabHeightMm * 4) / 2,
-    );
-    return fitFigure(
-      resolveSizeDimensionsMm(row),
-      artwork.width,
-      artwork.height,
-      calibration,
-      maxImageHeightMm,
-    );
-  }
 
   useEffect(() => {
     store.loadSettings();
@@ -389,7 +414,7 @@ export default function PaperMinisGenerator() {
     const hasFiles = (event: DragEvent) =>
       Array.from(event.dataTransfer?.types ?? []).includes('Files');
     const enter = (event: DragEvent) => {
-      if (hasFiles(event)) {
+      if (hasFiles(event) && calibratingId === undefined) {
         event.preventDefault();
         depth++;
         if (!store.$busy.get()) setDragging(true);
@@ -410,7 +435,7 @@ export default function PaperMinisGenerator() {
     const drop = (event: DragEvent) => {
       if (hasFiles(event)) {
         event.preventDefault();
-        store.ingest(Array.from(event.dataTransfer?.files ?? []));
+        if (calibratingId === undefined) store.ingest(Array.from(event.dataTransfer?.files ?? []));
       }
     };
     window.addEventListener('dragenter', enter);
@@ -425,7 +450,7 @@ export default function PaperMinisGenerator() {
       window.removeEventListener('drop', clear, true);
       window.removeEventListener('drop', drop);
     };
-  }, [store]);
+  }, [store, calibratingId]);
 
   async function generate(showPreview: boolean) {
     if (!marginValid || !packed.miniCount || !store.beginGeneration()) return;
@@ -687,7 +712,10 @@ export default function PaperMinisGenerator() {
                           variant="outline"
                           className="min-h-11"
                           disabled={!row.artwork}
-                          onClick={() => setCalibratingId(row.id)}
+                          onClick={(event) => {
+                            calibrationOpener.current = event.currentTarget;
+                            setCalibratingId(row.id);
+                          }}
                         >
                           Задать рост
                         </Button>
@@ -871,17 +899,29 @@ export default function PaperMinisGenerator() {
       )}
       {calibratingRow?.artwork && (
         <HeightCalibrationDialog
+          returnFocus={calibrationOpener}
           artwork={calibratingRow.artwork}
           backArtwork={calibratingRow.backArtwork}
           rowLabel={calibratingRow.name || 'Миниатюра'}
           slotHeightMm={resolveFigureHeightMm(calibratingRow)}
           initial={calibratingRow.frontCalibration}
-          previewFit={(side, calibration) => previewFit(calibratingRow, side, calibration)}
+          previewFit={(draft) =>
+            fitMiniFaces(
+              {
+                ...calibratingRow,
+                ...draft,
+                naturalWidth: calibratingRow.artwork!.width,
+                naturalHeight: calibratingRow.artwork!.height,
+                backNaturalWidth: calibratingRow.backArtwork?.width,
+                backNaturalHeight: calibratingRow.backArtwork?.height,
+              },
+              settings,
+            )
+          }
           initialBack={calibratingRow.backCalibration}
           onCancel={() => setCalibratingId(undefined)}
-          onApply={(side, calibration) => {
-            if (side === 'front') store.setFrontCalibration(calibratingRow.id, calibration);
-            else store.setBackCalibration(calibratingRow.id, calibration);
+          onApply={(changes) => {
+            if (Object.keys(changes).length) store.patch(calibratingRow.id, changes);
             setCalibratingId(undefined);
           }}
         />

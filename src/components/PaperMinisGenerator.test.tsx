@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import PaperMinisGenerator from './PaperMinisGenerator';
 import * as pdf from '@/lib/paper-minis/pdf';
 
@@ -15,10 +15,10 @@ afterEach(() => {
   localStorage.removeItem('pmg-settings');
 });
 
-async function addFront() {
+async function addFront(bytes = png) {
   await act(async () => {
     fireEvent.change(screen.getByLabelText('Добавить изображения', { selector: 'input' }), {
-      target: { files: [new File([png], 'goblin.png', { type: 'image/png' })] },
+      target: { files: [new File([bytes], 'goblin.png', { type: 'image/png' })] },
     });
   });
 }
@@ -318,7 +318,7 @@ test('front height dialog applies pointer calibration and row reset clears it', 
   fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
   const dialog = screen.getByRole('dialog', { name: 'Задать рост лицевой стороны' });
   const artwork = within(dialog).getByTestId('height-calibration-artwork');
-  Object.defineProperty(artwork, 'getBoundingClientRect', {
+  Object.defineProperty(within(dialog).getByRole('img'), 'getBoundingClientRect', {
     configurable: true,
     value: () => ({ left: 0, top: 0, width: 100, height: 100, right: 100, bottom: 100 }),
   });
@@ -344,6 +344,38 @@ test('front height dialog applies pointer calibration and row reset clears it', 
   });
 });
 
+test('pointer calibration measures the visible image inside vertical letterboxing', async () => {
+  // #given
+  const bytes = Buffer.from(png);
+  bytes.writeUInt32BE(400, 16);
+  bytes.writeUInt32BE(100, 20);
+  render(<PaperMinisGenerator />);
+  await addFront(bytes);
+  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
+  const dialog = within(screen.getByRole('dialog'));
+  const area = dialog.getByTestId('height-calibration-artwork');
+  const image = dialog.getByRole('img');
+  // A 400×100 image is centred in a 400×400 area: image top 150, bottom 250.
+  Object.defineProperty(area, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => ({ left: 0, top: 0, width: 400, height: 400, right: 400, bottom: 400 }),
+  });
+  Object.defineProperty(image, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => ({ left: 0, top: 150, width: 400, height: 100, right: 400, bottom: 250 }),
+  });
+  // #when
+  fireEvent.pointerDown(dialog.getByRole('slider', { name: 'Голова' }), {
+    pointerId: 1,
+    clientY: 175,
+  });
+  fireEvent.pointerUp(area, { pointerId: 1, clientY: 175 });
+  fireEvent.click(dialog.getByRole('button', { name: 'Применить' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
+  // #then
+  expect(screen.getByRole('slider', { name: 'Голова' }).getAttribute('aria-valuenow')).toBe('25');
+});
+
 test('front height dialog cancel leaves the row unchanged and keeps a 10 percent line gap', async () => {
   // #given
   render(<PaperMinisGenerator />);
@@ -352,7 +384,7 @@ test('front height dialog cancel leaves the row unchanged and keeps a 10 percent
   fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
   const dialog = screen.getByRole('dialog', { name: 'Задать рост лицевой стороны' });
   const artwork = within(dialog).getByTestId('height-calibration-artwork');
-  Object.defineProperty(artwork, 'getBoundingClientRect', {
+  Object.defineProperty(within(dialog).getByRole('img'), 'getBoundingClientRect', {
     configurable: true,
     value: () => ({ left: 0, top: 0, width: 100, height: 100, right: 100, bottom: 100 }),
   });
@@ -392,7 +424,7 @@ test('height dialog shows side tabs only with a back and applies back calibratio
   const dialog = screen.getByRole('dialog', { name: /Задать рост/ });
   fireEvent.click(within(dialog).getByRole('tab', { name: 'Зад' }));
   const artwork = within(dialog).getByTestId('height-calibration-artwork');
-  Object.defineProperty(artwork, 'getBoundingClientRect', {
+  Object.defineProperty(within(dialog).getByRole('img'), 'getBoundingClientRect', {
     configurable: true,
     value: () => ({ left: 0, top: 0, width: 100, height: 100, right: 100, bottom: 100 }),
   });
@@ -402,9 +434,97 @@ test('height dialog shows side tabs only with a back and applies back calibratio
   });
   fireEvent.pointerUp(artwork, { pointerId: 1, clientY: 25 });
   fireEvent.click(within(dialog).getByRole('button', { name: 'Применить' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
+  const reopened = within(screen.getByRole('dialog'));
+  const front = reopened.getByRole('slider', { name: 'Голова' }).getAttribute('aria-valuenow');
+  fireEvent.click(reopened.getByRole('tab', { name: 'Зад' }));
   // #then
-  expect({ frontOnlyTabs, label: screen.getByText('Рост задан вручную').textContent }).toEqual({
+  expect({
+    frontOnlyTabs,
+    front,
+    back: reopened.getByRole('slider', { name: 'Голова' }).getAttribute('aria-valuenow'),
+  }).toEqual({
     frontOnlyTabs: null,
-    label: 'Рост задан вручную',
+    front: '0',
+    back: '25',
   });
+});
+
+test('Apply saves edits on both sides even when the back tab is visible', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  await addBack();
+  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
+  const dialog = within(screen.getByRole('dialog'));
+  // #when
+  fireEvent.keyDown(dialog.getByRole('slider', { name: 'Голова' }), { key: 'ArrowDown' });
+  fireEvent.click(dialog.getByRole('tab', { name: 'Зад' }));
+  fireEvent.keyDown(dialog.getByRole('slider', { name: 'Ступни' }), { key: 'ArrowUp' });
+  fireEvent.click(dialog.getByRole('button', { name: 'Применить' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
+  const reopened = within(screen.getByRole('dialog'));
+  const values = () =>
+    ['Голова', 'Ступни'].map((name) =>
+      reopened.getByRole('slider', { name }).getAttribute('aria-valuenow'),
+    );
+  const front = values();
+  fireEvent.click(reopened.getByRole('tab', { name: 'Зад' }));
+  // #then
+  expect({ front, back: values() }).toEqual({ front: ['90', '100'], back: ['0', '10'] });
+});
+
+test('opening calibration moves focus inside and Escape cancels and restores the opener', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  const opener = screen.getByRole('button', { name: 'Задать рост' });
+  opener.focus();
+  // #when
+  fireEvent.click(opener);
+  const dialog = screen.getByRole('dialog');
+  await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+  fireEvent.keyDown(screen.getByRole('slider', { name: 'Голова' }), { key: 'ArrowDown' });
+  fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+  // #then
+  await waitFor(() =>
+    expect({
+      open: screen.queryByRole('dialog') !== null,
+      focusRestored: document.activeElement === opener,
+      calibrated: screen.queryByText('Рост задан вручную') !== null,
+    }).toEqual({ open: false, focusRestored: true, calibrated: false }),
+  );
+});
+
+test('Apply after only viewing both tabs keeps both sides uncalibrated', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  await addBack();
+  // #when
+  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Зад' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Применить' }));
+  // #then
+  expect(screen.queryByText('Рост задан вручную')).toBe(null);
+});
+
+test('an untouched back preview and Apply preserve its inherited printed height', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  await addBack();
+  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
+  fireEvent.keyDown(screen.getByRole('slider', { name: 'Голова' }), { key: 'ArrowDown' });
+  // #when
+  fireEvent.click(screen.getByRole('tab', { name: 'Зад' }));
+  const before = screen.getByText(/Рост 35 мм ·/).textContent;
+  fireEvent.click(screen.getByRole('button', { name: 'Применить' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Зад' }));
+  // #then
+  expect([before, screen.getByText(/Рост 35 мм ·/).textContent]).toEqual([
+    'Рост 35 мм · напечатается 53 мм',
+    'Рост 35 мм · напечатается 53 мм',
+  ]);
 });

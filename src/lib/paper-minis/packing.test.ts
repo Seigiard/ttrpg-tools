@@ -153,7 +153,7 @@ t('back calibration scales the back artwork height from its own marked creature 
   );
 });
 
-t('uncalibrated back on a calibrated front matches the front printed height', () => {
+t('an inherited square back shrinks both faces together at its width cap', () => {
   // #given
   const entries = [
     entry({
@@ -169,8 +169,47 @@ t('uncalibrated back on a calibrated front matches the front printed height', ()
     .rows[0].items[0];
   // #then
   assert.deepEqual(
-    [mini.imageHeightMm, mini.back?.imageWidthMm, mini.back?.imageHeightMm],
-    [70, 70, 70],
+    [
+      mini.imageWidthMm,
+      mini.imageHeightMm,
+      mini.back?.imageWidthMm,
+      mini.back?.imageHeightMm,
+      mini.fitLimits,
+    ],
+    [26.25, 52.5, 52.5, 52.5, ['width']],
+  );
+});
+
+t('an inherited wide back stays printable with matching heights and unchanged proportions', () => {
+  // #given
+  const entries = [
+    entry({
+      naturalWidth: 50,
+      naturalHeight: 100,
+      frontCalibration: { head: 0.25, feet: 0.75 },
+      backNaturalWidth: 300,
+      backNaturalHeight: 100,
+    }),
+  ];
+  // #when
+  const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false });
+  const mini = result.pages[0]?.rows[0].items[0];
+  // #then
+  assert.deepEqual(
+    {
+      count: result.miniCount,
+      skipped: result.skipped,
+      front: [mini?.imageWidthMm, mini?.imageHeightMm],
+      back: mini?.back,
+      warnings: result.limitedEntryFitLimits,
+    },
+    {
+      count: 1,
+      skipped: [],
+      front: [8.75, 17.5],
+      back: { imageWidthMm: 52.5, imageHeightMm: 17.5, imageOffsetXMm: 2 },
+      warnings: [{ entryIndex: 0, limits: ['width'] }],
+    },
   );
 });
 
