@@ -4,11 +4,16 @@ import { Button } from '@/components/ui/button';
 import { createPaperMinisStore } from '@/stores/paper-minis-store';
 import { isSupportedArtwork } from '@/lib/paper-minis/artwork';
 import { generatePDF, buildFilename } from '@/lib/paper-minis/pdf';
+import { MARGIN_MM, PAGE_SIZES_MM } from '@/lib/paper-minis/packing';
 import {
   DEFAULT_CUSTOM_HEIGHT_MM,
   DEFAULT_CUSTOM_WIDTH_MM,
   HEIGHT_SLOT_ORDER,
+  type FigureFitLimit,
+  fitFigure,
   resolveFigureHeightMm,
+  resolveSizeDimensionsMm,
+  resolveTabHeightMm,
   slotLabel,
   slotGeometryLabel,
   slotName,
@@ -43,6 +48,17 @@ function clamp(v: number, lo: number, hi: number) {
 
 function lineStyle(value: number) {
   return { top: `${value * 100}%` };
+}
+
+const fitLimitLabels: Record<FigureFitLimit, string> = {
+  height: 'лимит высоты 2×',
+  width: 'лимит ширины',
+  page: 'размер листа',
+};
+
+function fitLimitWarning(limits: FigureFitLimit[]) {
+  if (!limits.length) return undefined;
+  return `Миниатюра уменьшена: ${limits.map((limit) => fitLimitLabels[limit]).join(', ')}.`;
 }
 
 function SizeOptions({ custom = false }: { custom?: boolean }) {
@@ -164,6 +180,7 @@ function HeightCalibrationDialog({
   rowLabel,
   slotHeightMm,
   initial,
+  previewLimits,
   onApply,
   onCancel,
 }: {
@@ -171,6 +188,7 @@ function HeightCalibrationDialog({
   rowLabel: string;
   slotHeightMm: number;
   initial?: HeightCalibration;
+  previewLimits: (calibration: HeightCalibration) => FigureFitLimit[];
   onApply: (calibration: HeightCalibration) => void;
   onCancel: () => void;
 }) {
@@ -179,6 +197,7 @@ function HeightCalibrationDialog({
   const dragging = useRef<'head' | 'feet' | null>(null);
   const [lines, setLines] = useState<HeightCalibration>(initial ?? { head: 0, feet: 1 });
   const printedHeightMm = slotHeightMm / Math.max(lines.feet - lines.head, minCalibrationGap);
+  const warning = fitLimitWarning(previewLimits(lines));
 
   function setLineFromClientY(which: 'head' | 'feet', clientY: number) {
     const box = artworkRef.current?.getBoundingClientRect();
@@ -208,6 +227,11 @@ function HeightCalibrationDialog({
             Рост {Math.round(slotHeightMm)} мм · напечатается {Math.round(printedHeightMm)} мм
           </p>
         </div>
+        {warning && (
+          <p role="status" className="mt-3 border-l-2 border-warning pl-3 text-sm text-warning">
+            {warning}
+          </p>
+        )}
         <div
           ref={artworkRef}
           data-testid="height-calibration-artwork"
@@ -275,6 +299,20 @@ export default function PaperMinisGenerator() {
   const marginValid =
     margin.trim() !== '' && Number.isFinite(Number(margin)) && Number(margin) >= 0;
   const calibratingRow = rows.find((row) => row.id === calibratingId && row.artwork);
+
+  function previewFitLimits(row: typeof calibratingRow, calibration: HeightCalibration) {
+    if (!row?.artwork) return [];
+    const tabHeightMm = resolveTabHeightMm(row);
+    const usableHeightMm = PAGE_SIZES_MM[settings.pageSize].h - MARGIN_MM * 2;
+    const maxImageHeightMm = Math.max(0, (usableHeightMm - settings.marginMm * 2 - tabHeightMm * 4) / 2);
+    return fitFigure(
+      resolveSizeDimensionsMm(row),
+      row.artwork.width,
+      row.artwork.height,
+      calibration,
+      maxImageHeightMm,
+    ).limits;
+  }
 
   useEffect(() => {
     store.loadSettings();
@@ -682,6 +720,20 @@ export default function PaperMinisGenerator() {
                       PDF.
                     </p>
                   )}
+                  {fitLimitWarning(
+                    packed.limitedEntryFitLimits.find((warning) => warning.entryIndex === index)
+                      ?.limits ?? [],
+                  ) && (
+                    <p
+                      role="status"
+                      className="mt-3 border-l-2 border-warning pl-3 text-sm text-warning"
+                    >
+                      {fitLimitWarning(
+                        packed.limitedEntryFitLimits.find((warning) => warning.entryIndex === index)
+                          ?.limits ?? [],
+                      )}
+                    </p>
+                  )}
                   {[row.frontError, row.normalizationWarning, row.backWarning]
                     .filter(Boolean)
                     .map((warning, i) => (
@@ -759,6 +811,7 @@ export default function PaperMinisGenerator() {
           rowLabel={calibratingRow.name || 'Миниатюра'}
           slotHeightMm={resolveFigureHeightMm(calibratingRow)}
           initial={calibratingRow.frontCalibration}
+          previewLimits={(calibration) => previewFitLimits(calibratingRow, calibration)}
           onCancel={() => setCalibratingId(undefined)}
           onApply={(calibration) => {
             store.setFrontCalibration(calibratingRow.id, calibration);

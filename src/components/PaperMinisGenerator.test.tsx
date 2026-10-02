@@ -319,10 +319,12 @@ test('front height dialog applies pointer calibration and row reset clears it', 
   fireEvent.pointerUp(artwork, { pointerId: 1, clientY: 50 });
   fireEvent.click(within(dialog).getByRole('button', { name: 'Применить' }));
   const label = screen.getByText('Рост задан вручную');
+  const warning = screen.getByText('Миниатюра уменьшена: лимит ширины.');
   fireEvent.click(screen.getByRole('button', { name: 'Сбросить рост' }));
   // #then
-  expect({ label: label.textContent, reset: screen.queryByText('Рост задан вручную') }).toEqual({
+  expect({ label: label.textContent, warning: warning.textContent, reset: screen.queryByText('Рост задан вручную') }).toEqual({
     label: 'Рост задан вручную',
+    warning: 'Миниатюра уменьшена: лимит ширины.',
     reset: null,
   });
 });
@@ -346,13 +348,18 @@ test('front height dialog cancel leaves the row unchanged and keeps a 10 percent
   fireEvent.pointerUp(artwork, { pointerId: 1, clientY: 96 });
   const positions = [head.getAttribute('aria-valuenow'), feet.getAttribute('aria-valuenow')];
   const readout = within(dialog).getByText('Рост 35 мм · напечатается 350 мм');
+  const warning = within(dialog).getByText('Миниатюра уменьшена: лимит высоты 2×, лимит ширины.');
   fireEvent.click(within(dialog).getByRole('button', { name: 'Отмена' }));
   // #then
-  expect({ positions, readout: readout.textContent, label: screen.queryByText('Рост задан вручную') }).toEqual(
-    {
-      positions: ['90', '100'],
-      readout: 'Рост 35 мм · напечатается 350 мм',
-      label: null,
-    },
-  );
+  expect({
+    positions,
+    readout: readout.textContent,
+    warning: warning.textContent,
+    label: screen.queryByText('Рост задан вручную'),
+  }).toEqual({
+    positions: ['90', '100'],
+    readout: 'Рост 35 мм · напечатается 350 мм',
+    warning: 'Миниатюра уменьшена: лимит высоты 2×, лимит ширины.',
+    label: null,
+  });
 });

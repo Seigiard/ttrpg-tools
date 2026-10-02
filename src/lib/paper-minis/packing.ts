@@ -1,5 +1,6 @@
 import type { Entry, MiniSize, PackingEntry } from './types';
 import {
+  type FigureFitLimit,
   fitFigure,
   hasPackableDimensions,
   resolveSizeDimensionsMm,
@@ -42,6 +43,7 @@ export type PackedMini = {
   // images, so both halves fold to the same length and both tabs meet the floor.
   faceHeightMm: number;
   back?: BackFace; // present only for an entry with back artwork
+  fitLimits: FigureFitLimit[];
   totalHeightMm: number;
   label?: string;
 };
@@ -66,6 +68,7 @@ export type PackResult = {
   miniCount: number; // minis actually placed (what will print)
   skipped: SkippedMini[];
   oversizedEntryIndices: number[]; // distinct entries with >=1 skipped mini
+  limitedEntryFitLimits: { entryIndex: number; limits: FigureFitLimit[] }[];
 };
 
 export type PackOptions = {
@@ -125,16 +128,25 @@ export function packMinis(entries: PackingEntry[], opts: PackOptions): PackResul
     ) {
       return; // not packable yet
     }
-    const { imageWidthMm, imageHeightMm } = fitFigure(
+    const tabHMm = resolveTabHeightMm(e);
+    const maxImageHeightMm = e.frontCalibration
+      ? Math.max(0, (usableHmm - marginMm * 2 - tabHMm * 4) / 2)
+      : undefined;
+    const { imageWidthMm, imageHeightMm, limits } = fitFigure(
       dimensions,
       e.naturalWidth,
       e.naturalHeight,
       e.frontCalibration,
+      maxImageHeightMm,
     );
-    const backFit =
+    const rawBackFit =
       e.backNaturalWidth && e.backNaturalHeight
         ? fitFigure(dimensions, e.backNaturalWidth, e.backNaturalHeight)
         : undefined;
+    const backFit = rawBackFit && {
+      imageWidthMm: rawBackFit.imageWidthMm,
+      imageHeightMm: rawBackFit.imageHeightMm,
+    };
     // A figure may overhang its base, so the reserved column is the widest of
     // base and faces.
     const contentWidthMm = Math.max(baseWidthMm, imageWidthMm, backFit?.imageWidthMm ?? 0);
@@ -150,7 +162,6 @@ export function packMinis(entries: PackingEntry[], opts: PackOptions): PackResul
     // derives the back badge's own offset, inside the rotated frame, from this
     // rule — change it here and change it there.
     const baseOffsetXMm = marginMm + (contentWidthMm - baseWidthMm) / 2;
-    const tabHMm = resolveTabHeightMm(e);
     // Face on face, a margin either side of the fold, a tab at each end and
     // the floor strip, twice a tab, under the front one.
     const totalHeightMm = faceHeightMm * 2 + marginMm * 2 + tabHMm * 4;
@@ -169,6 +180,7 @@ export function packMinis(entries: PackingEntry[], opts: PackOptions): PackResul
         imageOffsetXMm,
         faceHeightMm,
         ...(back && { back }),
+        fitLimits: limits,
         totalHeightMm,
         label: opts.numberDuplicates ? String(i + 1) : undefined,
       });
@@ -233,5 +245,17 @@ export function packMinis(entries: PackingEntry[], opts: PackOptions): PackResul
     miniCount: placed,
     skipped,
     oversizedEntryIndices: [...oversized],
+    limitedEntryFitLimits: [...new Set(minis.map((mini) => mini.entryIndex))]
+      .map((entryIndex) => ({
+        entryIndex,
+        limits: [
+          ...new Set(
+            minis
+              .filter((mini) => mini.entryIndex === entryIndex)
+              .flatMap((mini) => mini.fitLimits),
+          ),
+        ],
+      }))
+      .filter(({ limits }) => limits.length > 0),
   };
 }
