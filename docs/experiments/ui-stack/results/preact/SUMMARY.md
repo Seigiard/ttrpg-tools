@@ -7,11 +7,11 @@ HTML is read from dist. Linked scripts, modulepreload links, stylesheets, Astro 
 | Route | External JS gzip | Lazy JS gzip | Inline JS gzip | CSS gzip | HTML gzip | Requests |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | / | 0 | 0 | 0 | 8034 | 1140 | 2 |
-| /mausritter/encounters | 2019 | 0 | 1902 | 8034 | 5225 | 4 |
-| /mausritter/locations | 3973 | 0 | 1902 | 8034 | 7938 | 4 |
-| /mausritter/weather | 2305 | 0 | 1902 | 8034 | 5642 | 4 |
-| /paper-minis | 194877 | 0 | 1902 | 8034 | 5319 | 4 |
-| /the-black-hack/prices | 3912 | 0 | 1902 | 8034 | 6180 | 4 |
+| /mausritter/encounters | 21413 | 0 | 1902 | 8034 | 5225 | 11 |
+| /mausritter/locations | 24368 | 0 | 1902 | 8034 | 7938 | 11 |
+| /mausritter/weather | 23217 | 0 | 1902 | 8034 | 5642 | 12 |
+| /paper-minis | 213012 | 0 | 1902 | 8034 | 5319 | 9 |
+| /the-black-hack/prices | 23852 | 0 | 1902 | 8034 | 6180 | 11 |
 
 
 See network.md, timings.md, versions.json and screenshots/.

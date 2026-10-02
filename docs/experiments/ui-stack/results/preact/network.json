@@ -241,11 +241,11 @@
       "transferredBytes": 1507
     },
     "byType": {
-      "document": {
+      "stylesheet": {
         "requests": 1,
         "transferredBytes": 127
       },
-      "stylesheet": {
+      "document": {
         "requests": 1,
         "transferredBytes": 127
       },

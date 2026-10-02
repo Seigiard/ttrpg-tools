@@ -15,4 +15,4 @@ Transferred bytes use Chrome DevTools Protocol Network.loadingFinished encodedDa
 | /the-black-hack/prices/ | cold | 41859 | 11 | document: 6446 B / 1<br>stylesheet: 8320 B / 1<br>script: 27093 B / 9 |
 | /the-black-hack/prices/ | warm | 1865 | 11 | document: 127 B / 1<br>stylesheet: 127 B / 1<br>script: 1611 B / 9 |
 | /paper-minis/ | cold | 228821 | 9 | document: 5582 B / 1<br>stylesheet: 8320 B / 1<br>script: 214919 B / 7 |
-| /paper-minis/ | warm | 1507 | 9 | document: 127 B / 1<br>stylesheet: 127 B / 1<br>script: 1253 B / 7 |
+| /paper-minis/ | warm | 1507 | 9 | stylesheet: 127 B / 1<br>document: 127 B / 1<br>script: 1253 B / 7 |
