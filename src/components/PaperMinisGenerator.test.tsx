@@ -23,6 +23,14 @@ async function addFront() {
   });
 }
 
+async function addBack() {
+  await act(async () => {
+    fireEvent.change(screen.getByLabelText('Оборот: отражение лицевой стороны', { selector: 'input' }), {
+      target: { files: [new File([png], 'back.png', { type: 'image/png' })] },
+    });
+  });
+}
+
 test('clearing copies keeps the field empty until a new count is entered', async () => {
   // #given
   render(<PaperMinisGenerator />);
@@ -355,4 +363,34 @@ test('front height dialog cancel leaves the row unchanged and keeps a 10 percent
       label: null,
     },
   );
+});
+
+test('height dialog shows side tabs only with a back and applies back calibration separately', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  // #when
+  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
+  const frontOnlyTabs = screen.queryByRole('tab', { name: 'Перед' });
+  fireEvent.click(screen.getByRole('button', { name: 'Отмена' }));
+  await addBack();
+  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
+  const dialog = screen.getByRole('dialog', { name: /Задать рост/ });
+  fireEvent.click(within(dialog).getByRole('tab', { name: 'Зад' }));
+  const artwork = within(dialog).getByTestId('height-calibration-artwork');
+  Object.defineProperty(artwork, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => ({ left: 0, top: 0, width: 100, height: 100, right: 100, bottom: 100 }),
+  });
+  fireEvent.pointerDown(within(dialog).getByRole('slider', { name: 'Head' }), {
+    pointerId: 1,
+    clientY: 25,
+  });
+  fireEvent.pointerUp(artwork, { pointerId: 1, clientY: 25 });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Применить' }));
+  // #then
+  expect({ frontOnlyTabs, label: screen.getByText('Рост задан вручную').textContent }).toEqual({
+    frontOnlyTabs: null,
+    label: 'Рост задан вручную',
+  });
 });

@@ -161,24 +161,34 @@ function ArtworkSlot({
 
 function HeightCalibrationDialog({
   artwork,
+  backArtwork,
   rowLabel,
   slotHeightMm,
   initial,
+  initialBack,
   onApply,
   onCancel,
 }: {
   artwork: PreparedArtwork;
+  backArtwork?: PreparedArtwork | null;
   rowLabel: string;
   slotHeightMm: number;
   initial?: HeightCalibration;
-  onApply: (calibration: HeightCalibration) => void;
+  initialBack?: HeightCalibration;
+  onApply: (side: 'front' | 'back', calibration: HeightCalibration) => void;
   onCancel: () => void;
 }) {
-  const url = useArtworkUrl(artwork);
+  const [side, setSide] = useState<'front' | 'back'>('front');
+  const currentArtwork = side === 'front' ? artwork : (backArtwork ?? artwork);
+  const url = useArtworkUrl(currentArtwork);
   const artworkRef = useRef<HTMLDivElement>(null);
   const dragging = useRef<'head' | 'feet' | null>(null);
-  const [lines, setLines] = useState<HeightCalibration>(initial ?? { head: 0, feet: 1 });
+  const [frontLines, setFrontLines] = useState<HeightCalibration>(initial ?? { head: 0, feet: 1 });
+  const [backLines, setBackLines] = useState<HeightCalibration>(initialBack ?? { head: 0, feet: 1 });
+  const lines = side === 'front' ? frontLines : backLines;
+  const setLines = side === 'front' ? setFrontLines : setBackLines;
   const printedHeightMm = slotHeightMm / Math.max(lines.feet - lines.head, minCalibrationGap);
+  const hasBack = !!backArtwork;
 
   function setLineFromClientY(which: 'head' | 'feet', clientY: number) {
     const box = artworkRef.current?.getBoundingClientRect();
@@ -196,7 +206,7 @@ function HeightCalibrationDialog({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Задать рост лицевой стороны"
+        aria-label={side === 'front' ? 'Задать рост лицевой стороны' : 'Задать рост оборота'}
         className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-xl border border-border bg-surface p-4 shadow-xl"
       >
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -208,6 +218,22 @@ function HeightCalibrationDialog({
             Рост {Math.round(slotHeightMm)} мм · напечатается {Math.round(printedHeightMm)} мм
           </p>
         </div>
+        {hasBack && (
+          <div role="tablist" aria-label="Сторона" className="mt-4 flex gap-2">
+            {(['front', 'back'] as const).map((key) => (
+              <Button
+                key={key}
+                role="tab"
+                variant={side === key ? 'default' : 'outline'}
+                aria-selected={side === key}
+                className="min-h-11"
+                onClick={() => setSide(key)}
+              >
+                {key === 'front' ? 'Перед' : 'Зад'}
+              </Button>
+            ))}
+          </div>
+        )}
         <div
           ref={artworkRef}
           data-testid="height-calibration-artwork"
@@ -220,7 +246,13 @@ function HeightCalibrationDialog({
             event.currentTarget.releasePointerCapture?.(event.pointerId);
           }}
         >
-          {url && <img src={url} alt="Лицевая сторона" className="h-full w-full object-contain" />}
+          {url && (
+            <img
+              src={url}
+              alt={side === 'front' ? 'Лицевая сторона' : 'Оборот'}
+              className="h-full w-full object-contain"
+            />
+          )}
           {(['head', 'feet'] as const).map((key) => (
             <button
               key={key}
@@ -248,7 +280,7 @@ function HeightCalibrationDialog({
           <Button variant="ghost" className="min-h-11" onClick={onCancel}>
             Отмена
           </Button>
-          <Button className="min-h-11" onClick={() => onApply(lines)}>
+          <Button className="min-h-11" onClick={() => onApply(side, lines)}>
             Применить
           </Button>
         </div>
@@ -559,6 +591,7 @@ export default function PaperMinisGenerator() {
                     <div className="space-y-2">
                       <ArtworkSlot
                         artwork={row.backArtwork}
+                        calibration={row.backCalibration}
                         label={
                           row.backImage
                             ? `Оборот: ${row.backImage.name}`
@@ -592,17 +625,20 @@ export default function PaperMinisGenerator() {
                         >
                           Задать рост
                         </Button>
-                        {row.frontCalibration && (
+                        {(row.frontCalibration || row.backCalibration) && (
                           <Button
                             variant="ghost"
                             className="min-h-11"
-                            onClick={() => store.clearFrontCalibration(row.id)}
+                            onClick={() => {
+                              store.clearFrontCalibration(row.id);
+                              store.clearBackCalibration(row.id);
+                            }}
                           >
                             Сбросить рост
                           </Button>
                         )}
                       </div>
-                      {row.frontCalibration && (
+                      {(row.frontCalibration || row.backCalibration) && (
                         <p className="text-sm font-medium text-text">Рост задан вручную</p>
                       )}
                     </div>
@@ -756,12 +792,15 @@ export default function PaperMinisGenerator() {
       {calibratingRow?.artwork && (
         <HeightCalibrationDialog
           artwork={calibratingRow.artwork}
+          backArtwork={calibratingRow.backArtwork}
           rowLabel={calibratingRow.name || 'Миниатюра'}
           slotHeightMm={resolveFigureHeightMm(calibratingRow)}
           initial={calibratingRow.frontCalibration}
+          initialBack={calibratingRow.backCalibration}
           onCancel={() => setCalibratingId(undefined)}
-          onApply={(calibration) => {
-            store.setFrontCalibration(calibratingRow.id, calibration);
+          onApply={(side, calibration) => {
+            if (side === 'front') store.setFrontCalibration(calibratingRow.id, calibration);
+            else store.setBackCalibration(calibratingRow.id, calibration);
             setCalibratingId(undefined);
           }}
         />

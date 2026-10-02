@@ -89,6 +89,7 @@ export function packEntries(entries: Entry[], opts: PackOptions): PackResult {
       customHeightMm: entry.customHeightMm,
       count: entry.count,
       frontCalibration: entry.frontCalibration,
+      backCalibration: entry.backCalibration,
       naturalWidth: isBackArtworkLoading(entry) ? undefined : entry.artwork?.width,
       naturalHeight: isBackArtworkLoading(entry) ? undefined : entry.artwork?.height,
       backNaturalWidth: entry.backArtwork?.width,
@@ -133,7 +134,14 @@ export function packMinis(entries: PackingEntry[], opts: PackOptions): PackResul
     );
     const backFit =
       e.backNaturalWidth && e.backNaturalHeight
-        ? fitFigure(dimensions, e.backNaturalWidth, e.backNaturalHeight)
+        ? e.backCalibration
+          ? fitFigure(dimensions, e.backNaturalWidth, e.backNaturalHeight, e.backCalibration)
+          : e.frontCalibration
+            ? {
+                imageHeightMm,
+                imageWidthMm: (e.backNaturalWidth / e.backNaturalHeight) * imageHeightMm,
+              }
+            : fitFigure(dimensions, e.backNaturalWidth, e.backNaturalHeight)
         : undefined;
     // A figure may overhang its base, so the reserved column is the widest of
     // base and faces.

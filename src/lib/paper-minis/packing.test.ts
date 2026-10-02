@@ -70,6 +70,42 @@ t('front calibration uses a custom figure height as its target', () => {
   assert.deepEqual([mini.imageWidthMm, mini.imageHeightMm], [30, 60]);
 });
 
+t('back calibration scales the back artwork height from its own marked creature height', () => {
+  // #given
+  const entries = [
+    entry({
+      naturalWidth: 100,
+      naturalHeight: 100,
+      backNaturalWidth: 50,
+      backNaturalHeight: 100,
+      backCalibration: { head: 0.25, feet: 0.75 },
+    }),
+  ];
+  // #when
+  const mini = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 }).pages[0]
+    .rows[0].items[0];
+  // #then
+  assert.deepEqual([mini.imageHeightMm, mini.back?.imageWidthMm, mini.back?.imageHeightMm], [35, 35, 70]);
+});
+
+t('uncalibrated back on a calibrated front matches the front printed height', () => {
+  // #given
+  const entries = [
+    entry({
+      naturalWidth: 50,
+      naturalHeight: 100,
+      frontCalibration: { head: 0.25, feet: 0.75 },
+      backNaturalWidth: 100,
+      backNaturalHeight: 100,
+    }),
+  ];
+  // #when
+  const mini = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 }).pages[0]
+    .rows[0].items[0];
+  // #then
+  assert.deepEqual([mini.imageHeightMm, mini.back?.imageWidthMm, mini.back?.imageHeightMm], [70, 70, 70]);
+});
+
 t('calibrated slots keep their height order with the same marked lines', () => {
   // #given
   const shared = {
