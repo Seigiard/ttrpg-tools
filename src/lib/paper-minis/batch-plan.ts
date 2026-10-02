@@ -1,3 +1,4 @@
+import { calibrationGap } from './calibration';
 import { HEIGHT_SLOT_ORDER } from './sizes';
 import type { HeightCalibration, HeightSlot, MiniSize } from './types';
 
@@ -23,6 +24,7 @@ type ParsedFile = {
   customWidthMm?: number;
   customHeightMm?: number;
   count?: number;
+  calibration?: HeightCalibration;
   name: string;
   key: string;
 };
@@ -58,6 +60,8 @@ export function planBatch(files: readonly File[]): PlannedRow[] {
       const customHeightMm = front.customHeightMm ?? back?.customHeightMm;
       if (customHeightMm !== undefined) row.customHeightMm = customHeightMm;
       if (front.count !== undefined) row.count = front.count;
+      const calibration = front.calibration ?? back?.calibration;
+      if (calibration) row.calibration = calibration;
       return row;
     });
 }
@@ -78,7 +82,8 @@ function parseFile(file: File): ParsedFile {
   const tokens = stem(file.name)
     .split(separators)
     .filter((token) => token !== '');
-  const { nameTokens, side, heightSlot, customWidthMm, customHeightMm, count } = readMarkers(tokens);
+  const { nameTokens, side, heightSlot, customWidthMm, customHeightMm, count, calibration } =
+    readMarkers(tokens);
   const raw = nameTokens.join(' ');
   return {
     file,
@@ -87,6 +92,7 @@ function parseFile(file: File): ParsedFile {
     customWidthMm,
     customHeightMm,
     count,
+    calibration,
     // An empty name stays empty: the view owns the "Миниатюра N" fallback.
     name: raw.charAt(0).toUpperCase() + raw.slice(1),
     key: raw.toLowerCase(),
@@ -101,6 +107,7 @@ function readMarkers(tokens: readonly string[]) {
   let customWidthMm: number | undefined;
   let customHeightMm: number | undefined;
   let count: number | undefined;
+  let calibration: HeightCalibration | undefined;
   while (end > 0) {
     const token = tokens[end - 1].toLowerCase();
     if (count === undefined && /^x\d+$/i.test(token)) {
@@ -108,6 +115,14 @@ function readMarkers(tokens: readonly string[]) {
       if (parsed !== undefined) count = parsed;
       end -= 1;
       continue;
+    }
+    if (calibration === undefined && end > 1) {
+      const parsed = parseCalibration(tokens[end - 2], token);
+      if (parsed !== undefined) {
+        if (parsed) calibration = parsed;
+        end -= 2;
+        continue;
+      }
     }
     if (side === undefined && (token === 'front' || token === 'back')) {
       side = token;
@@ -143,6 +158,7 @@ function readMarkers(tokens: readonly string[]) {
     customWidthMm,
     customHeightMm,
     count,
+    calibration,
   };
 }
 
@@ -162,6 +178,14 @@ function parseCustomSize(label: string, dimensions: string) {
   if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0)
     return { valid: false } as const;
   return { valid: true, width, height } as const;
+}
+
+function parseCalibration(headToken: string, feetToken: string): HeightCalibration | null | undefined {
+  const headMatch = /^h(\d{3})$/i.exec(headToken);
+  const feetMatch = /^f(\d{3})$/i.exec(feetToken);
+  if (!headMatch || !feetMatch) return undefined;
+  const calibration = { head: Number(headMatch[1]) / 1000, feet: Number(feetMatch[1]) / 1000 };
+  return calibrationGap(calibration) === undefined ? null : calibration;
 }
 
 function stem(fileName: string) {

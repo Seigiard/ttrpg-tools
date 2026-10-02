@@ -124,6 +124,14 @@ function exportCount(row: MiniRow): string {
   return row.count > 1 ? `-x${row.count}` : '';
 }
 
+function exportCalibration(row: MiniRow): string {
+  const calibration = row.calibration;
+  if (!calibration || calibrationGap(calibration) === undefined) return '';
+  const head = String(Math.round(calibration.head * 1000)).padStart(3, '0');
+  const feet = String(Math.round(calibration.feet * 1000)).padStart(3, '0');
+  return `-h${head}-f${feet}`;
+}
+
 function fileExtension(name: string): string {
   const dot = name.lastIndexOf('.');
   return dot < 0 ? '' : name.slice(dot + 1).toLowerCase();
@@ -688,15 +696,16 @@ export function createPaperMinisStore({
         const base = exportName(row, index);
         const size = exportSize(row);
         const count = exportCount(row);
+        const calibration = exportCalibration(row);
         let suffix = 1;
-        let collisionNames = sides.map((side) => `${base}-${size}-${side}.png`);
-        let names = sides.map((side) => `${base}-${size}-${side}${count}.png`);
-        while (collisionNames.some((name) => used.has(name))) {
+        let collisionKeys = sides.map((side) => `${base}-${size}-${side}.png`);
+        let names = sides.map((side) => `${base}-${size}-${side}${count}${calibration}.png`);
+        while (collisionKeys.some((name) => used.has(name))) {
           suffix += 1;
-          collisionNames = sides.map((side) => `${base}-${suffix}-${size}-${side}.png`);
-          names = sides.map((side) => `${base}-${suffix}-${size}-${side}${count}.png`);
+          collisionKeys = sides.map((side) => `${base}-${suffix}-${size}-${side}.png`);
+          names = sides.map((side) => `${base}-${suffix}-${size}-${side}${count}${calibration}.png`);
         }
-        for (const name of collisionNames) used.add(name);
+        for (const name of collisionKeys) used.add(name);
         entries[names[0]] = await artworkAsPng(row.artwork!);
         if (row.backArtwork) entries[names[1]] = await artworkAsPng(row.backArtwork);
       }

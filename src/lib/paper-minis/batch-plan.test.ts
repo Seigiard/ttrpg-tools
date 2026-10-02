@@ -427,3 +427,39 @@ test('a back is never attached to a front of another size', () => {
   });
   expect(clashes).toEqual([]);
 });
+
+test('calibration markers are read from the front side', () => {
+  const [row] = planBatch([file('goblin-medium-front-h200-f800.png')]);
+
+  expect(row.calibration).toEqual({ head: 0.2, feet: 0.8 });
+});
+
+test('front calibration wins over back calibration', () => {
+  const [row] = planBatch([
+    file('goblin-medium-front-h200-f800.png'),
+    file('goblin-medium-back-h300-f900.png'),
+  ]);
+
+  expect(row.calibration).toEqual({ head: 0.2, feet: 0.8 });
+});
+
+test('back-only calibration is used when the front has none', () => {
+  const [row] = planBatch([file('goblin-medium-front.png'), file('goblin-medium-back-h300-f900.png')]);
+
+  expect(row.calibration).toEqual({ head: 0.3, feet: 0.9 });
+});
+
+test.each(['h300-f300', 'h800-f200', 'h900-f999', 'h400-f450'])(
+  '%s is ignored as an invalid calibration marker',
+  (marker) => {
+    const [row] = planBatch([file(`goblin-medium-front-${marker}.png`)]);
+
+    expect([row.name, row.calibration]).toEqual(['Goblin', undefined]);
+  },
+);
+
+test('different calibration markers do not stop front and back pairing', () => {
+  expect(rows('goblin-medium-front-h200-f800.png', 'goblin-medium-back-h300-f900.png')).toEqual([
+    ['Goblin', 'goblin-medium-front-h200-f800.png', 'goblin-medium-back-h300-f900.png'],
+  ]);
+});

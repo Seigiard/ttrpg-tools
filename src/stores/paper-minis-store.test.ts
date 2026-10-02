@@ -272,13 +272,14 @@ test('download renders the layout shown by the counter and returns the renderer 
   });
 });
 
-test('export zip restores names, sizes, counts and sides through batch ingest', async () => {
+test('export zip restores names, sizes, counts, calibration and sides through batch ingest', async () => {
   // #given
   const store = setup();
   const goblin = store.addBlank({ name: 'Goblin', heightSlot: 'small' })!;
   store.setCount(goblin, '2');
   await store.setImage(goblin, artworkFile(10, 20, 'goblin-front.png'));
   await store.setImage(goblin, artworkFile(11, 20, 'goblin-back.png'), true);
+  calibrate(store, goblin, { head: 0.2, feet: 0.8 });
   const empty = store.addBlank({ name: '', heightSlot: 'large' })!;
   await store.setImage(empty, artworkFile(12, 20, 'empty.png'));
   const custom = store.addBlank({ name: 'Dragon', heightSlot: 'custom' })!;
@@ -309,6 +310,7 @@ test('export zip restores names, sizes, counts and sides through batch ingest', 
       count: row.count,
       customWidthMm: row.customWidthMm,
       customHeightMm: row.customHeightMm,
+      calibration: row.calibration,
       front: row.image?.name,
       back: row.backImage?.name,
       inputs: restored.$inputs.get().rows[row.id],
@@ -318,8 +320,8 @@ test('export zip restores names, sizes, counts and sides through batch ingest', 
       'Dragon-custom-30x45-front-x3.png',
       'Goblin-2-small-back.png',
       'Goblin-2-small-front.png',
-      'Goblin-small-back-x2.png',
-      'Goblin-small-front-x2.png',
+      'Goblin-small-back-x2-h200-f800.png',
+      'Goblin-small-front-x2-h200-f800.png',
       'mini-2-large-front.png',
     ],
     message: 'Архив готов.',
@@ -330,8 +332,9 @@ test('export zip restores names, sizes, counts and sides through batch ingest', 
         count: 2,
         customWidthMm: undefined,
         customHeightMm: undefined,
-        front: 'Goblin-small-front-x2.png',
-        back: 'Goblin-small-back-x2.png',
+        calibration: { head: 0.2, feet: 0.8 },
+        front: 'Goblin-small-front-x2-h200-f800.png',
+        back: 'Goblin-small-back-x2-h200-f800.png',
         inputs: {
           count: { text: '2', valid: true },
           customWidthMm: { text: '', valid: false },
@@ -344,6 +347,7 @@ test('export zip restores names, sizes, counts and sides through batch ingest', 
         count: 1,
         customWidthMm: undefined,
         customHeightMm: undefined,
+        calibration: undefined,
         front: 'mini-2-large-front.png',
         back: undefined,
         inputs: {
@@ -358,6 +362,7 @@ test('export zip restores names, sizes, counts and sides through batch ingest', 
         count: 3,
         customWidthMm: 30,
         customHeightMm: 45,
+        calibration: undefined,
         front: 'Dragon-custom-30x45-front-x3.png',
         back: undefined,
         inputs: {
@@ -372,6 +377,7 @@ test('export zip restores names, sizes, counts and sides through batch ingest', 
         count: 1,
         customWidthMm: undefined,
         customHeightMm: undefined,
+        calibration: undefined,
         front: 'Goblin-2-small-front.png',
         back: 'Goblin-2-small-back.png',
         inputs: {
