@@ -167,7 +167,7 @@ To keep React: close both PRs. The harness commits are still useful on their own
 
 **Preact.** On this project it gives the smallest payload: about 22–24 KB of JS per generator page, against 34–37 KB for Svelte and 87–96 KB for React. It changes the fewest files and keeps the authoring model and the test tooling the codebase already uses. The follow-up change came out identical in shape to React.
 
-What it costs: owning Tabs and Dialog (about 220 extra lines), longer component tests, and a dialog that is not `inert` like a native one. Switching that Dialog to `<dialog>.showModal()`, as Svelte did, is the first follow-up worth doing.
+What it costs: owning Tabs and Dialog (about 220 extra lines), longer component tests, and a dialog that is not `inert` like a native one. Switching that Dialog to `<dialog>.showModal()`, as Svelte did, is the first follow-up worth doing. The second is to check whether the 40 ms later URL write on the prices tab switch is the `useEffect` timing.
 
 Svelte is a reasonable choice if shorter templates and the adapter-free store binding matter more than payload. On this app it ships about 12 KB more per page than Preact. Its toolchain also needs three additions that React and Preact do not: `svelte-check`, a Bun compile plugin and serial unit tests.
 
