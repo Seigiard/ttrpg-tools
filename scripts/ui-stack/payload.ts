@@ -36,7 +36,7 @@ export interface PayloadReport {
 }
 
 const method =
-  'HTML is read from dist. Linked scripts, modulepreload links, stylesheets, Astro island component-url and renderer-url attributes are resolved. Static JS imports are counted as initial-load JS. Dynamic imports are counted as lazy JS. Library labels come from chunk filenames and content heuristics for React, Astro, Base UI, Nanostores, Lucide and pdf-lib.';
+  'HTML is read from dist. Linked scripts, modulepreload links, stylesheets, Astro island component-url and renderer-url attributes are resolved. Static JS imports are counted as initial-load JS. Dynamic imports and their transitive JS dependencies are counted as lazy JS. Library labels come from chunk filenames and content heuristics for Preact, React, Astro, Base UI, Nanostores, Lucide and pdf-lib.';
 
 function sizes(bytes: Uint8Array | string): SizeSet {
   const data = typeof bytes === 'string' ? Buffer.from(bytes) : Buffer.from(bytes);
@@ -118,8 +118,8 @@ function importsFromJs(code: string) {
       /(?:\bimport\s*(?:[^'"()=;]+?\s*from\s*)?|\bexport\s*[^'"()=;]+?\s*from\s*)(['"])(.*?)\1/g,
     ),
   ].map((match) => match[2] ?? '');
-  const dynamicImports = [...code.matchAll(/import\(\s*(['"])(.*?)\1\s*\)/g)].map(
-    (match) => match[2] ?? '',
+  const dynamicImports = [...code.matchAll(/import\(\s*((['"])(.*?)\2|`([^${}`]*)`)\s*\)/g)].map(
+    (match) => match[3] ?? match[4] ?? '',
   );
   return { staticImports, dynamicImports };
 }
@@ -127,7 +127,12 @@ function importsFromJs(code: string) {
 function libraries(path: string, code: string) {
   const name = basename(path).toLowerCase();
   const libs = new Set<string>();
-  if (/react|jsx|scheduler/.test(name) || /react-dom|__REACT_DEVTOOLS_GLOBAL_HOOK__/.test(code))
+  if (/preact/.test(name) || /from\s*['"]preact|preact\/compat|__PREACT/.test(code))
+    libs.add('preact');
+  if (
+    /(^|[._-])(?:react|jsx|scheduler)(?:[._-]|$)/.test(name) ||
+    /react-dom|__REACT_DEVTOOLS_GLOBAL_HOOK__/.test(code)
+  )
     libs.add('react');
   if (/astro/.test(name) || /astro-island|astro:scripts/.test(code)) libs.add('astro');
   if (/base-ui|floating-ui/.test(name) || /Base UI|useRender/.test(code)) libs.add('base-ui');
@@ -143,20 +148,40 @@ async function collectJs(
   entry: string,
   initial: Set<string>,
   lazy: Set<string>,
-  seen = new Set<string>(),
+  seenInitial = new Set<string>(),
+  seenLazy = new Set<string>(),
 ) {
-  if (seen.has(entry)) return;
-  seen.add(entry);
+  if (seenInitial.has(entry)) return;
+  seenInitial.add(entry);
   initial.add(entry);
   const code = await readFile(entry, 'utf8');
   const { staticImports, dynamicImports } = importsFromJs(code);
   for (const url of staticImports) {
     const next = localAsset(dist, entry, url);
-    if (next && extname(next) === '.js') await collectJs(dist, next, initial, lazy, seen);
+    if (next && extname(next) === '.js')
+      await collectJs(dist, next, initial, lazy, seenInitial, seenLazy);
   }
   for (const url of dynamicImports) {
     const next = localAsset(dist, entry, url);
-    if (next && extname(next) === '.js' && !initial.has(next)) lazy.add(next);
+    if (next && extname(next) === '.js') await collectLazyJs(dist, next, initial, lazy, seenLazy);
+  }
+}
+
+async function collectLazyJs(
+  dist: string,
+  entry: string,
+  initial: Set<string>,
+  lazy: Set<string>,
+  seen: Set<string>,
+) {
+  if (initial.has(entry) || seen.has(entry)) return;
+  seen.add(entry);
+  lazy.add(entry);
+  const code = await readFile(entry, 'utf8');
+  const { staticImports, dynamicImports } = importsFromJs(code);
+  for (const url of [...staticImports, ...dynamicImports]) {
+    const next = localAsset(dist, entry, url);
+    if (next && extname(next) === '.js') await collectLazyJs(dist, next, initial, lazy, seen);
   }
 }
 
