@@ -685,6 +685,24 @@ test('export zip includes oversized artwork and skips rows without artwork', asy
   expect(entries).toEqual(['Castle-custom-10000x10000-front.png']);
 });
 
+test('a ready mini opens calibration while another mini is still preparing', async () => {
+  // #given
+  const store = setup();
+  const ready = store.addBlank()!;
+  await store.setImage(ready, artworkFile(10, 20, 'ready.png'));
+  const slow = deferredFile();
+  const pendingImage = store.setImage(store.addBlank()!, slow.file);
+
+  // #when
+  const opened = store.openCalibration(ready);
+  store.cancelCalibration();
+  slow.release();
+  await pendingImage;
+
+  // #then
+  expect(opened).toBe(true);
+});
+
 test('export zip does nothing while locked, preparing, or without a ready mini', async () => {
   // #given
   let finish!: (bytes: Uint8Array) => void;

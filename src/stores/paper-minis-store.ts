@@ -265,7 +265,9 @@ export function createPaperMinisStore({
   }
 
   function openCalibration(id: number) {
-    if ($busy.get() || $preparing.get()) return false;
+    // Only zip expansion blocks: its rows do not exist yet, and an open session would make
+    // the finished expansion drop them. A single image loading never touches a ready row.
+    if ($busy.get() || [...loads.keys()].some((key) => key.startsWith('zip:'))) return false;
     const row = $rows.get().find((candidate) => candidate.id === id);
     if (!row) return false;
     initialCalibration = calibrationGap(row.calibration) === undefined ? undefined : row.calibration;
