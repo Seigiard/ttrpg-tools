@@ -109,6 +109,7 @@ t('each row reports why it does not print yet', () => {
     entry(1, null),
     { ...entry(1, null), image: file },
     { ...entry(1, null), image: file, frontError: 'broken' },
+    { ...entry(1, null), image: file, frontError: 'broken', backImage: new File([], 'back.png') },
     { ...entry(1), image: file, backImage: new File([], 'back.png') },
     { ...entry(1), heightSlot: 'custom', customWidthMm: 30 },
     { ...entry(0), image: file },
@@ -119,7 +120,7 @@ t('each row reports why it does not print yet', () => {
   // #then
   assert.deepEqual(
     result.entries.map(({ state }) => state),
-    ['empty', 'loading', 'failed', 'loading', 'empty', 'empty', 'upright'],
+    ['empty', 'loading', 'failed', 'failed', 'loading', 'empty', 'empty', 'upright'],
   );
 });
 

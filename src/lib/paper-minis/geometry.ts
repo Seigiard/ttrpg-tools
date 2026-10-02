@@ -44,8 +44,7 @@ export const CUT_MARK_STROKE_MM = 0.2;
 export const CUT_MARK_EXTENT_MM = CUT_MARK_ARM_MM + CUT_MARK_STROKE_MM / 2;
 
 // A single copy of an entry, with its resolved geometry. entryIndex maps back
-// to the source entry so callers (the PDF drawer, the warning UI) can attribute
-// each mini to its row.
+// to the source entry so the PDF drawer can attribute each mini to its row.
 export type PackedMini = {
   entryIndex: number;
   copyIndex: number; // 0-based copy within the entry

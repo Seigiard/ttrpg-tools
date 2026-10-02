@@ -989,7 +989,7 @@ t('no slot is lost when the figure margin is raised to 5 mm', () => {
 });
 
 // The dropdown's tooltip is a promise about paper, and it reaches the user
-// through the resolvers; the row candidate resolves the mini's geometry.
+// through the resolvers; resolveMini fixes the geometry before either layout.
 t('the tooltip promises the millimetres the packer actually produces', () => {
   // #given  every slot on artwork too tall to reach the width cap, so each
   //         figure prints at its slot's own height
