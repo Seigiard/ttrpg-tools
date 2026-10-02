@@ -70,6 +70,65 @@ t('front calibration uses a custom figure height as its target', () => {
   assert.deepEqual([mini.imageWidthMm, mini.imageHeightMm], [30, 60]);
 });
 
+t('front calibration past twice the slot height is scaled down and reported', () => {
+  // #given
+  const entries = [
+    entry({ naturalWidth: 50, naturalHeight: 100, frontCalibration: { head: 0.1, feet: 0.2 } }),
+  ];
+  // #when
+  const mini = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 }).pages[0]
+    .rows[0].items[0];
+  // #then
+  assert.deepEqual(
+    [mini.imageWidthMm, mini.imageHeightMm, mini.imageWidthMm / mini.imageHeightMm, mini.fitLimits],
+    [35, 70, 0.5, ['height']],
+  );
+});
+
+t('front calibration that hits the width cap scales down whole and reports width', () => {
+  // #given
+  const entries = [
+    entry({ naturalWidth: 300, naturalHeight: 100, frontCalibration: { head: 0.25, feet: 0.75 } }),
+  ];
+  // #when
+  const mini = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 }).pages[0]
+    .rows[0].items[0];
+  // #then
+  assert.deepEqual(
+    [mini.imageWidthMm, mini.imageHeightMm, mini.imageWidthMm / mini.imageHeightMm, mini.fitLimits],
+    [52.5, 17.5, 3, ['width']],
+  );
+});
+
+t('front calibration too tall for the page scales to fit and is reported instead of skipped', () => {
+  // #given
+  const entries = [
+    entry({
+      heightSlot: 'custom',
+      customWidthMm: 10,
+      customHeightMm: 140,
+      naturalWidth: 50,
+      naturalHeight: 100,
+      frontCalibration: { head: 0.25, feet: 0.75 },
+    }),
+  ];
+  // #when
+  const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 });
+  const mini = result.pages[0].rows[0].items[0];
+  // #then
+  assert.deepEqual(
+    [
+      result.miniCount,
+      result.skipped.length,
+      mini.imageHeightMm,
+      mini.totalHeightMm,
+      mini.fitLimits,
+      result.limitedEntryFitLimits,
+    ],
+    [1, 0, 128.5, usableH, ['page'], [{ entryIndex: 0, limits: ['page'] }]],
+  );
+});
+
 t('calibrated slots keep their height order with the same marked lines', () => {
   // #given
   const shared = {
@@ -393,6 +452,7 @@ t('a numbered mini at zero margin centres its base under the figure', () => {
               imageHeightMm: 35,
               imageOffsetXMm: 0,
               faceHeightMm: 35,
+              fitLimits: [],
               totalWidthMm: 35,
               baseOffsetXMm: 5,
               tabHeightMm: 12.5,
