@@ -874,6 +874,40 @@ test('height dialog shows both artworks side by side under one pair of shared li
   });
 });
 
+test('height dialog keeps artwork URLs stable while calibration lines move', async () => {
+  // #given
+  let nextUrl = 0;
+  const objectUrl = spyOn(URL, 'createObjectURL').mockImplementation(() => {
+    nextUrl += 1;
+    return `blob:calibration-${nextUrl}`;
+  });
+  const revokeUrl = spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+  try {
+    render(PaperMinisGenerator);
+    await addFront();
+    await addBack();
+    fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
+    const dialog = within(screen.getByRole('dialog', { name: 'Задать рост' }));
+    const urlsBeforeMove = dialog
+      .getAllByRole('img')
+      .map((image) => image.getAttribute('src'));
+    const createdBeforeMove = objectUrl.mock.calls.length;
+    // #when
+    fireEvent.keyDown(dialog.getByRole('slider', { name: 'Голова' }), { key: 'ArrowDown' });
+    // #then
+    expect({
+      urlsAfterMove: dialog.getAllByRole('img').map((image) => image.getAttribute('src')),
+      createdAfterMove: objectUrl.mock.calls.length,
+    }).toEqual({
+      urlsAfterMove: urlsBeforeMove,
+      createdAfterMove: createdBeforeMove,
+    });
+  } finally {
+    objectUrl.mockRestore();
+    revokeUrl.mockRestore();
+  }
+});
+
 test('opening calibration moves focus inside and Escape cancels and restores the opener', async () => {
   // #given
   render(PaperMinisGenerator);

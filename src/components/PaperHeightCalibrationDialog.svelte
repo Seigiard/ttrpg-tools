@@ -30,11 +30,15 @@
   let dragging: CalibrationLine | null = $state(null);
   let frontUrl = $state<string>();
   let backUrl = $state<string>();
+  let artwork = $derived(session.artwork);
+  let backArtwork = $derived(session.backArtwork);
 
-  function makeUrl(artwork?: PreparedArtwork | null) {
-    if (!artwork) return undefined;
+  function makeUrl(preparedArtwork?: PreparedArtwork | null) {
+    if (!preparedArtwork) return undefined;
     return URL.createObjectURL(
-      new Blob([artwork.bytes as BlobPart], { type: artworkMimeType(artwork.format) }),
+      new Blob([preparedArtwork.bytes as BlobPart], {
+        type: artworkMimeType(preparedArtwork.format),
+      }),
     );
   }
 
@@ -45,7 +49,7 @@
   }
 
   $effect(() => {
-    const next = makeUrl(session.artwork);
+    const next = makeUrl(artwork);
     frontUrl = next;
     return () => {
       if (next) URL.revokeObjectURL(next);
@@ -53,7 +57,7 @@
   });
 
   $effect(() => {
-    const next = makeUrl(session.backArtwork);
+    const next = makeUrl(backArtwork);
     backUrl = next;
     return () => {
       if (next) URL.revokeObjectURL(next);
