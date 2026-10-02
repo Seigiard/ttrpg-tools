@@ -33,7 +33,7 @@ for (const reconstruction of reconstructions) {
           withinBudget: result.pageCount <= (pageSize === 'a4' ? 4 : 3),
           copies: result.pages
             .flatMap((page) => page.placements.map(({ mini }) => [mini.entryIndex, mini.copyIndex]))
-            .sort((a, b) => a[0] - b[0]),
+            .toSorted((a, b) => a[0] - b[0]),
           placed: result.miniCount,
           skipped: result.skipped,
         },
