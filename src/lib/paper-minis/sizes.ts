@@ -266,7 +266,7 @@ export const MIN_CALIBRATION_GAP = 0.1;
 // Then apply the 2× height cap, width cap, and supplied page-height cap, in order.
 // Each cap only shrinks the whole image; proportions stay intact, without cropping.
 // The height cap and width-limit reporting require valid calibration. The page
-// cap is opt-in: packing supplies it for both faces when either is calibrated.
+// cap is opt-in: packing supplies it for both faces when the mini is calibrated.
 // Without calibration or a supplied page cap, only the existing width cap applies.
 export function fitFigure(
   { figureHeightMm }: SizeDimensionsMm,

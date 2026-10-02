@@ -63,14 +63,21 @@ export function createPaperMinisStore() {
     loads.set(key, token);
     $preparing.set(true);
     const normalization = $settings.get().normalization;
+    const selectedRow = $rows.get().find((candidate) => candidate.id === id);
+    const replacing = back ? selectedRow?.backArtwork != null : selectedRow?.artwork != null;
     patch(
       id,
       back
-        ? { backImage: file, backArtwork: null, backCalibration: undefined, backWarning: undefined }
+        ? {
+            backImage: file,
+            backArtwork: null,
+            ...(replacing && { calibration: undefined }),
+            backWarning: undefined,
+          }
         : {
             image: file,
             artwork: null,
-            frontCalibration: undefined,
+            ...(replacing && { calibration: undefined }),
             normalizationWarning: undefined,
             frontError: undefined,
           },
@@ -137,13 +144,7 @@ export function createPaperMinisStore() {
       /* Storage is optional. */
     }
     if (previous.normalization !== next.normalization) {
-      $rows.set(
-        $rows
-          .get()
-          .map((row) =>
-            Object.assign({}, row, { frontCalibration: undefined, backCalibration: undefined }),
-          ),
-      );
+      $rows.set($rows.get().map((row) => Object.assign({}, row, { calibration: undefined })));
       for (const row of $rows.get()) {
         if (row.image) void setImage(row.id, row.image);
         if (row.backImage) void setImage(row.id, row.backImage, true);
@@ -192,17 +193,11 @@ export function createPaperMinisStore() {
     ingest,
     settings,
     loadSettings,
-    setFrontCalibration(id: number, calibration: HeightCalibration) {
-      patch(id, { frontCalibration: calibration });
+    setCalibration(id: number, calibration: HeightCalibration) {
+      patch(id, { calibration });
     },
-    clearFrontCalibration(id: number) {
-      patch(id, { frontCalibration: undefined });
-    },
-    setBackCalibration(id: number, calibration: HeightCalibration) {
-      patch(id, { backCalibration: calibration });
-    },
-    clearBackCalibration(id: number) {
-      patch(id, { backCalibration: undefined });
+    clearCalibration(id: number) {
+      patch(id, { calibration: undefined });
     },
     pack: () => packEntries($rows.get(), $settings.get()),
     clearBack(id: number) {
@@ -211,7 +206,7 @@ export function createPaperMinisStore() {
       patch(id, {
         backImage: null,
         backArtwork: null,
-        backCalibration: undefined,
+        ...(!$rows.get().find((row) => row.id === id)?.image && { calibration: undefined }),
         backWarning: undefined,
       });
       $preparing.set(loads.size > 0);

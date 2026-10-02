@@ -90,9 +90,9 @@ export type PackOptions = {
   marginMm?: number;
 };
 
-// Resolve both faces together for packing and the calibration preview. An unset
-// back inherits the calibrated front's height; its width cap shrinks both faces
-// by the same factor so their heights still match and neither artwork distorts.
+// Resolve both faces together for packing and the calibration preview. A shared
+// calibration gives both faces the same printed height. The wider face's cap
+// shrinks both by the same factor so neither artwork distorts.
 export function fitMiniFaces(
   e: PackingEntry & { naturalWidth: number; naturalHeight: number },
   opts: PackOptions,
@@ -102,24 +102,15 @@ export function fitMiniFaces(
   const usableWidthMm = PAGE_SIZES_MM[opts.pageSize].w - MARGIN_MM * 2;
   const marginMm = opts.marginMm ?? DEFAULT_FIGURE_MARGIN_MM;
   const imageSpaceMm = (usableHeightMm - marginMm * 2 - resolveTabHeightMm(e) * 4) / 2;
-  const hasBack = !!(e.backNaturalWidth && e.backNaturalHeight);
-  const calibrated = !!(
-    validCalibrationGap(e.frontCalibration) ||
-    (hasBack && validCalibrationGap(e.backCalibration))
-  );
-  // Page fitting belongs to the whole calibrated mini, including an unmarked
-  // front. Do not promise a page fit when the base/tabs alone cannot fit.
+  const calibrated = validCalibrationGap(e.calibration);
+  // Page fitting belongs to the whole calibrated mini. Do not promise a page
+  // fit when the base/tabs alone cannot fit.
   const maxImageHeightMm = (aspect: number) =>
     calibrated && imageSpaceMm > 0 && dimensions.baseWidthMm + marginMm * 2 <= usableWidthMm
       ? Math.min(imageSpaceMm, (usableWidthMm - marginMm * 2) / aspect)
       : undefined;
   let faces: { front: FigureFitMm; back?: FigureFitMm };
-  if (
-    e.backNaturalWidth &&
-    e.backNaturalHeight &&
-    validCalibrationGap(e.frontCalibration) &&
-    !validCalibrationGap(e.backCalibration)
-  ) {
+  if (e.backNaturalWidth && e.backNaturalHeight && calibrated) {
     const frontAspect = e.naturalWidth / e.naturalHeight;
     const backAspect = e.backNaturalWidth / e.backNaturalHeight;
     // Fit the wider face first so width still precedes page in the cap order.
@@ -127,7 +118,7 @@ export function fitMiniFaces(
       dimensions,
       Math.max(frontAspect, backAspect),
       1,
-      e.frontCalibration,
+      e.calibration,
       maxImageHeightMm(Math.max(frontAspect, backAspect)),
     );
     faces = {
@@ -140,7 +131,7 @@ export function fitMiniFaces(
         dimensions,
         e.naturalWidth,
         e.naturalHeight,
-        e.frontCalibration,
+        e.calibration,
         maxImageHeightMm(e.naturalWidth / e.naturalHeight),
       ),
       back:
@@ -149,7 +140,7 @@ export function fitMiniFaces(
               dimensions,
               e.backNaturalWidth,
               e.backNaturalHeight,
-              e.backCalibration,
+              e.calibration,
               maxImageHeightMm(e.backNaturalWidth / e.backNaturalHeight),
             )
           : undefined,
@@ -172,8 +163,7 @@ export function packEntries(entries: Entry[], opts: PackOptions): PackResult {
       customWidthMm: entry.customWidthMm,
       customHeightMm: entry.customHeightMm,
       count: entry.count,
-      frontCalibration: entry.frontCalibration,
-      backCalibration: entry.backCalibration,
+      calibration: entry.calibration,
       naturalWidth: isBackArtworkLoading(entry) ? undefined : entry.artwork?.width,
       naturalHeight: isBackArtworkLoading(entry) ? undefined : entry.artwork?.height,
       backNaturalWidth: entry.backArtwork?.width,

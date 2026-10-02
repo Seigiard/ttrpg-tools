@@ -2,7 +2,6 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode, type Re
 import { useStore } from '@nanostores/react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { createPaperMinisStore } from '@/stores/paper-minis-store';
 import { isSupportedArtwork } from '@/lib/paper-minis/artwork';
 import { generatePDF, buildFilename } from '@/lib/paper-minis/pdf';
@@ -18,9 +17,9 @@ import {
   slotGeometryLabel,
   slotName,
 } from '@/lib/paper-minis/sizes';
-import type { Entry, HeightCalibration, MiniSize, PreparedArtwork } from '@/lib/paper-minis/types';
+import type { HeightCalibration, MiniSize, PreparedArtwork } from '@/lib/paper-minis/types';
 
-type CalibrationDraft = Pick<Entry, 'frontCalibration' | 'backCalibration'>;
+const DEFAULT_CALIBRATION: HeightCalibration = { head: 0, feet: 1 };
 
 const field =
   'min-h-11 w-full rounded-lg border border-border bg-surface-elevated px-3 text-text focus-visible:outline-2 focus-visible:outline-primary';
@@ -57,13 +56,11 @@ function ArtworkFrame({
   artwork,
   url,
   label,
-  imageRef,
   children,
 }: {
   artwork: PreparedArtwork;
   url: string;
   label: string;
-  imageRef?: Ref<HTMLImageElement>;
   children?: ReactNode;
 }) {
   return (
@@ -75,7 +72,7 @@ function ArtworkFrame({
           aspectRatio: `${artwork.width} / ${artwork.height}`,
         }}
       >
-        <img ref={imageRef} src={url} alt={label} className="block h-full w-full" />
+        <img src={url} alt={label} className="block h-full w-full" />
         {children}
       </span>
     </span>
@@ -207,29 +204,42 @@ function ArtworkSlot({
   );
 }
 
-function CalibrationSides({
-  hasBack,
-  side,
-  onSideChange,
+function CalibrationArtwork({
+  artwork,
+  backArtwork,
+  frontUrl,
+  backUrl,
+  artworkRef,
   children,
 }: {
-  hasBack: boolean;
-  side: 'front' | 'back';
-  onSideChange: (side: 'front' | 'back') => void;
+  artwork: PreparedArtwork;
+  backArtwork?: PreparedArtwork | null;
+  frontUrl: string;
+  backUrl?: string;
+  artworkRef: Ref<HTMLSpanElement>;
   children: ReactNode;
 }) {
-  if (!hasBack) return children;
+  const totalAspect =
+    artwork.width / artwork.height +
+    (backArtwork && backUrl ? backArtwork.width / backArtwork.height : 0);
   return (
-    <Tabs value={side} onValueChange={(value) => onSideChange(value as 'front' | 'back')}>
-      <TabsList aria-label="Сторона" className="mt-4 min-h-11">
-        {(['front', 'back'] as const).map((key) => (
-          <TabsTrigger key={key} value={key} className="min-h-11">
-            {key === 'front' ? 'Перед' : 'Зад'}
-          </TabsTrigger>
-        ))}
-      </TabsList>
-      <TabsContent value={side}>{children}</TabsContent>
-    </Tabs>
+    <span className="relative block h-full w-full [container-type:size]">
+      <span
+        ref={artworkRef}
+        data-testid="calibration-artworks"
+        className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2"
+        style={{
+          width: `min(100cqw, ${totalAspect * 100}cqh)`,
+          aspectRatio: `${totalAspect} / 1`,
+        }}
+      >
+        <img src={frontUrl} alt="Лицевая сторона" className="block h-full w-auto" />
+        {backArtwork && backUrl && (
+          <img src={backUrl} alt="Оборот" className="block h-full w-auto" />
+        )}
+        {children}
+      </span>
+    </span>
   );
 }
 
@@ -240,7 +250,6 @@ function HeightCalibrationDialog({
   slotHeightMm,
   initial,
   previewFit,
-  initialBack,
   onApply,
   onCancel,
   returnFocus,
@@ -250,28 +259,27 @@ function HeightCalibrationDialog({
   rowLabel: string;
   slotHeightMm: number;
   initial?: HeightCalibration;
-  previewFit: (draft: CalibrationDraft) => ReturnType<typeof fitMiniFaces>;
-  initialBack?: HeightCalibration;
-  onApply: (changes: CalibrationDraft) => void;
+  previewFit: (calibration?: HeightCalibration) => ReturnType<typeof fitMiniFaces>;
+  onApply: (calibration?: HeightCalibration) => void;
   onCancel: () => void;
   returnFocus: React.RefObject<HTMLButtonElement | null>;
 }) {
-  const [side, setSide] = useState<'front' | 'back'>('front');
-  const currentArtwork = side === 'front' ? artwork : (backArtwork ?? artwork);
-  const url = useArtworkUrl(currentArtwork);
-  const artworkRef = useRef<HTMLImageElement>(null);
+  const frontUrl = useArtworkUrl(artwork);
+  const backUrl = useArtworkUrl(backArtwork);
+  const artworkRef = useRef<HTMLSpanElement>(null);
   const dragging = useRef<'head' | 'feet' | null>(null);
-  const [frontLines, setFrontLines] = useState(initial);
-  const [backLines, setBackLines] = useState(initialBack);
-  const lines = (side === 'front' ? frontLines : backLines) ?? { head: 0, feet: 1 };
-  const setLines = side === 'front' ? setFrontLines : setBackLines;
-  const fits = previewFit({ frontCalibration: frontLines, backCalibration: backLines });
-  const fit = side === 'back' ? (fits.back ?? fits.front) : fits.front;
-  const printedHeightMm = fit.imageHeightMm;
+  const [lines, setLines] = useState(initial ?? DEFAULT_CALIBRATION);
+  const startingLines = initial ?? DEFAULT_CALIBRATION;
+  const unchanged =
+    Math.abs(lines.head - startingLines.head) <= Number.EPSILON * 8 &&
+    Math.abs(lines.feet - startingLines.feet) <= Number.EPSILON * 8;
+  const draft = unchanged ? initial : lines;
+  const fits = previewFit(draft);
+  const printedHeightMm = fits.front.imageHeightMm;
   const warning = fitLimitWarning([
     ...new Set([...fits.front.limits, ...(fits.back?.limits ?? [])]),
   ]);
-  const hasBack = !!backArtwork;
+  const keyboardHeight = Math.max(artwork.height, backArtwork?.height ?? 0);
 
   function setLineFromClientY(which: 'head' | 'feet', clientY: number) {
     const box = artworkRef.current?.getBoundingClientRect();
@@ -282,13 +290,12 @@ function HeightCalibrationDialog({
 
   function setLine(which: 'head' | 'feet', position: (current: number) => number) {
     setLines((previous) => {
-      const current = previous ?? { head: 0, feet: 1 };
-      const fraction = position(current[which]);
+      const fraction = position(previous[which]);
       const next =
         which === 'head'
-          ? clamp(fraction, 0, current.feet - MIN_CALIBRATION_GAP)
-          : clamp(fraction, current.head + MIN_CALIBRATION_GAP, 1);
-      return next === current[which] ? previous : { ...current, [which]: next };
+          ? clamp(fraction, 0, previous.feet - MIN_CALIBRATION_GAP)
+          : clamp(fraction, previous.head + MIN_CALIBRATION_GAP, 1);
+      return next === previous[which] ? previous : { ...previous, [which]: next };
     });
   }
 
@@ -302,10 +309,7 @@ function HeightCalibrationDialog({
       <DialogContent finalFocus={returnFocus}>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <DialogTitle className="text-2xl text-text">
-              Задать рост
-              <span className="sr-only">{side === 'front' ? ' лицевой стороны' : ' оборота'}</span>
-            </DialogTitle>
+            <DialogTitle className="text-2xl text-text">Задать рост</DialogTitle>
             <p className="text-sm text-text-muted">
               {rowLabel}: перетащите линии головы и стоп или используйте ↑/↓ — 1 пиксель, с Shift —
               10.
@@ -320,90 +324,76 @@ function HeightCalibrationDialog({
             {warning}
           </p>
         )}
-        <CalibrationSides hasBack={hasBack} side={side} onSideChange={setSide}>
-          <div
-            data-testid="height-calibration-artwork"
-            className="relative mt-4 h-[min(65vh,640px)] touch-none rounded-lg border border-border bg-surface-elevated p-6"
-            onPointerMove={(event) => {
-              if (dragging.current) setLineFromClientY(dragging.current, event.clientY);
-            }}
-            onPointerUp={(event) => {
-              dragging.current = null;
-              event.currentTarget.releasePointerCapture?.(event.pointerId);
-            }}
-            onPointerCancel={() => {
-              dragging.current = null;
-            }}
-            onLostPointerCapture={() => {
-              dragging.current = null;
-            }}
-          >
-            {url && (
-              <ArtworkFrame
-                artwork={currentArtwork}
-                url={url}
-                label={side === 'front' ? 'Лицевая сторона' : 'Оборот'}
-                imageRef={artworkRef}
-              >
-                {(['head', 'feet'] as const).map((key) => (
-                  <Fragment key={key}>
-                    <span
-                      aria-hidden="true"
-                      className="pointer-events-none absolute inset-x-0 border-t-2 border-primary"
-                      style={lineStyle(lines[key])}
-                    />
-                    <button
-                      type="button"
-                      role="slider"
-                      aria-label={key === 'head' ? 'Голова' : 'Ступни'}
-                      aria-orientation="vertical"
-                      aria-valuemin={key === 'feet' ? (lines.head + MIN_CALIBRATION_GAP) * 100 : 0}
-                      aria-valuemax={
-                        key === 'head' ? (lines.feet - MIN_CALIBRATION_GAP) * 100 : 100
-                      }
-                      aria-valuenow={lines[key] * 100}
-                      aria-valuetext={`${Number((lines[key] * currentArtwork.height).toFixed(2))} пикселей от верха`}
-                      className={`absolute left-1/2 h-11 w-1/2 min-w-11 -translate-y-1/2 cursor-row-resize text-left text-xs font-bold text-primary focus-visible:outline-2 focus-visible:outline-primary ${key === 'head' ? '-translate-x-full' : ''}`}
-                      style={lineStyle(lines[key])}
-                      onKeyDown={(event) => {
-                        if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
-                        event.preventDefault();
-                        const step = (event.shiftKey ? 10 : 1) / currentArtwork.height;
-                        setLine(
-                          key,
-                          (current) => current + (event.key === 'ArrowUp' ? -step : step),
-                        );
-                      }}
-                      onPointerDown={(event) => {
-                        if (event.button !== 0 || event.ctrlKey) return;
-                        dragging.current = key;
-                        event.currentTarget.setPointerCapture?.(event.pointerId);
-                        setLineFromClientY(key, event.clientY);
-                      }}
-                    >
-                      <span className="relative ml-2 rounded bg-surface/90 px-1">
-                        {key === 'head' ? 'Голова' : 'Ступни'}
-                      </span>
-                    </button>
-                  </Fragment>
-                ))}
-              </ArtworkFrame>
-            )}
-          </div>
-        </CalibrationSides>
+        <div
+          data-testid="height-calibration-artwork"
+          className="relative mt-4 h-[min(65vh,640px)] touch-none rounded-lg border border-border bg-surface-elevated p-6"
+          onPointerMove={(event) => {
+            if (dragging.current) setLineFromClientY(dragging.current, event.clientY);
+          }}
+          onPointerUp={(event) => {
+            dragging.current = null;
+            event.currentTarget.releasePointerCapture?.(event.pointerId);
+          }}
+          onPointerCancel={() => {
+            dragging.current = null;
+          }}
+          onLostPointerCapture={() => {
+            dragging.current = null;
+          }}
+        >
+          {frontUrl && (
+            <CalibrationArtwork
+              artwork={artwork}
+              backArtwork={backArtwork}
+              frontUrl={frontUrl}
+              backUrl={backUrl}
+              artworkRef={artworkRef}
+            >
+              {(['head', 'feet'] as const).map((key) => (
+                <Fragment key={key}>
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-x-0 border-t-2 border-primary"
+                    style={lineStyle(lines[key])}
+                  />
+                  <button
+                    type="button"
+                    role="slider"
+                    aria-label={key === 'head' ? 'Голова' : 'Ступни'}
+                    aria-orientation="vertical"
+                    aria-valuemin={key === 'feet' ? (lines.head + MIN_CALIBRATION_GAP) * 100 : 0}
+                    aria-valuemax={key === 'head' ? (lines.feet - MIN_CALIBRATION_GAP) * 100 : 100}
+                    aria-valuenow={lines[key] * 100}
+                    aria-valuetext={`${Number((lines[key] * keyboardHeight).toFixed(2))} пикселей от верха`}
+                    className={`absolute left-1/2 h-11 w-1/2 min-w-11 -translate-y-1/2 cursor-row-resize text-left text-xs font-bold text-primary focus-visible:outline-2 focus-visible:outline-primary ${key === 'head' ? '-translate-x-full' : ''}`}
+                    style={lineStyle(lines[key])}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+                      event.preventDefault();
+                      const step = (event.shiftKey ? 10 : 1) / keyboardHeight;
+                      setLine(key, (current) => current + (event.key === 'ArrowUp' ? -step : step));
+                    }}
+                    onPointerDown={(event) => {
+                      if (event.button !== 0 || event.ctrlKey) return;
+                      dragging.current = key;
+                      event.currentTarget.setPointerCapture?.(event.pointerId);
+                      setLineFromClientY(key, event.clientY);
+                    }}
+                  >
+                    <span className="relative ml-2 rounded bg-surface/90 px-1">
+                      {key === 'head' ? 'Голова' : 'Ступни'}
+                    </span>
+                  </button>
+                </Fragment>
+              ))}
+            </CalibrationArtwork>
+          )}
+        </div>
         <div className="mt-4 flex justify-end gap-2">
           <Button variant="ghost" className="min-h-11" onClick={onCancel}>
             Отмена
           </Button>
-          <Button
-            className="min-h-11"
-            onClick={() =>
-              onApply({
-                ...(frontLines !== initial && { frontCalibration: frontLines }),
-                ...(backLines !== initialBack && { backCalibration: backLines }),
-              })
-            }
-          >
+          <Button className="min-h-11" onClick={() => onApply(unchanged ? undefined : lines)}>
             Применить
           </Button>
         </div>
@@ -711,7 +701,7 @@ export default function PaperMinisGenerator() {
                     <div className="grid gap-3 sm:grid-cols-2">
                       <ArtworkSlot
                         artwork={row.artwork}
-                        calibration={row.frontCalibration}
+                        calibration={row.calibration}
                         label="Лицевая сторона"
                         hint="Выбрать лицевую сторону"
                         loading={!!row.image && !row.artwork && !row.frontError}
@@ -720,7 +710,7 @@ export default function PaperMinisGenerator() {
                       <div className="space-y-2">
                         <ArtworkSlot
                           artwork={row.backArtwork}
-                          calibration={row.backCalibration}
+                          calibration={row.calibration}
                           label={
                             row.backImage
                               ? `Оборот: ${row.backImage.name}`
@@ -757,20 +747,17 @@ export default function PaperMinisGenerator() {
                           >
                             Задать рост
                           </Button>
-                          {(row.frontCalibration || row.backCalibration) && (
+                          {row.calibration && (
                             <Button
                               variant="ghost"
                               className="min-h-11"
-                              onClick={() => {
-                                store.clearFrontCalibration(row.id);
-                                store.clearBackCalibration(row.id);
-                              }}
+                              onClick={() => store.clearCalibration(row.id)}
                             >
                               Сбросить рост
                             </Button>
                           )}
                         </div>
-                        {(row.frontCalibration || row.backCalibration) && (
+                        {row.calibration && (
                           <p className="text-sm font-medium text-text">Рост задан вручную</p>
                         )}
                       </div>
@@ -937,12 +924,12 @@ export default function PaperMinisGenerator() {
           backArtwork={calibratingRow.backArtwork}
           rowLabel={calibratingRow.name || 'Миниатюра'}
           slotHeightMm={resolveFigureHeightMm(calibratingRow)}
-          initial={calibratingRow.frontCalibration}
-          previewFit={(draft) =>
+          initial={calibratingRow.calibration}
+          previewFit={(calibration) =>
             fitMiniFaces(
               {
                 ...calibratingRow,
-                ...draft,
+                calibration,
                 naturalWidth: calibratingRow.artwork!.width,
                 naturalHeight: calibratingRow.artwork!.height,
                 backNaturalWidth: calibratingRow.backArtwork?.width,
@@ -951,10 +938,9 @@ export default function PaperMinisGenerator() {
               settings,
             )
           }
-          initialBack={calibratingRow.backCalibration}
           onCancel={() => setCalibratingId(undefined)}
-          onApply={(changes) => {
-            if (Object.keys(changes).length) store.patch(calibratingRow.id, changes);
+          onApply={(calibration) => {
+            if (calibration) store.setCalibration(calibratingRow.id, calibration);
             setCalibratingId(undefined);
           }}
         />
