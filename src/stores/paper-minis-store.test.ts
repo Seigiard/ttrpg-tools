@@ -1,10 +1,13 @@
-import { afterEach, expect, spyOn, test } from 'bun:test';
+import { afterEach, expect, test } from 'bun:test';
+import type { PreparedArtwork } from '@/lib/paper-minis/types';
 import {
   DEFAULT_CUSTOM_HEIGHT_MM,
   DEFAULT_CUSTOM_WIDTH_MM,
 } from '@/lib/paper-minis/sizes';
 import {
   createPaperMinisStore,
+  type ArtworkPreparation,
+  type PaperMinisArtwork,
   type PaperMinisRenderer,
   type PaperMinisSettings,
 } from './paper-minis-store';
@@ -13,24 +16,37 @@ const png = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==',
   'base64',
 );
-function setup(renderer?: PaperMinisRenderer) {
-  const store = createPaperMinisStore(renderer);
-  store.settings({ normalization: false });
-  return store;
+const preparation = Symbol('preparation');
+type ControlledFile = File & {
+  [preparation]?: Promise<ArtworkPreparation>;
+};
+
+function preparedArtwork(width = 1, height = 1): PreparedArtwork {
+  return { bytes: Uint8Array.from([1]), format: 'png', width, height };
+}
+function fakeArtwork(): PaperMinisArtwork {
+  return {
+    prepare(file) {
+      return (file as ControlledFile)[preparation] ?? Promise.resolve({ artwork: preparedArtwork() });
+    },
+  };
+}
+function setup(renderer?: PaperMinisRenderer, artwork = fakeArtwork()) {
+  return createPaperMinisStore({ renderer, artwork });
 }
 function deferredFile() {
-  let release!: (bytes: ArrayBuffer) => void;
-  const pending = new Promise<ArrayBuffer>((resolve) => {
+  let release!: (result: ArtworkPreparation) => void;
+  const pending = new Promise<ArtworkPreparation>((resolve) => {
     release = resolve;
   });
-  // A real 1×100 PNG makes stale artwork distinguishable from the 1×1 replacement.
-  const slowPng = Buffer.from(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAABkCAYAAABHLFpgAAAAEklEQVR4nGP4z8Dwn2GUGEkEAJoCxzl9ksz2AAAAAElFTkSuQmCC',
-    'base64',
-  );
-  const file = new File([slowPng], 'slow.png', { type: 'image/png' });
-  file.arrayBuffer = () => pending;
-  return { file, release: () => release(Uint8Array.from(slowPng).buffer) };
+  const file = new File(['slow'], 'slow.png', { type: 'image/png' }) as ControlledFile;
+  file[preparation] = pending;
+  return { file, release: () => release({ artwork: preparedArtwork(1, 100) }) };
+}
+function failedFile(name: string) {
+  const file = new File(['broken'], name, { type: 'image/png' }) as ControlledFile;
+  file[preparation] = Promise.reject(new Error('Artwork preparation failed'));
+  return file;
 }
 afterEach(() => localStorage.removeItem('pmg-settings'));
 
@@ -230,7 +246,7 @@ test('download renders the layout shown by the counter and returns the renderer 
       pageSize: 'a4',
       marginMm: 2,
       numberDuplicates: false,
-      normalization: false,
+      normalization: true,
     },
     busy: false,
     message: 'PDF готов.',
@@ -424,65 +440,54 @@ test('generation waits for artwork preparation even when another row is printabl
   });
 });
 
-test('a normalization job keeps generation unavailable until its failure fallback is published', async () => {
+test('a pending normalized result keeps generation unavailable until its warning is published', async () => {
   // #given
   let renders = 0;
-  const store = setup(async () => {
-    renders++;
-    return Uint8Array.from([1]);
+  let release!: (result: ArtworkPreparation) => void;
+  let normalize: boolean | undefined;
+  const pending = new Promise<ArtworkPreparation>((resolve) => {
+    release = resolve;
   });
-  await store.setImage(store.addBlank()!, new File([png], 'front.png', { type: 'image/png' }));
-  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'createImageBitmap');
-  const errors = spyOn(console, 'error').mockImplementation(() => {});
-  let reject!: (reason: Error) => void;
-  let started!: () => void;
-  const decoding = new Promise<void>((resolve) => {
-    started = resolve;
-  });
-  Object.defineProperty(globalThis, 'createImageBitmap', {
-    configurable: true,
-    value: () => {
-      started();
-      return new Promise<ImageBitmap>((_, no) => {
-        reject = no;
-      });
+  const slow = new File(['slow'], 'slow.png', { type: 'image/png' });
+  const artwork: PaperMinisArtwork = {
+    prepare(file, options) {
+      normalize = options.normalize;
+      return file === slow ? pending : Promise.resolve({ artwork: preparedArtwork() });
     },
+  };
+  const store = setup(
+    async () => {
+      renders++;
+      return Uint8Array.from([1]);
+    },
+    artwork,
+  );
+  await store.setImage(store.addBlank()!, new File([png], 'front.png', { type: 'image/png' }));
+  const pendingImage = store.setImage(store.addBlank()!, slow);
+  // #when
+  const during = await store.download();
+  release({
+    artwork: preparedArtwork(1, 100),
+    warning: 'Не удалось обрезать изображение. Будет напечатан оригинал.',
   });
-  try {
-    // #when
-    store.settings({ normalization: true });
-    await decoding;
-    const during = await store.download();
-    const settled = new Promise<void>((resolve) => {
-      const unsubscribe = store.$preparing.listen((preparing) => {
-        if (!preparing) {
-          unsubscribe();
-          resolve();
-        }
-      });
-    });
-    reject(new Error('Bitmap decoding failed'));
-    await settled;
-    const after = await store.download();
-    // #then
-    expect({
-      during,
-      after: after && Array.from(after),
-      renders,
-      count: store.pack().miniCount,
-      warning: store.$rows.get()[0].normalizationWarning,
-    }).toEqual({
-      during: undefined,
-      after: [1],
-      renders: 1,
-      count: 1,
-      warning: 'Не удалось обрезать изображение. Будет напечатан оригинал.',
-    });
-  } finally {
-    if (descriptor) Object.defineProperty(globalThis, 'createImageBitmap', descriptor);
-    else Reflect.deleteProperty(globalThis, 'createImageBitmap');
-    errors.mockRestore();
-  }
+  await pendingImage;
+  const after = await store.download();
+  // #then
+  expect({
+    normalize,
+    during,
+    after: after && Array.from(after),
+    renders,
+    count: store.pack().miniCount,
+    warning: store.$rows.get()[1].normalizationWarning,
+  }).toEqual({
+    normalize: true,
+    during: undefined,
+    after: [1],
+    renders: 1,
+    count: 2,
+    warning: 'Не удалось обрезать изображение. Будет напечатан оригинал.',
+  });
 });
 
 test.each(['remove', 'clearBack', 'replace'])(
@@ -556,19 +561,32 @@ test.each([false, true])(
 
 test('a late image cannot replace the newer selection', async () => {
   // #given
-  const store = setup();
-  const slow = deferredFile();
+  let release!: () => void;
+  const decoding = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const slow = new File(['slow'], 'slow.png', { type: 'image/png' });
+  const normalized: string[] = [];
+  const artwork: PaperMinisArtwork = {
+    async prepare(file, options) {
+      if (file === slow) await decoding;
+      if (options.normalize && options.isCurrent?.() !== false) normalized.push(file.name);
+      return { artwork: preparedArtwork() };
+    },
+  };
+  const store = setup(undefined, artwork);
   const id = store.addBlank()!;
-  const pending = store.setImage(id, slow.file);
+  const pending = store.setImage(id, slow);
   const replacement = new File([png], 'new.png', { type: 'image/png' });
   // #when
   await store.setImage(id, replacement);
-  slow.release();
+  release();
   await pending;
   // #then
-  expect(
-    store.$rows.get().map((row) => [row.image?.name, row.artwork?.width, row.artwork?.height]),
-  ).toEqual([['new.png', 1, 1]]);
+  expect({
+    rows: store.$rows.get().map((row) => [row.image?.name, row.artwork?.width, row.artwork?.height]),
+    normalized,
+  }).toEqual({ rows: [['new.png', 1, 1]], normalized: ['new.png'] });
 });
 
 test('clearing a loading back keeps the reflection and restores print readiness', async () => {
@@ -595,7 +613,7 @@ test('a broken back falls back to the front with a warning', async () => {
   const id = store.addBlank()!;
   await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
   // #when
-  await store.setImage(id, new File(['broken'], 'back.png', { type: 'image/png' }), true);
+  await store.setImage(id, failedFile('back.png'), true);
   // #then
   expect({
     count: store.pack().miniCount,
@@ -612,7 +630,7 @@ test('a failed front stays out of the print estimate and can be replaced', async
   // #given
   const store = setup();
   const id = store.addBlank()!;
-  await store.setImage(id, new File(['broken'], 'bad.png', { type: 'image/png' }));
+  await store.setImage(id, failedFile('bad.png'));
   const failed = { count: store.pack().miniCount, error: store.$rows.get()[0].frontError };
   // #when
   await store.setImage(id, new File([png], 'good.png', { type: 'image/png' }));
@@ -767,8 +785,6 @@ test('normalization clears calibration on a row with loaded front and back image
   await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
   await store.setImage(id, new File([png], 'back.png', { type: 'image/png' }), true);
   store.setCalibration(id, { head: 0.2, feet: 0.8 });
-  // happy-dom has no bitmap decoder. The reset must also survive trim fallback.
-  const errors = spyOn(console, 'error').mockImplementation(() => {});
   const settled = new Promise<void>((resolve) => {
     const unsubscribe = store.$preparing.listen((preparing) => {
       if (!preparing) {
@@ -777,22 +793,18 @@ test('normalization clears calibration on a row with loaded front and back image
       }
     });
   });
-  try {
-    // #when
-    store.settings({ normalization: true });
-    const during = store.$rows.get()[0];
-    await settled;
-    const after = store.$rows.get()[0];
-    // #then
-    expect(
-      [during, after].map((row) => [row.image?.name, row.backImage?.name, row.calibration]),
-    ).toEqual([
-      ['front.png', 'back.png', undefined],
-      ['front.png', 'back.png', undefined],
-    ]);
-  } finally {
-    errors.mockRestore();
-  }
+  // #when
+  store.settings({ normalization: false });
+  const during = store.$rows.get()[0];
+  await settled;
+  const after = store.$rows.get()[0];
+  // #then
+  expect(
+    [during, after].map((row) => [row.image?.name, row.backImage?.name, row.calibration]),
+  ).toEqual([
+    ['front.png', 'back.png', undefined],
+    ['front.png', 'back.png', undefined],
+  ]);
 });
 
 test('removing one of two sides keeps calibration', async () => {

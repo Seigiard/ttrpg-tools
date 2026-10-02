@@ -1,31 +1,33 @@
 import { findFigureBounds } from './figure-bounds';
-import { canvasToPngBytes } from './artwork';
+import { canvasToPngBytes } from './canvas';
 import type { PreparedArtwork } from './types';
 
 type NormalizedArtwork = { artwork: PreparedArtwork; warning?: string };
-const cache = new WeakMap<PreparedArtwork, Promise<NormalizedArtwork>>();
-// A batch holds at most one full-resolution bitmap, canvas and pixel buffer.
-let trimQueue: Promise<void> = Promise.resolve();
 
-// Memoized per prepared original. Failures return that original with a warning
-// and leave the cache so a later call can retry.
-export function normalizeArtwork(original: PreparedArtwork): Promise<NormalizedArtwork> {
-  let pending = cache.get(original);
-  if (!pending) {
-    pending = trimQueue
-      .then(() => trimArtwork(original))
-      .catch((err) => {
-        console.error(err);
-        cache.delete(original);
-        return {
-          artwork: original,
-          warning: 'Не удалось обрезать изображение. Будет напечатан оригинал.',
-        };
-      });
-    trimQueue = pending.then(() => {});
-    cache.set(original, pending);
-  }
-  return pending;
+export function createArtworkNormalizer() {
+  const cache = new WeakMap<PreparedArtwork, Promise<NormalizedArtwork>>();
+  // A batch holds at most one full-resolution bitmap, canvas and pixel buffer.
+  let trimQueue: Promise<void> = Promise.resolve();
+
+  // Failures return the original and leave the cache so a later call can retry.
+  return function normalizeArtwork(original: PreparedArtwork): Promise<NormalizedArtwork> {
+    let pending = cache.get(original);
+    if (!pending) {
+      pending = trimQueue
+        .then(() => trimArtwork(original))
+        .catch((err) => {
+          console.error(err);
+          cache.delete(original);
+          return {
+            artwork: original,
+            warning: 'Не удалось обрезать изображение. Будет напечатан оригинал.',
+          };
+        });
+      trimQueue = pending.then(() => {});
+      cache.set(original, pending);
+    }
+    return pending;
+  };
 }
 
 async function trimArtwork(original: PreparedArtwork): Promise<NormalizedArtwork> {
