@@ -1,3 +1,4 @@
+import { artworkMimeType } from './artwork-formats';
 import { findFigureBounds } from './figure-bounds';
 import { canvasToPngBytes } from './canvas';
 import type { PreparedArtwork } from './types';
@@ -36,7 +37,7 @@ async function trimArtwork(original: PreparedArtwork): Promise<NormalizedArtwork
     warning: 'Не удалось определить границы фигурки. Будет напечатан оригинал.',
   };
   const blob = new Blob([original.bytes as BlobPart], {
-    type: original.format === 'jpg' ? 'image/jpeg' : 'image/png',
+    type: artworkMimeType(original.format),
   });
   const bitmap = await createImageBitmap(blob, { imageOrientation: 'none' });
   const canvas = document.createElement('canvas');

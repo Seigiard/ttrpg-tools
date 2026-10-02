@@ -1,3 +1,5 @@
+import type { PreparedArtworkFormat } from './artwork-formats';
+
 // The size category a slot carries: a label the player knows from the rules,
 // and the one thing that still fixes the base width.
 export type SizeCategory = 'tiny' | 'small' | 'medium' | 'large' | 'huge' | 'gargantuan';
@@ -47,7 +49,7 @@ export type HeightCalibration = {
 
 export type PreparedArtwork = {
   readonly bytes: Uint8Array;
-  readonly format: 'png' | 'jpg';
+  readonly format: PreparedArtworkFormat;
   readonly width: number; // pixels in the prepared bytes
   readonly height: number;
 };
