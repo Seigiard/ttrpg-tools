@@ -118,6 +118,33 @@ async function chooseBatchFiles(files: File[]) {
   });
 }
 
+test('printer scale shows approximate sizing until a measurement is entered and can be cleared', () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  const measurement = screen.getByRole<HTMLInputElement>('spinbutton', {
+    name: 'Длина линейки, мм',
+  });
+
+  // #when
+  const defaultState = screen.getByText('Принтер не измерен: размеры приблизительные.').textContent;
+  fireEvent.change(measurement, { target: { value: '91' } });
+  const measuredState = screen.getByText('Линейка измерена: 91 мм.').textContent;
+  fireEvent.click(screen.getByRole('button', { name: 'Сбросить измерение' }));
+
+  // #then
+  expect({
+    defaultState,
+    measuredState,
+    input: measurement.value,
+    restoredState: screen.getByText('Принтер не измерен: размеры приблизительные.').textContent,
+  }).toEqual({
+    defaultState: 'Принтер не измерен: размеры приблизительные.',
+    measuredState: 'Линейка измерена: 91 мм.',
+    input: '',
+    restoredState: 'Принтер не измерен: размеры приблизительные.',
+  });
+});
+
 test('blur restores an invalid draft and both PDF actions become available again', async () => {
   // #given
   renderGenerator();
@@ -400,6 +427,40 @@ test('download action clicks an attached PDF download anchor', async () => {
   } finally {
     HTMLAnchorElement.prototype.click = originalClick;
     setSystemTime();
+  }
+});
+
+test('printer scale test sheet can download before any minis are added', async () => {
+  // #given
+  const originalClick = HTMLAnchorElement.prototype.click;
+  let clicked: { attached: boolean; download: string; protocol: string } | undefined;
+  HTMLAnchorElement.prototype.click = function () {
+    clicked = {
+      attached: this.isConnected,
+      download: this.download,
+      protocol: new URL(this.href).protocol,
+    };
+  };
+  try {
+    render(<PaperMinisGenerator />);
+    const download = screen.getByRole<HTMLButtonElement>('button', {
+      name: 'Скачать тестовый лист масштаба',
+    });
+    // #when
+    fireEvent.click(download);
+    // #then
+    await waitFor(() =>
+      expect({ disabled: download.disabled, clicked }).toEqual({
+        disabled: false,
+        clicked: {
+          attached: true,
+          download: 'paper-minis-printer-scale-test-a4.pdf',
+          protocol: 'blob:',
+        },
+      }),
+    );
+  } finally {
+    HTMLAnchorElement.prototype.click = originalClick;
   }
 });
 

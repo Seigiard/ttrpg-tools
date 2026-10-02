@@ -25,23 +25,41 @@ export const PAGE_SIZES_MM = {
 
 export type PageSizeKey = keyof typeof PAGE_SIZES_MM;
 
-export const SHEET_MARGIN_MM = 10;
 export const DEFAULT_FIGURE_MARGIN_MM = 2;
+export const DEFAULT_PRINTER_SCALE = 0.91;
+export const SCALE_BAR_BAND_MM = 10;
 
 export type PackOptions = {
   pageSize: PageSizeKey;
   numberDuplicates: boolean;
   marginMm?: number;
+  printerScale?: number;
 };
 
-export function usableAreaMm(pageSize: PageSizeKey): { widthMm: number; heightMm: number } {
-  const { w, h } = PAGE_SIZES_MM[pageSize];
-  return { widthMm: w - SHEET_MARGIN_MM * 2, heightMm: h - SHEET_MARGIN_MM * 2 };
+export function printerScale(opts: Pick<PackOptions, 'printerScale'>): number {
+  return opts.printerScale ?? DEFAULT_PRINTER_SCALE;
+}
+
+export function usableAreaMm(opts: Pick<PackOptions, 'pageSize' | 'printerScale'>): {
+  widthMm: number;
+  heightMm: number;
+} {
+  const full = fullPageAreaMm(opts);
+  return { widthMm: full.widthMm, heightMm: full.heightMm - SCALE_BAR_BAND_MM };
+}
+
+// Later sheets have no scale bar, so minis may use their complete scaled height.
+export function fullPageAreaMm(opts: Pick<PackOptions, 'pageSize' | 'printerScale'>): {
+  widthMm: number;
+  heightMm: number;
+} {
+  const scale = printerScale(opts);
+  const { w, h } = PAGE_SIZES_MM[opts.pageSize];
+  return { widthMm: w * scale, heightMm: h * scale };
 }
 
 export const CUT_MARK_ARM_MM = 1.5;
 export const CUT_MARK_STROKE_MM = 0.2;
-export const CUT_MARK_EXTENT_MM = CUT_MARK_ARM_MM + CUT_MARK_STROKE_MM / 2;
 
 export type MiniLevels = {
   floorStripTopMm: number;
@@ -52,8 +70,8 @@ export type MiniLevels = {
   backFaceTopMm: number;
   topMm: number;
   cutMarks: {
-    crossesMm: [number, number, number];
-    halvesMm: [number, number, number];
+    cornersMm: [number, number];
+    edgeTicksMm: [number, number, number, number];
   };
 };
 
@@ -108,15 +126,12 @@ export function footprintMm(
   rotated: boolean,
 ): { widthMm: number; heightMm: number } {
   return rotated
-    ? {
-        widthMm: mini.totalHeightMm + CUT_MARK_EXTENT_MM * 2,
-        heightMm: mini.totalWidthMm + CUT_MARK_EXTENT_MM * 2,
-      }
+    ? { widthMm: mini.totalHeightMm, heightMm: mini.totalWidthMm }
     : { widthMm: mini.totalWidthMm, heightMm: mini.totalHeightMm };
 }
 
-function miniOrientation(mini: PackedMini, pageSize: PageSizeKey): MiniOrientation {
-  const usable = usableAreaMm(pageSize);
+function miniOrientation(mini: PackedMini, opts: PackOptions): MiniOrientation {
+  const usable = fullPageAreaMm(opts);
   const fits = ({ widthMm, heightMm }: { widthMm: number; heightMm: number }) =>
     widthMm <= usable.widthMm && heightMm <= usable.heightMm;
   if (fits(footprintMm(mini, false))) return 'upright';
@@ -198,7 +213,7 @@ function fitMiniFaces(
   opts: PackOptions,
 ): { front: FigureFitMm; back?: FigureFitMm } {
   const dimensions = resolveSizeDimensionsMm(e);
-  const { widthMm: usableWidthMm, heightMm: usableHeightMm } = usableAreaMm(opts.pageSize);
+  const { widthMm: usableWidthMm, heightMm: usableHeightMm } = fullPageAreaMm(opts);
   const marginMm = opts.marginMm ?? DEFAULT_FIGURE_MARGIN_MM;
   const imageSpaceMm = (usableHeightMm - marginMm * 2 - resolveTabHeightMm(e) * 4) / 2;
   const calibrated = calibrationGap(e.calibration);
@@ -326,8 +341,8 @@ export function resolveMini(
     backFaceTopMm,
     topMm,
     cutMarks: {
-      crossesMm: [0, foldMm, topMm],
-      halvesMm: [floorStripTopMm, frontTabTopMm, backFaceTopMm],
+      cornersMm: [0, topMm],
+      edgeTicksMm: [floorStripTopMm, frontTabTopMm, foldMm, backFaceTopMm],
     },
   };
   const backBadgeOffsetXMm = ((back?.imageWidthMm ?? imageWidthMm) - baseWidthMm) / 2;
@@ -357,7 +372,7 @@ export function resolveMini(
   }
   // A count that is not a number passes the check above but yields no copy.
   if (copies.length === 0) return undefined;
-  return { entryIndex, orientation: miniOrientation(copies[0], opts.pageSize), limits, copies };
+  return { entryIndex, orientation: miniOrientation(copies[0], opts), limits, copies };
 }
 
 // Keeps entry indices: an entry that is not packable yet leaves a gap.
