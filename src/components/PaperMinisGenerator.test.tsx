@@ -34,41 +34,22 @@ async function addBack(bytes = png) {
   });
 }
 
-test('both PDF actions follow generation availability', async () => {
+test('blur restores an invalid draft and both PDF actions become available again', async () => {
   // #given
   render(<PaperMinisGenerator />);
   await addFront();
-  const input = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Поля, мм' });
+  const margin = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Поля, мм' });
+  const count = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Количество копий' });
+  fireEvent.change(margin, { target: { value: '5' } });
+  fireEvent.change(count, { target: { value: '3' } });
   // #when
-  fireEvent.change(input, { target: { value: '' } });
+  fireEvent.change(count, { target: { value: '' } });
   const disabled = ['Скачать PDF', 'Предпросмотр PDF'].map(
     (name) => screen.getByRole<HTMLButtonElement>('button', { name }).disabled,
   );
-  fireEvent.change(input, { target: { value: '2' } });
-  // #then
-  expect({
-    disabled,
-    enabled: ['Скачать PDF', 'Предпросмотр PDF'].map(
-      (name) => !screen.getByRole<HTMLButtonElement>('button', { name }).disabled,
-    ),
-  }).toEqual({ disabled: [true, true], enabled: [true, true] });
-});
-
-test('blur restores every invalid numeric draft without changing another field', async () => {
-  // #given
-  render(<PaperMinisGenerator />);
-  await addFront();
-  const count = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Количество копий' });
-  const margin = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Поля, мм' });
-  fireEvent.change(count, { target: { value: '2' } });
-  fireEvent.change(margin, { target: { value: '5' } });
-  // #when
-  fireEvent.change(count, { target: { value: '' } });
   fireEvent.blur(count);
-  const restoredCount = { value: count.value, invalid: count.getAttribute('aria-invalid') };
   fireEvent.change(margin, { target: { value: '' } });
   fireEvent.blur(margin);
-  const restoredMargin = { value: margin.value, invalid: margin.getAttribute('aria-invalid') };
   fireEvent.change(screen.getByRole('combobox', { name: 'Высота существа' }), {
     target: { value: 'custom' },
   });
@@ -83,24 +64,26 @@ test('blur restores every invalid numeric draft without changing another field',
   fireEvent.blur(height);
   // #then
   expect({
-    count: restoredCount,
-    margin: restoredMargin,
+    disabled,
+    count: { value: count.value, invalid: count.getAttribute('aria-invalid') },
+    margin: { value: margin.value, invalid: margin.getAttribute('aria-invalid') },
     afterWidthBlur,
     afterHeightBlur: { width: width.value, height: height.value },
     dimensionsInvalid: [
       width.getAttribute('aria-invalid'),
       height.getAttribute('aria-invalid'),
     ],
-    actionsEnabled: ['Скачать PDF', 'Предпросмотр PDF'].map(
+    enabled: ['Скачать PDF', 'Предпросмотр PDF'].map(
       (name) => !screen.getByRole<HTMLButtonElement>('button', { name }).disabled,
     ),
   }).toEqual({
-    count: { value: '2', invalid: 'false' },
+    disabled: [true, true],
+    count: { value: '3', invalid: 'false' },
     margin: { value: '5', invalid: 'false' },
     afterWidthBlur: { width: '12.5', height: '40' },
     afterHeightBlur: { width: '12.5', height: '40' },
     dimensionsInvalid: ['false', 'false'],
-    actionsEnabled: [true, true],
+    enabled: [true, true],
   });
 });
 
@@ -161,7 +144,7 @@ test('every artwork file input offers every supported MIME type', async () => {
   );
   // #then
   expect(accepts).toEqual([
-    'image/png,image/jpeg,image/jpg,image/webp',
+    'image/png,image/jpeg,image/jpg,image/webp,.zip,application/zip',
     'image/png,image/jpeg,image/jpg,image/webp',
     'image/png,image/jpeg,image/jpg,image/webp',
   ]);
@@ -193,6 +176,15 @@ test('the drop zone explains the naming convention with every size id outside th
       'gargantuan — Громадный',
     ],
   });
+});
+
+test('the batch file picker accepts exported zip archives', () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  // #when
+  const input = screen.getByLabelText('Добавить изображения', { selector: 'input' });
+  // #then
+  expect(input.getAttribute('accept')).toBe('image/png,image/jpeg,image/jpg,image/webp,.zip,application/zip');
 });
 
 test('a batch row is titled by its cleaned file name, or numbered when the name is empty', async () => {
@@ -293,6 +285,86 @@ test('download action clicks an attached PDF download anchor', async () => {
   } finally {
     HTMLAnchorElement.prototype.click = originalClick;
     setSystemTime();
+  }
+});
+
+test('export action waits for ready minis and clicks an attached zip download anchor', async () => {
+  // #given
+  setSystemTime(new Date(2026, 9, 2, 10, 30));
+  const originalClick = HTMLAnchorElement.prototype.click;
+  let clicked: { attached: boolean; download: string; protocol: string } | undefined;
+  HTMLAnchorElement.prototype.click = function () {
+    clicked = {
+      attached: this.isConnected,
+      download: this.download,
+      protocol: new URL(this.href).protocol,
+    };
+  };
+  try {
+    render(<PaperMinisGenerator />);
+    const emptyDisabled = screen.getByRole<HTMLButtonElement>('button', {
+      name: 'Экспорт в ZIP',
+    }).disabled;
+    await addFront();
+    const readyDisabled = screen.getByRole<HTMLButtonElement>('button', {
+      name: 'Экспорт в ZIP',
+    }).disabled;
+    let release!: (bytes: ArrayBuffer) => void;
+    const slow = new File([png], 'slow-back.png', { type: 'image/png' });
+    slow.arrayBuffer = () =>
+      new Promise<ArrayBuffer>((resolve) => {
+        release = resolve;
+      });
+    fireEvent.change(
+      screen.getByLabelText('Оборот: отражение лицевой стороны', { selector: 'input' }),
+      { target: { files: [slow] } },
+    );
+    const loadingDisabled = screen.getByRole<HTMLButtonElement>('button', {
+      name: 'Экспорт в ZIP',
+    }).disabled;
+    await act(async () => {
+      release(Uint8Array.from(png).buffer);
+    });
+
+    // #when
+    fireEvent.click(screen.getByRole('button', { name: 'Экспорт в ZIP' }));
+
+    // #then
+    await waitFor(() =>
+      expect({
+        disabled: [emptyDisabled, readyDisabled, loadingDisabled],
+        clicked,
+      }).toEqual({
+        disabled: [true, false, true],
+        clicked: {
+          attached: true,
+          download: 'paper-minis-2026-10-02.zip',
+          protocol: 'blob:',
+        },
+      }),
+    );
+  } finally {
+    HTMLAnchorElement.prototype.click = originalClick;
+    setSystemTime();
+  }
+});
+
+test('export reports a browser object-URL failure', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  const objectUrl = spyOn(URL, 'createObjectURL').mockImplementation(() => {
+    throw new Error('Object URL unavailable');
+  });
+  try {
+    // #when
+    fireEvent.click(screen.getByRole('button', { name: 'Экспорт в ZIP' }));
+    // #then
+    expect((await screen.findByText('Не удалось создать архив. Попробуйте ещё раз.')).textContent).toBe(
+      'Не удалось создать архив. Попробуйте ещё раз.',
+    );
+  } finally {
+    objectUrl.mockRestore();
   }
 });
 

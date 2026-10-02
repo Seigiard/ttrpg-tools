@@ -2,10 +2,13 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode, type Re
 import { useStore } from '@nanostores/react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { createPaperMinisStore, type CalibrationSession } from '@/stores/paper-minis-store';
+import {
+  createPaperMinisStore,
+  type CalibrationSession,
+} from '@/stores/paper-minis-store';
 import { ARTWORK_ACCEPT, artworkMimeType } from '@/lib/paper-minis/artwork-formats';
 import { isSupportedArtwork } from '@/lib/paper-minis/artwork';
-import type { CalibrationLine } from '@/lib/paper-minis/calibration';
+import type { CalibrationLine } from '@/lib/paper-minis/calibration-session';
 import { entryStatusWarning } from '@/lib/paper-minis/geometry';
 import { buildFilename } from '@/lib/paper-minis/pdf';
 import { HEIGHT_SLOT_ORDER, slotLabel, slotGeometryLabel, slotName } from '@/lib/paper-minis/sizes';
@@ -13,6 +16,13 @@ import type { HeightCalibration, MiniSize, PreparedArtwork } from '@/lib/paper-m
 
 const field =
   'min-h-11 w-full rounded-lg border border-border bg-surface-elevated px-3 text-text focus-visible:outline-2 focus-visible:outline-primary';
+
+function buildZipFilename(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `paper-minis-${year}-${month}-${day}.zip`;
+}
 
 function useArtworkUrl(artwork?: PreparedArtwork | null) {
   const [url, setUrl] = useState<string>();
@@ -30,10 +40,6 @@ function useArtworkUrl(artwork?: PreparedArtwork | null) {
     return () => URL.revokeObjectURL(next);
   }, [artwork]);
   return url;
-}
-
-function clamp(v: number, lo: number, hi: number) {
-  return Math.min(Math.max(v, lo), hi);
 }
 
 function lineStyle(value: number) {
@@ -246,7 +252,7 @@ function HeightCalibrationDialog({
   function setLineFromClientY(which: 'head' | 'feet', clientY: number) {
     const box = artworkRef.current?.getBoundingClientRect();
     if (!box || box.height <= 0) return;
-    const fraction = clamp((clientY - box.top) / box.height, 0, 1);
+    const fraction = (clientY - box.top) / box.height;
     onSetLine(which, fraction);
   }
 
@@ -362,7 +368,7 @@ export default function PaperMinisGenerator() {
   const rows = useStore(store.$rows);
   const settings = useStore(store.$settings);
   const inputs = useStore(store.$inputs);
-  const inputsValid = useStore(store.$inputsValid);
+  const draftError = useStore(store.$draftError);
   const packed = useStore(store.$layout);
   const canGenerate = useStore(store.$canGenerate);
   const message = useStore(store.$message);
@@ -460,6 +466,28 @@ export default function PaperMinisGenerator() {
     }
   }
 
+  async function exportZip() {
+    const bytes = await store.exportZip();
+    if (!bytes) return;
+    let url: string | undefined;
+    try {
+      const nextUrl = URL.createObjectURL(
+        new Blob([bytes as BlobPart], { type: 'application/zip' }),
+      );
+      url = nextUrl;
+      const anchor = document.createElement('a');
+      anchor.href = nextUrl;
+      anchor.download = buildZipFilename();
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(nextUrl), 5000);
+    } catch {
+      if (url) URL.revokeObjectURL(url);
+      store.reportExportFailure();
+    }
+  }
+
   return (
     <div className="space-y-8">
       <fieldset
@@ -501,10 +529,7 @@ export default function PaperMinisGenerator() {
                   value={inputs.margin.text}
                   aria-invalid={!inputs.margin.valid}
                   onChange={(event) => store.setMargin(event.target.value)}
-                  onBlur={() => {
-                    if (!store.$inputs.get().margin.valid)
-                      store.setMargin(String(store.$settings.get().marginMm));
-                  }}
+                  onBlur={store.commitMargin}
                 />
               </label>
               {rows.length > 0 && (
@@ -559,14 +584,9 @@ export default function PaperMinisGenerator() {
                       ? 'Обрабатываем изображения. PDF будет доступен после завершения.'
                       : ''}
                 </p>
-                {!inputs.margin.valid && (
+                {draftError && (
                   <p role="status" className="text-sm text-danger">
-                    Поля должны быть числом от 0 мм.
-                  </p>
-                )}
-                {!inputsValid && inputs.margin.valid && (
-                  <p role="status" className="text-sm text-danger">
-                    Количество должно быть целым числом от 1, размеры — больше 0 мм.
+                    {draftError}
                   </p>
                 )}
                 <div className="space-y-2">
@@ -576,6 +596,14 @@ export default function PaperMinisGenerator() {
                     onClick={() => void download()}
                   >
                     {busy ? 'Подготовка PDF…' : 'Скачать PDF'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="min-h-11 w-full"
+                    disabled={!canGenerate}
+                    onClick={() => void exportZip()}
+                  >
+                    Экспорт в ZIP
                   </Button>
                   <Button
                     variant="outline"
@@ -609,7 +637,7 @@ export default function PaperMinisGenerator() {
               ref={files}
               type="file"
               multiple
-              accept={ARTWORK_ACCEPT}
+              accept={`${ARTWORK_ACCEPT},.zip,application/zip`}
               className="hidden"
               aria-label="Добавить изображения"
               onChange={(event) => {
@@ -623,17 +651,7 @@ export default function PaperMinisGenerator() {
               {rows.map((row, index) => {
                 const status = packed.entries[index];
                 const statusWarning = status && entryStatusWarning(status);
-                const rowInputs = inputs.rows[row.id] ?? {
-                  count: { text: String(row.count), valid: true },
-                  customWidthMm: {
-                    text: row.customWidthMm === undefined ? '' : String(row.customWidthMm),
-                    valid: row.customWidthMm !== undefined,
-                  },
-                  customHeightMm: {
-                    text: row.customHeightMm === undefined ? '' : String(row.customHeightMm),
-                    valid: row.customHeightMm !== undefined,
-                  },
-                };
+                const rowInputs = inputs.rows[row.id];
                 return (
                   <article
                     key={row.id}
@@ -749,10 +767,7 @@ export default function PaperMinisGenerator() {
                           value={rowInputs.count.text}
                           aria-invalid={!rowInputs.count.valid}
                           onChange={(event) => store.setCount(row.id, event.target.value)}
-                          onBlur={() => {
-                            if (!store.$inputs.get().rows[row.id]?.count.valid)
-                              store.setCount(row.id, String(row.count));
-                          }}
+                          onBlur={() => store.commitCount(row.id)}
                         />
                       </label>
                       {row.heightSlot === 'custom' && (
@@ -774,12 +789,7 @@ export default function PaperMinisGenerator() {
                                       [dimension]: event.target.value,
                                     })
                                   }
-                                  onBlur={() => {
-                                    if (!store.$inputs.get().rows[row.id]?.[key].valid)
-                                      store.setCustomDimensions(row.id, {
-                                        [dimension]: String(row[key]),
-                                      });
-                                  }}
+                                  onBlur={() => store.commitCustomDimension(row.id, dimension)}
                                 />
                               </label>
                             );
