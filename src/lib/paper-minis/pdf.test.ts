@@ -8,10 +8,14 @@ import {
   PrintScaling,
   decodePDFRawStream,
 } from 'pdf-lib';
-import { generatePDF } from './pdf.ts';
+import { generatePDF as renderPDF } from './pdf.ts';
+import { packEntries, type PackOptions } from './packing.ts';
 import type { Entry } from './types.ts';
 
 import { test as t } from 'bun:test';
+
+const generatePDF = (entries: Entry[], options: PackOptions) =>
+  renderPDF(entries, packEntries(entries, options), options);
 
 type Point = { x: number; y: number };
 type Box = { left: number; bottom: number; right: number; top: number };
@@ -250,6 +254,34 @@ const artwork = {
   height: 1,
 };
 const entry: Entry = { image: null, artwork, heightSlot: 'tiny', count: 1 };
+
+t('artwork for a mini that does not fit is not embedded in the PDF', async () => {
+  // #given
+  const oversized: Entry = {
+    ...entry,
+    artwork: { ...artwork },
+    heightSlot: 'custom',
+    customWidthMm: 400,
+    customHeightMm: 400,
+  };
+  const entries = [entry, oversized];
+  const options = { pageSize: 'a4' as const, numberDuplicates: false };
+  const layout = packEntries(entries, options);
+  // #when
+  const document = await PDFDocument.load(await renderPDF(entries, layout, options));
+  const imageObjects = document.context
+    .enumerateIndirectObjects()
+    .filter(
+      ([, object]) =>
+        object instanceof PDFRawStream &&
+        object.dict.get(PDFName.of('Subtype'))?.toString() === '/Image',
+    ).length;
+  // #then
+  assert.deepEqual(
+    { miniCount: layout.miniCount, skipped: layout.skipped.length, imageObjects },
+    { miniCount: 1, skipped: 1, imageObjects: 1 },
+  );
+});
 
 for (const separateBack of [false, true]) {
   t(

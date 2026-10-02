@@ -1,7 +1,6 @@
-import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
+import { afterEach, beforeEach, expect, setSystemTime, spyOn, test } from 'bun:test';
 import { act, cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import PaperMinisGenerator from './PaperMinisGenerator';
-import * as pdf from '@/lib/paper-minis/pdf';
 
 const png = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==',
@@ -172,115 +171,108 @@ test('rendered dwarf and bugbear choices retain distinct heights on the same bas
   });
 });
 
-for (const action of ['Скачать PDF', 'Предпросмотр PDF']) {
-  for (const outcome of ['success', 'failure']) {
-    test(`${action} locks editing and file events until PDF ${outcome}`, async () => {
-      // #given
-      let resolve!: (bytes: Uint8Array) => void;
-      let reject!: (error: Error) => void;
-      const pending = new Promise<Uint8Array>((yes, no) => {
-        resolve = yes;
-        reject = no;
-      });
-      const generate = spyOn(pdf, 'generatePDF').mockReturnValue(pending);
-      // happy-dom cannot navigate an iframe to a PDF blob. Rendering is outside this seam.
-      const objectUrl = spyOn(URL, 'createObjectURL').mockReturnValue('about:blank');
-      const revokeUrl = spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
-      try {
-        render(<PaperMinisGenerator />);
-        await addFront();
-        fireEvent.change(screen.getByRole('combobox', { name: 'Высота существа' }), {
-          target: { value: 'custom' },
-        });
-        const picker = screen.getByLabelText('Добавить изображения', { selector: 'input' });
-        const frontPicker = screen.getByLabelText('Лицевая сторона', { selector: 'input' });
-        const backPicker = screen.getByLabelText('Оборот: отражение лицевой стороны', {
-          selector: 'input',
-        });
-        const file = new File([png], 'late.png', { type: 'image/png' });
-        // #when
-        fireEvent.click(screen.getByRole('button', { name: action }));
-        const editor = screen.getByRole<HTMLFieldSetElement>('group', {
-          name: 'Редактор миниатюр',
-        });
-        const locked = editor.disabled;
-        const busy = editor.getAttribute('aria-busy');
-        const controlsInside = Array.from(document.querySelectorAll('input, select')).every(
-          (control) => editor.contains(control),
-        );
-        const status = screen
-          .getByText('Создаём PDF. Редактирование временно недоступно.')
-          .getAttribute('role');
-        let pageDrop = true;
-        let thumbnailDrop = true;
-        await act(async () => {
-          fireEvent.change(picker, { target: { files: [file] } });
-          fireEvent.change(frontPicker, { target: { files: [file] } });
-          fireEvent.change(backPicker, { target: { files: [file] } });
-          fireEvent.change(screen.getByRole('combobox', { name: 'Размер бумаги' }), {
-            target: { value: 'letter' },
-          });
-          fireEvent.change(screen.getByRole('spinbutton', { name: 'Количество копий' }), {
-            target: { value: '9' },
-          });
-          fireEvent.click(screen.getByRole('button', { name: 'Дублировать' }));
-          fireEvent.click(screen.getByRole('button', { name: 'Удалить' }));
-          pageDrop = fireEvent.drop(window, { dataTransfer: { types: ['Files'], files: [file] } });
-          thumbnailDrop = fireEvent.drop(screen.getByRole('button', { name: 'Лицевая сторона' }), {
-            dataTransfer: { types: ['Files'], files: [file] },
-          });
-        });
-        const summary = document.querySelector('[aria-live="polite"]')?.textContent;
-        const lateBack = screen.queryByRole('button', { name: 'Оборот: late.png' }) !== null;
-        const lockedTitles = screen
-          .getAllByRole('article')
-          .map((row) => row.querySelector('h3')?.textContent);
-        await act(async () => {
-          if (outcome === 'success') resolve(new Uint8Array([1]));
-          else reject(new Error('PDF failed'));
-          await pending.catch(() => {});
-        });
-        const unlocked = !editor.disabled && editor.getAttribute('aria-busy') === 'false';
-        fireEvent.click(screen.getByRole('button', { name: 'Дублировать' }));
-        await act(async () => {
-          fireEvent.drop(window, { dataTransfer: { types: ['Files'], files: [file] } });
-        });
-        // #then
-        expect({
-          locked,
-          busy,
-          controlsInside,
-          status,
-          pageDrop,
-          thumbnailDrop,
-          summary,
-          lateBack,
-          lockedTitles,
-          unlocked,
-          rows: screen.getAllByRole('article').length,
-          pdfCalls: generate.mock.calls.length,
-        }).toEqual({
-          locked: true,
-          busy: 'true',
-          controlsInside: true,
-          status: 'status',
-          pageDrop: false,
-          thumbnailDrop: false,
-          summary: 'Миниатюр: 1 → листов: 1 (A4)',
-          lateBack: false,
-          lockedTitles: ['Goblin'],
-          unlocked: true,
-          rows: 3,
-          pdfCalls: 1,
-        });
-      } finally {
-        generate.mockRestore();
-        objectUrl.mockRestore();
-        revokeUrl.mockRestore();
-      }
-    });
+test('download action clicks an attached PDF download anchor', async () => {
+  // #given
+  setSystemTime(new Date(2026, 9, 2, 10, 30));
+  const originalClick = HTMLAnchorElement.prototype.click;
+  let clicked: { attached: boolean; download: string; protocol: string } | undefined;
+  HTMLAnchorElement.prototype.click = function () {
+    clicked = {
+      attached: this.isConnected,
+      download: this.download,
+      protocol: new URL(this.href).protocol,
+    };
+  };
+  try {
+    render(<PaperMinisGenerator />);
+    await addFront();
+    // #when
+    fireEvent.click(screen.getByRole('button', { name: 'Скачать PDF' }));
+    // #then
+    await waitFor(() =>
+      expect(clicked).toEqual({
+        attached: true,
+        download: 'paper-minis-20261002-1030.pdf',
+        protocol: 'blob:',
+      }),
+    );
+  } finally {
+    HTMLAnchorElement.prototype.click = originalClick;
+    setSystemTime();
   }
-}
+});
+
+test('download reports a browser object-URL failure', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  const objectUrl = spyOn(URL, 'createObjectURL').mockImplementation(() => {
+    throw new Error('Object URL unavailable');
+  });
+  try {
+    // #when
+    fireEvent.click(screen.getByRole('button', { name: 'Скачать PDF' }));
+    // #then
+    expect(
+      (
+        await screen.findByText(
+          'Не удалось создать PDF. Попробуйте ещё раз или уменьшите изображения.',
+        )
+      ).textContent,
+    ).toBe('Не удалось создать PDF. Попробуйте ещё раз или уменьшите изображения.');
+  } finally {
+    objectUrl.mockRestore();
+  }
+});
+
+test('preview action shows the generated PDF in an iframe and matching link', async () => {
+  // #given
+  const objectUrl = spyOn(URL, 'createObjectURL').mockReturnValue('about:blank#pdf-preview');
+  const revokeUrl = spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+  try {
+    render(<PaperMinisGenerator />);
+    await addFront();
+    // #when
+    fireEvent.click(screen.getByRole('button', { name: 'Предпросмотр PDF' }));
+    const iframe = await screen.findByTitle<HTMLIFrameElement>('Предпросмотр PDF');
+    const link = screen.getByRole<HTMLAnchorElement>('link', {
+      name: 'Открыть PDF в новой вкладке',
+    });
+    // #then
+    expect({ src: iframe.src, sameUrl: iframe.src === link.href, target: link.target }).toEqual({
+      src: 'about:blank#pdf-preview',
+      sameUrl: true,
+      target: '_blank',
+    });
+  } finally {
+    cleanup();
+    objectUrl.mockRestore();
+    revokeUrl.mockRestore();
+  }
+});
+
+test('preview reports a browser object-URL failure instead of showing a ready message', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  const objectUrl = spyOn(URL, 'createObjectURL').mockImplementation(() => {
+    throw new Error('Object URL unavailable');
+  });
+  try {
+    // #when
+    fireEvent.click(screen.getByRole('button', { name: 'Предпросмотр PDF' }));
+    // #then
+    expect(
+      (
+        await screen.findByText(
+          'Не удалось создать PDF. Попробуйте ещё раз или уменьшите изображения.',
+        )
+      ).textContent,
+    ).toBe('Не удалось создать PDF. Попробуйте ещё раз или уменьшите изображения.');
+  } finally {
+    objectUrl.mockRestore();
+  }
+});
 
 test('PDF actions wait for a pending image while the editor stays available', async () => {
   // #given

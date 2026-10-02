@@ -1,23 +1,37 @@
-import { atom } from 'nanostores';
+import { atom, computed } from 'nanostores';
 import { prepareArtwork, isSupportedArtwork } from '@/lib/paper-minis/artwork';
 import { planBatch } from '@/lib/paper-minis/batch-plan';
 import { normalizeArtwork } from '@/lib/paper-minis/normalization';
-import { DEFAULT_FIGURE_MARGIN_MM, packEntries, type PageSizeKey } from '@/lib/paper-minis/packing';
+import { generatePDF } from '@/lib/paper-minis/pdf';
+import {
+  DEFAULT_FIGURE_MARGIN_MM,
+  packEntries,
+  type PackResult,
+  type PageSizeKey,
+} from '@/lib/paper-minis/packing';
 import { DEFAULT_HEIGHT_SLOT } from '@/lib/paper-minis/sizes';
 import type { Entry, HeightCalibration, HeightSlot } from '@/lib/paper-minis/types';
 
 export type MiniRow = Entry & { id: number; frontError?: string };
-type Settings = {
+export type PaperMinisSettings = {
   pageSize: PageSizeKey;
   marginMm: number;
   numberDuplicates: boolean;
   normalization: boolean;
 };
+export type PaperMinisRenderer = (
+  rows: readonly MiniRow[],
+  layout: PackResult,
+  settings: Readonly<PaperMinisSettings>,
+) => Promise<Uint8Array>;
+type Preview = { bytes: Uint8Array; revision: number };
 const storageKey = 'pmg-settings';
+const successMessage = 'PDF готов.';
+const failureMessage = 'Не удалось создать PDF. Попробуйте ещё раз или уменьшите изображения.';
 
-export function createPaperMinisStore() {
+export function createPaperMinisStore(renderer: PaperMinisRenderer = generatePDF) {
   const $rows = atom<MiniRow[]>([]);
-  const $settings = atom<Settings>({
+  const $settings = atom<PaperMinisSettings>({
     pageSize: 'a4',
     marginMm: DEFAULT_FIGURE_MARGIN_MM,
     numberDuplicates: false,
@@ -27,8 +41,16 @@ export function createPaperMinisStore() {
   const $revision = atom(0);
   const $busy = atom(false);
   const $preparing = atom(false);
+  const $preview = atom<Preview | undefined>(undefined);
+  const $previewStale = computed(
+    [$preview, $revision],
+    (preview, revision) => preview !== undefined && preview.revision !== revision,
+  );
   let nextId = 0;
   const loads = new Map<string, object>();
+  let packedRows: MiniRow[] | undefined;
+  let packedSettings: PaperMinisSettings | undefined;
+  let packed: PackResult | undefined;
 
   function changed() {
     $revision.set($revision.get() + 1);
@@ -132,7 +154,7 @@ export function createPaperMinisStore() {
       if (planned.back) void setImage(id, planned.back, true);
     }
   }
-  function settings(fields: Partial<Settings>) {
+  function settings(fields: Partial<PaperMinisSettings>) {
     if ($busy.get()) return;
     const previous = $settings.get();
     const next = { ...previous, ...fields };
@@ -172,6 +194,35 @@ export function createPaperMinisStore() {
       /* Use defaults when storage is unavailable. */
     }
   }
+  function pack() {
+    const rows = $rows.get();
+    const currentSettings = $settings.get();
+    if (rows !== packedRows || currentSettings !== packedSettings || !packed) {
+      packedRows = rows;
+      packedSettings = currentSettings;
+      packed = packEntries(rows, currentSettings);
+    }
+    return packed;
+  }
+  async function render() {
+    if ($busy.get() || $preparing.get()) return;
+    const layout = pack();
+    if (!layout.miniCount) return;
+    $busy.set(true);
+    $message.set('');
+    const rows = $rows.get().map((row) => Object.assign({}, row));
+    const snapshotSettings = { ...$settings.get() };
+    const revision = $revision.get();
+    try {
+      const bytes = await renderer(rows, layout, snapshotSettings);
+      $message.set(successMessage);
+      return { bytes, revision };
+    } catch {
+      $message.set(failureMessage);
+    } finally {
+      $busy.set(false);
+    }
+  }
   return {
     $rows,
     $settings,
@@ -179,14 +230,8 @@ export function createPaperMinisStore() {
     $revision,
     $busy,
     $preparing,
-    beginGeneration() {
-      if ($busy.get() || $preparing.get()) return false;
-      $busy.set(true);
-      return true;
-    },
-    endGeneration() {
-      $busy.set(false);
-    },
+    $preview,
+    $previewStale,
     patch,
     addBlank,
     setImage,
@@ -199,7 +244,14 @@ export function createPaperMinisStore() {
     clearCalibration(id: number) {
       patch(id, { calibration: undefined });
     },
-    pack: () => packEntries($rows.get(), $settings.get()),
+    pack,
+    async download() {
+      return (await render())?.bytes;
+    },
+    async refreshPreview() {
+      const preview = await render();
+      if (preview) $preview.set(preview);
+    },
     clearBack(id: number) {
       if ($busy.get()) return;
       loads.delete(`${id}:true`);

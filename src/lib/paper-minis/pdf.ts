@@ -16,17 +16,15 @@ import {
   setStrokingGrayscaleColor,
 } from 'pdf-lib';
 import type { PreparedArtwork, Entry } from './types';
-import { hasPackableDimensions } from './sizes.ts';
 import {
   CUT_MARK_ARM_MM,
   CUT_MARK_EXTENT_MM,
   CUT_MARK_STROKE_MM,
   MARGIN_MM,
   PAGE_SIZES_MM,
-  isBackArtworkLoading,
-  packEntries,
   type BackFace,
   type PackOptions,
+  type PackResult,
   type PackedMini,
   type PageSizeKey,
 } from './packing.ts';
@@ -55,16 +53,12 @@ export const SCALE_BAR_NOTE = 'Must measure 100 mm. If shorter, print at Actual 
 
 export type GenerateOptions = PackOptions;
 
-export async function generatePDF(entries: Entry[], opts: GenerateOptions): Promise<Uint8Array> {
-  // The packer's own dimension rule, so a row it drops for want of a figure
-  // height does not have its artwork embedded and flushed into the file
-  // undrawn. The packer's other drop path — a mini too large for the page —
-  // still slips through here, so an oversized row costs its bytes.
-  const valid = entries
-    .filter((e) => e.artwork && e.count > 0 && hasPackableDimensions(e) && !isBackArtworkLoading(e))
-    .map((e) => ({ ...e }));
-  if (valid.length === 0) throw new Error('No valid entries to generate.');
-
+export async function generatePDF(
+  entries: readonly Entry[],
+  layout: PackResult,
+  opts: GenerateOptions,
+): Promise<Uint8Array> {
+  if (layout.pages.length === 0) throw new Error('Nothing fits on a page.');
   const pdf = await PDFDocument.create();
   pdf.setTitle('Paper Minis');
   pdf.setCreator('Paper Mini Generator');
@@ -75,9 +69,9 @@ export async function generatePDF(entries: Entry[], opts: GenerateOptions): Prom
   const font = await pdf.embedFont(StandardFonts.HelveticaBold);
   const noteFont = await pdf.embedFont(StandardFonts.Helvetica);
 
-  // Embed each unique artwork once, keyed by its position in `valid` so packing's
-  // entryIndex maps straight back to the embedded images.
-  const faces: FaceImages[] = [];
+  // Embed only artwork used by a placement. Oversized and otherwise skipped
+  // rows must not add their image bytes to the document.
+  const faces = new Map<number, FaceImages>();
   const cache = new Map<PreparedArtwork, PDFImage>();
   const embed = async (artwork: PreparedArtwork) => {
     let img = cache.get(artwork);
@@ -89,18 +83,20 @@ export async function generatePDF(entries: Entry[], opts: GenerateOptions): Prom
     }
     return img;
   };
-  for (const e of valid) {
-    faces.push({
-      front: await embed(e.artwork!),
-      back: e.backArtwork ? await embed(e.backArtwork) : undefined,
+  const placedEntryIndices = new Set(
+    layout.pages.flatMap((page) => page.placements.map(({ mini }) => mini.entryIndex)),
+  );
+  for (const entryIndex of placedEntryIndices) {
+    const entry = entries[entryIndex];
+    if (!entry?.artwork) throw new Error('Layout refers to an entry without prepared artwork.');
+    faces.set(entryIndex, {
+      front: await embed(entry.artwork),
+      back: entry.backArtwork ? await embed(entry.backArtwork) : undefined,
     });
   }
 
-  const { pages } = packEntries(valid, opts);
-  if (pages.length === 0) throw new Error('Nothing fits on a page.');
-
   const { w: pageWmm, h: pageHmm } = PAGE_SIZES_MM[opts.pageSize];
-  for (const page of pages) {
+  for (const page of layout.pages) {
     const pdfPage = pdf.addPage([mm(pageWmm), mm(pageHmm)]);
     for (const { mini, xMm, yMm, rotated } of page.placements) {
       if (rotated) {
@@ -117,14 +113,14 @@ export async function generatePDF(entries: Entry[], opts: GenerateOptions): Prom
             mm(pageHmm - MARGIN_MM - yMm - CUT_MARK_EXTENT_MM),
           ),
         );
-        drawMini(pdfPage, mini, faces[mini.entryIndex], 0, mini.totalHeightMm, font);
+        drawMini(pdfPage, mini, faces.get(mini.entryIndex)!, 0, mini.totalHeightMm, font);
         pdfPage.pushOperators(popGraphicsState());
         continue;
       }
       drawMini(
         pdfPage,
         mini,
-        faces[mini.entryIndex],
+        faces.get(mini.entryIndex)!,
         MARGIN_MM + xMm,
         pageHmm - MARGIN_MM - yMm,
         font,

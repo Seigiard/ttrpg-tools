@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { createPaperMinisStore } from '@/stores/paper-minis-store';
 import { isSupportedArtwork } from '@/lib/paper-minis/artwork';
-import { generatePDF, buildFilename } from '@/lib/paper-minis/pdf';
+import { buildFilename } from '@/lib/paper-minis/pdf';
 import { fitMiniFaces } from '@/lib/paper-minis/packing';
 import {
   DEFAULT_CUSTOM_HEIGHT_MM,
@@ -23,6 +23,7 @@ const DEFAULT_CALIBRATION: HeightCalibration = { head: 0, feet: 1 };
 
 const field =
   'min-h-11 w-full rounded-lg border border-border bg-surface-elevated px-3 text-text focus-visible:outline-2 focus-visible:outline-primary';
+const pdfFailureMessage = 'Не удалось создать PDF. Попробуйте ещё раз или уменьшите изображения.';
 
 function useArtworkUrl(artwork?: PreparedArtwork | null) {
   const [url, setUrl] = useState<string>();
@@ -407,14 +408,14 @@ export default function PaperMinisGenerator() {
   const rows = useStore(store.$rows);
   const settings = useStore(store.$settings);
   const message = useStore(store.$message);
-  const revision = useStore(store.$revision);
   const [margin, setMargin] = useState(String(settings.marginMm));
   const busy = useStore(store.$busy);
   const preparing = useStore(store.$preparing);
-  const [preview, setPreview] = useState<{ url: string; revision: number }>();
+  const preview = useStore(store.$preview);
+  const previewStale = useStore(store.$previewStale);
+  const [previewUrl, setPreviewUrl] = useState<string>();
   const [calibratingId, setCalibratingId] = useState<number>();
   const calibrationOpener = useRef<HTMLButtonElement>(null);
-  const previewUrl = useRef<string | undefined>(undefined);
   const [dragging, setDragging] = useState(false);
   const files = useRef<HTMLInputElement>(null);
   const packed = useMemo(() => store.pack(), [store, rows, settings]);
@@ -426,12 +427,22 @@ export default function PaperMinisGenerator() {
     store.loadSettings();
     setMargin(String(store.$settings.get().marginMm));
   }, [store]);
-  useEffect(
-    () => () => {
-      if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
-    },
-    [],
-  );
+  useEffect(() => {
+    if (!preview) {
+      setPreviewUrl(undefined);
+      return;
+    }
+    try {
+      const url = URL.createObjectURL(
+        new Blob([preview.bytes as BlobPart], { type: 'application/pdf' }),
+      );
+      setPreviewUrl(url);
+      return () => URL.revokeObjectURL(url);
+    } catch {
+      setPreviewUrl(undefined);
+      store.$message.set(pdfFailureMessage);
+    }
+  }, [preview, store]);
   useEffect(() => {
     let depth = 0;
     const hasFiles = (event: DragEvent) =>
@@ -475,34 +486,25 @@ export default function PaperMinisGenerator() {
     };
   }, [store, calibratingId]);
 
-  async function generate(showPreview: boolean) {
-    if (!marginValid || !packed.miniCount || !store.beginGeneration()) return;
+  async function download() {
+    const bytes = await store.download();
+    if (!bytes) return;
+    let url: string | undefined;
     try {
-      setDragging(false);
-      store.$message.set('');
-      const snapshot = store.$rows.get().map((row) => ({ ...row }));
-      const options = { ...store.$settings.get() };
-      const seq = store.$revision.get();
-      const bytes = await generatePDF(snapshot, options);
-      const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' }));
-      if (showPreview) {
-        if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
-        previewUrl.current = url;
-        setPreview({ url, revision: seq });
-      } else {
-        const anchor = document.createElement('a');
-        anchor.href = url;
-        anchor.download = buildFilename();
-        document.body.append(anchor);
-        anchor.click();
-        anchor.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 5000);
-        store.$message.set('PDF готов.');
-      }
+      const nextUrl = URL.createObjectURL(
+        new Blob([bytes as BlobPart], { type: 'application/pdf' }),
+      );
+      url = nextUrl;
+      const anchor = document.createElement('a');
+      anchor.href = nextUrl;
+      anchor.download = buildFilename();
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(nextUrl), 5000);
     } catch {
-      store.$message.set('Не удалось создать PDF. Попробуйте ещё раз или уменьшите изображения.');
-    } finally {
-      store.endGeneration();
+      if (url) URL.revokeObjectURL(url);
+      store.$message.set(pdfFailureMessage);
     }
   }
 
@@ -618,7 +620,7 @@ export default function PaperMinisGenerator() {
                   <Button
                     className="min-h-11 w-full"
                     disabled={busy || preparing || !packed.miniCount || !marginValid}
-                    onClick={() => void generate(false)}
+                    onClick={() => void download()}
                   >
                     {busy ? 'Подготовка PDF…' : 'Скачать PDF'}
                   </Button>
@@ -626,7 +628,7 @@ export default function PaperMinisGenerator() {
                     variant="outline"
                     className="min-h-11 w-full"
                     disabled={busy || preparing || !packed.miniCount || !marginValid}
-                    onClick={() => void generate(true)}
+                    onClick={() => void store.refreshPreview()}
                   >
                     {preview ? 'Обновить предпросмотр' : 'Предпросмотр PDF'}
                   </Button>
@@ -895,19 +897,19 @@ export default function PaperMinisGenerator() {
           </p>
         </div>
       </aside>
-      {preview && (
+      {preview && previewUrl && (
         <section aria-label="Предпросмотр PDF" className="space-y-2">
-          {preview.revision !== revision && (
+          {previewStale && (
             <p role="status" className="text-sm text-warning">
               Настройки или изображения изменились. Обновите предпросмотр.
             </p>
           )}
           <iframe
             title="Предпросмотр PDF"
-            src={preview.url}
+            src={previewUrl}
             className="h-[65vh] w-full rounded-lg border border-border"
           />
-          <a href={preview.url} target="_blank" rel="noreferrer" className="text-primary underline">
+          <a href={previewUrl} target="_blank" rel="noreferrer" className="text-primary underline">
             Открыть PDF в новой вкладке
           </a>
         </section>
