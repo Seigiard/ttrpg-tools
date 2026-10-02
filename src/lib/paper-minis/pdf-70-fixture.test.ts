@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'bun:test';
 import { pdf70Entries, type Pdf70Reconstruction } from './fixtures/pdf-70.ts';
-import { packMinis } from './packing.ts';
-import { packRowCandidate } from '@/test-utils/pack-row-candidate';
+import { resolveMinis } from './geometry.ts';
+import { packMinis, packRows } from './packing.ts';
 
 // #70's budget describes the observed set, not every possible perturbation.
 // The lower/upper sensitivity results and the failing upper Letter budget
@@ -15,13 +15,15 @@ for (const reconstruction of reconstructions) {
       // #given: #70 reports four A4 sheets and five Letter sheets with rows.
       const entries = pdf70Entries(reconstruction);
       // #when
-      const result = packRowCandidate(entries, { pageSize, numberDuplicates: false });
+      const opts = { pageSize, numberDuplicates: false };
+      const minis = resolveMinis(entries, opts);
+      const result = packRows(minis, opts);
       // #then
       assert.deepEqual(
         {
           pages: result.pageCount,
-          placed: result.miniCount,
-          oversized: result.entries.some(({ state }) => state === 'oversized'),
+          placed: result.pages.flatMap((page) => page.rows.flatMap((row) => row.items)).length,
+          oversized: minis.some(({ orientation }) => orientation === 'oversized'),
         },
         { pages: pageSize === 'a4' ? 4 : 5, placed: 25, oversized: false },
       );
