@@ -7,6 +7,12 @@ function dispatchCancel(element: HTMLElement) {
   element.dispatchEvent(new Event('cancel', { cancelable: true }));
 }
 
+// happy-dom lays nothing out, so the dialog box is placed explicitly.
+function placeDialog(dialog: HTMLElement) {
+  dialog.getBoundingClientRect = () =>
+    ({ left: 100, top: 100, right: 300, bottom: 300, width: 200, height: 200, x: 100, y: 100 }) as DOMRect;
+}
+
 describe('Preact Dialog', () => {
   afterEach(() => {
     cleanup();
@@ -87,7 +93,7 @@ describe('Preact Dialog', () => {
   });
 
   test('clicking outside the popup closes the dialog', async () => {
-    // #given a dialog with a visible outside-click target
+    // #given an open dialog whose box sits in the middle of the viewport
     render(
       <Dialog defaultOpen>
         <DialogContent>
@@ -97,15 +103,35 @@ describe('Preact Dialog', () => {
       </Dialog>,
     );
     const dialog = await screen.findByRole('dialog', { name: 'Задать рост' });
-    const outside = dialog;
+    placeDialog(dialog);
 
-    // #when the user clicks outside the popup
-    fireEvent.click(outside);
+    // #when the user clicks the backdrop, which targets the dialog element outside its box
+    fireEvent.click(dialog, { clientX: 10, clientY: 10 });
 
     // #then the dialog is removed
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: 'Задать рост' })).toBeNull();
     });
+  });
+
+  test('clicking the popup padding keeps the dialog open', async () => {
+    // #given an open dialog whose box sits in the middle of the viewport
+    render(
+      <Dialog defaultOpen>
+        <DialogContent>
+          <DialogTitle>Задать рост</DialogTitle>
+          <button type="button">Применить</button>
+        </DialogContent>
+      </Dialog>,
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Задать рост' });
+    placeDialog(dialog);
+
+    // #when the user clicks the padding, which also targets the dialog element
+    fireEvent.click(dialog, { clientX: 200, clientY: 200 });
+
+    // #then the dialog stays open
+    expect(screen.getByRole('dialog', { name: 'Задать рост' })).toBeTruthy();
   });
 
   test('locks document scrolling while the dialog is open', async () => {

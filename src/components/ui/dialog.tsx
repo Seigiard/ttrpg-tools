@@ -106,7 +106,16 @@ function DialogContent({ className, finalFocus, children, onClick, ...props }: D
       {...props}
       onClick={(event) => {
         onClick?.(event);
-        if (!event.defaultPrevented && event.target === event.currentTarget) setOpen(false);
+        // Clicks on the ::backdrop and on the dialog's own padding both target the
+        // dialog element; only a point outside its box is a backdrop click.
+        if (event.defaultPrevented || event.target !== event.currentTarget) return;
+        const box = event.currentTarget.getBoundingClientRect();
+        const inside =
+          event.clientX >= box.left &&
+          event.clientX <= box.right &&
+          event.clientY >= box.top &&
+          event.clientY <= box.bottom;
+        if (!inside) setOpen(false);
       }}
     >
       {children}
