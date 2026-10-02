@@ -76,7 +76,7 @@ Review base: 48c587c626dba17990da59ea1ccb475054d36c35
 - [ ] H3 · Measurement scripts and React baseline results. Done: `results/react/` holds raw payload, network, timing data and screenshots.
 - [ ] H4 · React follow-up change on `experiment/ui-stack-react-followup`. Done: diff saved to `results/react/followup.diff`.
 - [x] P1 · Preact toolchain beside React and the Base UI decision. Done: all CI checks green.
-- [ ] P2 · Preact primitives, icons and `ReferenceList` with their tests. Done: CI checks green.
+- [x] P2 · Preact primitives, icons and `ReferenceList` with their tests. Done: CI checks green.
 - [ ] P3 · Preact weather, locations, encounters and prices with their tests. Done: CI checks green.
 - [ ] P4 · Preact paper minis with its tests. Done: CI checks green.
 - [ ] P5 · React removed; no React runtime in any bundle; parity suite green; measurements saved. Done: CI checks and e2e green, `results/preact/` filled.
