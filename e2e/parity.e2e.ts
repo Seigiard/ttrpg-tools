@@ -177,3 +177,27 @@ test('no route has horizontal page scroll at 390px @narrow', async ({ page }) =>
       .toBe(true);
   }
 });
+
+test('the calibration dialog keeps keyboard focus inside while open', async ({ page }) => {
+  await openHydrated(page, '/paper-minis/');
+  await page.getByLabel('Добавить изображения').setInputFiles('e2e/fixtures/mini.png');
+  const row = page.getByRole('article', { name: /Миниатюра 1|mini/ });
+  const calibrationButton = row.getByRole('button', { name: 'Задать рост' });
+  await expect(calibrationButton).toBeEnabled({ timeout: 15_000 });
+  await calibrationButton.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog', { name: 'Задать рост' })).toBeVisible();
+
+  // Focus-trap implementations may pass focus through a sentinel element outside the
+  // dialog before moving it back, so the check waits for focus to settle.
+  const focusInsideDialog = () =>
+    page.evaluate(() => !!document.activeElement?.closest('[role="dialog"], dialog'));
+  for (const key of ['Shift+Tab', 'Tab']) {
+    for (let i = 0; i < 12; i++) {
+      await page.keyboard.press(key);
+      await expect
+        .poll(focusInsideDialog, { message: `${key} #${i + 1} left the dialog`, timeout: 1000 })
+        .toBe(true);
+    }
+  }
+});
