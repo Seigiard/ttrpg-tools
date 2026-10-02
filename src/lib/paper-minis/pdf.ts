@@ -3,7 +3,6 @@ import {
   type PDFFont,
   type PDFImage,
   type PDFPage,
-  PrintScaling,
   StandardFonts,
   rgb,
   pushGraphicsState,
@@ -21,7 +20,8 @@ import {
   CUT_MARK_ARM_MM,
   CUT_MARK_STROKE_MM,
   PAGE_SIZES_MM,
-  SHEET_MARGIN_MM,
+  SCALE_BAR_BAND_MM,
+  printerScale,
   type BackFace,
   type PackOptions,
   type PackedMini,
@@ -35,12 +35,10 @@ const mm = (v: number) => v * MM_TO_PT;
 
 const MARK_GREY = 0.5;
 
-// The scale check printed in each sheet's top margin. A print dialog left on
-// "Fit to page" shrinks the whole sheet by a few per cent, which no amount of
+// The first sheet's scale check occupies a reserved band above the packed layout.
+// A print dialog shrinks the whole sheet by a few per cent, which no amount of
 // care in the layout can undo, so the sheet has to let the user see it happen.
-// 100 mm makes a 3% shrink a 3 mm shortfall, visible against any ruler. It sits
-// in the top margin, clear of the first row, because a printer's unprintable
-// strip is narrower at the top than at the bottom on most home printers.
+// 100 mm makes a 3% shrink a 3 mm shortfall, visible against any ruler.
 export const SCALE_BAR_MM = 100;
 const SCALE_BAR_Y_FROM_TOP_MM = 5.5;
 const SCALE_BAR_THICKNESS_MM = 0.4;
@@ -48,7 +46,12 @@ const SCALE_TICK_MM = 1.5;
 const SCALE_MAJOR_TICK_MM = 2.5;
 const SCALE_TICK_WIDTH_MM = 0.3;
 const SCALE_TEXT_PT = 7;
-export const SCALE_BAR_NOTE = 'Must measure 100 mm. If shorter, print at Actual size (100%).';
+const SCALE_NOTE_GAP_MM = 1.5;
+export const SCALE_BAR_NOTE =
+  'Print with Scale to Fit. This bar should be 100 mm; if not, reprint the printer test sheet.';
+const TEST_SHEET_INSTRUCTION =
+  'Print with Scale to Fit, measure the ruler, then enter the measured length.';
+const TEST_SHEET_TICK_WIDTH_MM = 0.2;
 
 export type GenerateOptions = PackOptions;
 
@@ -61,10 +64,6 @@ export async function generatePDF(
   const pdf = await PDFDocument.create();
   pdf.setTitle('Paper Minis');
   pdf.setCreator('Paper Mini Generator');
-  // A hint, not a guarantee: Acrobat opens its print dialog at actual size,
-  // while Chrome, Firefox and Preview ignore it — hence the scale bar as well.
-  pdf.catalog.getOrCreateViewerPreferences().setPrintScaling(PrintScaling.None);
-
   const font = await pdf.embedFont(StandardFonts.HelveticaBold);
   const noteFont = await pdf.embedFont(StandardFonts.Helvetica);
 
@@ -95,8 +94,12 @@ export async function generatePDF(
   }
 
   const { w: pageWmm, h: pageHmm } = PAGE_SIZES_MM[opts.pageSize];
-  for (const page of layout.pages) {
+  const scale = printerScale(opts);
+  const scaledPageHmm = pageHmm * scale;
+  for (const [pageIndex, page] of layout.pages.entries()) {
     const pdfPage = pdf.addPage([mm(pageWmm), mm(pageHmm)]);
+    pdfPage.pushOperators(pushGraphicsState(), concatTransformationMatrix(1 / scale, 0, 0, 1 / scale, 0, 0));
+    const layoutTopMm = scaledPageHmm - (pageIndex === 0 ? SCALE_BAR_BAND_MM : 0);
     for (const { mini, xMm, yMm, rotated } of page.placements) {
       if (rotated) {
         // Turn the whole local drawing clockwise about the footprint's top-left.
@@ -107,8 +110,8 @@ export async function generatePDF(
             -1,
             1,
             0,
-            mm(SHEET_MARGIN_MM + xMm),
-            mm(pageHmm - SHEET_MARGIN_MM - yMm),
+            mm(xMm),
+            mm(layoutTopMm - yMm),
           ),
         );
         drawMini(pdfPage, mini, faces.get(mini.entryIndex)!, 0, mini.totalHeightMm, font);
@@ -119,14 +122,53 @@ export async function generatePDF(
         pdfPage,
         mini,
         faces.get(mini.entryIndex)!,
-        SHEET_MARGIN_MM + xMm,
-        pageHmm - SHEET_MARGIN_MM - yMm,
+        xMm,
+        layoutTopMm - yMm,
         font,
       );
     }
-    drawScaleBar(pdfPage, pageHmm, noteFont);
+    if (pageIndex === 0) drawScaleBar(pdfPage, scaledPageHmm, noteFont);
+    pdfPage.pushOperators(popGraphicsState());
   }
 
+  return pdf.save();
+}
+
+export async function generatePrinterScaleTestSheet(pageSize: PageSizeKey): Promise<Uint8Array> {
+  const pdf = await PDFDocument.create();
+  pdf.setTitle('Paper Minis printer scale test sheet');
+  pdf.setCreator('Paper Mini Generator');
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const { w: pageWmm, h: pageHmm } = PAGE_SIZES_MM[pageSize];
+  const page = pdf.addPage([mm(pageWmm), mm(pageHmm)]);
+  const xMm = (pageWmm - SCALE_BAR_MM) / 2;
+  const yMm = pageHmm / 2;
+
+  page.drawRectangle({
+    x: mm(xMm),
+    y: mm(yMm),
+    width: mm(SCALE_BAR_MM),
+    height: mm(SCALE_BAR_THICKNESS_MM),
+    color: rgb(0, 0, 0),
+  });
+  for (let tickMm = 0; tickMm <= SCALE_BAR_MM; tickMm++) {
+    const length = tickMm % 10 === 0 ? SCALE_MAJOR_TICK_MM * 2 : SCALE_TICK_MM;
+    page.drawRectangle({
+      x: mm(xMm + Math.min(Math.max(tickMm - TEST_SHEET_TICK_WIDTH_MM / 2, 0), SCALE_BAR_MM - TEST_SHEET_TICK_WIDTH_MM)),
+      y: mm(yMm - length),
+      width: mm(TEST_SHEET_TICK_WIDTH_MM),
+      height: mm(length),
+      color: rgb(0, 0, 0),
+    });
+  }
+  const textWidth = font.widthOfTextAtSize(TEST_SHEET_INSTRUCTION, SCALE_TEXT_PT);
+  page.drawText(TEST_SHEET_INSTRUCTION, {
+    x: (mm(pageWmm) - textWidth) / 2,
+    y: mm(yMm - SCALE_MAJOR_TICK_MM * 2 - 5),
+    size: SCALE_TEXT_PT,
+    font,
+    color: rgb(0, 0, 0),
+  });
   return pdf.save();
 }
 
@@ -254,7 +296,7 @@ function drawScaleBar(pdfPage: PDFPage, pageHmm: number, font: PDFFont) {
   const barY = pageHmm - SCALE_BAR_Y_FROM_TOP_MM;
   const color = rgb(0, 0, 0);
   pdfPage.drawRectangle({
-    x: mm(SHEET_MARGIN_MM),
+    x: 0,
     y: mm(barY - SCALE_BAR_THICKNESS_MM / 2),
     width: mm(SCALE_BAR_MM),
     height: mm(SCALE_BAR_THICKNESS_MM),
@@ -264,9 +306,10 @@ function drawScaleBar(pdfPage: PDFPage, pageHmm: number, font: PDFFont) {
     const length = tickMm % 50 === 0 ? SCALE_MAJOR_TICK_MM : SCALE_TICK_MM;
     // The end ticks sit inside the bar's ends, so the bar's own length is the
     // measurement and the ticks never add to it.
-    const x =
-      SHEET_MARGIN_MM +
-      Math.min(Math.max(tickMm - SCALE_TICK_WIDTH_MM / 2, 0), SCALE_BAR_MM - SCALE_TICK_WIDTH_MM);
+  const x = Math.min(
+    Math.max(tickMm - SCALE_TICK_WIDTH_MM / 2, 0),
+    SCALE_BAR_MM - SCALE_TICK_WIDTH_MM,
+  );
     pdfPage.drawRectangle({
       x: mm(x),
       y: mm(barY - length),
@@ -275,9 +318,11 @@ function drawScaleBar(pdfPage: PDFPage, pageHmm: number, font: PDFFont) {
       color,
     });
   }
+  // Above the bar: the ticks hang below it, and the note is too long to sit
+  // beside a 100 mm bar on a scaled A4 or Letter width.
   pdfPage.drawText(SCALE_BAR_NOTE, {
-    x: mm(SHEET_MARGIN_MM + SCALE_BAR_MM + 3),
-    y: mm(barY - SCALE_MAJOR_TICK_MM),
+    x: 0,
+    y: mm(barY + SCALE_NOTE_GAP_MM),
     size: SCALE_TEXT_PT,
     font,
     color,
@@ -340,4 +385,8 @@ export function buildFilename(): string {
   const d = new Date();
   const pad = (n: number) => n.toString().padStart(2, '0');
   return `paper-minis-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.pdf`;
+}
+
+export function buildPrinterScaleTestSheetFilename(pageSize: PageSizeKey): string {
+  return `paper-minis-printer-scale-test-${pageSize}.pdf`;
 }

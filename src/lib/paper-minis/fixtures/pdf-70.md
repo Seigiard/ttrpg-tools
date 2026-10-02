@@ -54,7 +54,7 @@ These are simultaneous width extremes, not an exhaustive interval proof. Heights
 
 ## Page-count oracle and arithmetic check
 
-The budget oracle comes from #70's prototype, not from running `packMinis`. The dedicated test checks the original row counts and the new upper budgets, while requiring all 25 distinct copies to survive. It tests both rounded and raw measurements.
+The prototype's budget predates printer scale, shared cut lines and the guillotine-only layout. The dedicated test records the merged default-printer-scale budget while requiring all 25 distinct copies to survive. It tests both rounded and raw measurements.
 
 A separate arithmetic check confirms that the rounded geometry admits a three-sheet Letter layout. Letter's usable area is 196×259 mm under the project's 216×279 mm convention. In this constructive witness, commas separate columns, `/` stacks two minis, and each strip is cut independently:
 
@@ -70,21 +70,15 @@ The stacks are `140+4+94 = 238` and `124+4+108 = 236` mm, both below 242. Two no
 
 The raw outline widths of the 22 Small/Medium/Medium-short minis sum to 751.987 mm. With 21 gaps that is 835.987 mm, **not** the spec's approximate 822 mm. The fixture does not reproduce that secondary estimate or claim the spec's four-A4 lower-bound argument has been independently proved.
 
-Observed results at `47660a6`:
+Observed results after the printer-scale and shared-cut-line merge:
 
-| Reconstruction | Rows A4 | Rows Letter | New A4 | New Letter |
-| --- | ---: | ---: | ---: | ---: |
-| Rounded | 4 | 5 | 4 | 3 |
-| Raw | 4 | 5 | 4 | 3 |
-| Lower sensitivity sample | 4 | 5 | 4 | 3 |
-| Upper sensitivity sample | 4 | 5 | 4 | **4** |
+| Reconstruction | Default-scale A4 | Default-scale Letter |
+| --- | ---: | ---: |
+| Rounded | 3 | 5 |
+| Raw | 3 | 5 |
 
-The upper sample exceeds the three-Letter budget. For example, the first sheet's four witness columns grow from 195.1 to about 196.848 mm, beyond 196. The original PDF budget is not an independently established guarantee for every perturbation. An initial test applied it to those samples too; the upper Letter assertion failed. That unsupported interval guarantee was withdrawn, not fixed by changing dimensions. Sensitivity modes remain reproducible in the fixture. The surviving tests cover the supplied measurements and their stated rounding only.
-
-## Regression calibration
-
-A temporary Bun loader replaced only the candidate-selection expression in memory with `rowPlacements(rows.pages)`. Production files were not edited. All four Letter budget assertions in that initial run failed; row counts, copy conservation and A4 checks passed (12 pass / 4 fail). The temporary loader was removed. The final raw/rounded suite passes 8 tests with the real packer and fails its two Letter budget tests with that same row-only mutation.
+The old three-Letter witness is no longer a budget oracle: printer scale reduces the available Letter height, while shared cut lines remove width cost. The surviving tests cover the supplied measurements and their stated rounding only.
 
 ## Later changes
 
-The row layout and the 4 mm gap were later removed: minis now abut and share cut lines. The test that checked this reconstruction against the prototype's row sheet counts went with them, as it depended on both. The budget test remains and runs against the guillotine layout alone. The tables above record results at `47660a6`.
+The row layout and the 4 mm gap were removed: minis now abut and share cut lines. The test that checked this reconstruction against the prototype's row sheet counts went with them, as it depended on both. The budget test runs against the guillotine layout alone.

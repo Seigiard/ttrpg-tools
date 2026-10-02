@@ -5,17 +5,21 @@ import {
   PDFDict,
   PDFName,
   PDFRawStream,
-  PrintScaling,
+  StandardFonts,
   decodePDFRawStream,
 } from 'pdf-lib';
-import { generatePDF as renderPDF } from './pdf.ts';
+import { generatePDF as renderPDF, generatePrinterScaleTestSheet } from './pdf.ts';
 import { packEntries } from './packing.ts';
 import type { MiniLevels, PackOptions } from './geometry.ts';
 import type { Entry } from './types.ts';
 
 import { test as t } from 'bun:test';
 
-const generatePDF = (entries: Entry[], options: PackOptions) =>
+const generatePDF = (entries: Entry[], options: PackOptions) => {
+  const resolved = { ...options, printerScale: options.printerScale ?? 1 };
+  return renderPDF(entries, packEntries(entries, resolved), resolved);
+};
+const generatePDFAtDefaultScale = (entries: Entry[], options: PackOptions) =>
   renderPDF(entries, packEntries(entries, options), options);
 
 type Point = { x: number; y: number };
@@ -59,6 +63,7 @@ type Text = {
 type Mirror = { x: boolean; y: boolean };
 type Segment = [Point, Point];
 type Shape = {
+  page: number;
   role: Role;
   flipped: boolean;
   box: Box;
@@ -77,6 +82,7 @@ type Face = { image: Box; mirror: Mirror; xobject: string; badge?: Box; text?: T
 // `inward` says every arm stays on the piece, so neighbours can share an edge.
 type Level = { y: number; kind: 'corner' | 'tick' };
 type Mini = {
+  page: number;
   extent: Box;
   marks: Box;
   levels: Level[];
@@ -91,6 +97,7 @@ async function read(bytes: Uint8Array, readUprightMinis = true) {
   const pdf = await PDFDocument.load(bytes);
   const shapes: Shape[] = [];
   const scaleBars: ScaleBar[] = [];
+  const pageSizes: { width: number; height: number }[] = [];
   // pdf-lib gives every draw its own random resource name, so an image is
   // known by the object its name points at, numbered in order of first use.
   const xobjects = new Map<string, string>();
@@ -100,6 +107,7 @@ async function read(bytes: Uint8Array, readUprightMinis = true) {
     return xobjects.get(ref)!;
   };
   for (const [pageIndex, page] of pdf.getPages().entries()) {
+    pageSizes.push(page.getSize());
     const scaleBar: ScaleBar = { page: pageIndex, marks: [], notes: [] };
     scaleBars.push(scaleBar);
     const fonts = page.node.Resources()!.lookup(PDFName.of('Font'), PDFDict);
@@ -136,14 +144,16 @@ async function read(bytes: Uint8Array, readUprightMinis = true) {
           path.push(end);
         }
         if (op === 'f') scaleBar.marks.push(bounds(path));
-        if (op === 'S') shapes.push({ role: 'marks', flipped, box: bounds(path), segments });
-        if (op === 'B') shapes.push({ role: 'badge', flipped, box: bounds(path) });
+        if (op === 'S')
+          shapes.push({ page: pageIndex, role: 'marks', flipped, box: bounds(path), segments });
+        if (op === 'B') shapes.push({ page: pageIndex, role: 'badge', flipped, box: bounds(path) });
         if (op === 'f' || op === 'S' || op === 'B') {
           path = [];
           segments = [];
         }
         if (op === 'Do')
           shapes.push({
+            page: pageIndex,
             role: 'image',
             flipped,
             box: bounds([
@@ -174,7 +184,7 @@ async function read(bytes: Uint8Array, readUprightMinis = true) {
             position,
           };
           if (baseFont === '/Helvetica') scaleBar.notes.push(text);
-          else shapes.push({ role: 'text', flipped, box: bounds([position]), text });
+          else shapes.push({ page: pageIndex, role: 'text', flipped, box: bounds([position]), text });
         }
       }
     }
@@ -184,6 +194,7 @@ async function read(bytes: Uint8Array, readUprightMinis = true) {
     minis: readUprightMinis ? minis(shapes) : [],
     texts: shapes.filter((s) => s.role === 'text').map((s) => s.text!),
     pages: pdf.getPageCount(),
+    pageSizes,
     scaleBars,
     printScaling: pdf.catalog.getViewerPreferences()?.getPrintScaling(),
   };
@@ -235,6 +246,7 @@ function minis(shapes: Shape[]): Mini[] {
       text: pick('text', flipped)?.text,
     });
     return {
+      page: marks.page,
       extent: { left, right, bottom: ys[0], top: ys[ys.length - 1] },
       marks: marks.box,
       levels,
@@ -339,15 +351,15 @@ for (const separateBack of [false, true]) {
         {
           pages: 1,
           images: [
-            [40, 75, 61, 285],
-            [separateBack ? 75.5 : 65, 75, 86, 285],
+            [30, 75, 51, 285],
+            [separateBack ? 65.5 : 55, 75, 76, 285],
           ],
           axes: [[0, -1, 1, 0], separateBack ? [0, 1, -1, 0] : [0, -1, -1, 0]],
-          marks: [10, 73, 96, 287],
-          folds: [10, 30, 40, 63, 86, 96],
-          badge: [86.8, 184.8, 90.54, 189.2],
+          marks: [0, 73, 86, 287],
+          folds: [0, 20, 30, 53, 76, 86],
+          badge: [76.8, 184.8, 80.54, 189.2],
           label: [['1', 0, 1]],
-          scale: [10, 100, 1],
+          scale: [0, 100, 1],
         },
       );
     },
@@ -613,7 +625,7 @@ t('a height slot prints one figure height for artworks of different proportions'
 
 t('the drawer places images and cut marks at the resolved levels', async () => {
   // #given  a synthetic resolved layout whose levels differ from the Medium formula
-  const options = { pageSize: 'a4', numberDuplicates: false, marginMm: 2 } as const;
+  const options = { pageSize: 'a4', numberDuplicates: false, marginMm: 2, printerScale: 1 } as const;
   const entries = [{ ...entry, heightSlot: 'medium' as const }];
   const layout = packEntries(entries, options);
   const placement = layout.pages[0].placements[0];
@@ -733,43 +745,140 @@ t('the badge marks the base, a fixed step inside it', async () => {
 
 // A print dialog on "Fit to page" shrinks the sheet by a few per cent. The bar
 // is how the user finds out before cutting, so it has to be a true 100 mm.
-t('every sheet carries a 100 mm scale bar starting at the left margin', async () => {
-  // #given  nine Medium squares, which spill onto a second A4 sheet
-  const copies: Entry = { ...entry, heightSlot: 'medium', count: 9 };
+t('only the first sheet carries a 100 mm scale bar starting at the page edge', async () => {
+  // #given  a final 28 mm strip fits only after the full-height second page's rows
+  const copies: Entry[] = [
+    { ...entry, heightSlot: 'custom', customWidthMm: 2, customHeightMm: 10, count: 3 },
+    { ...entry, heightSlot: 'custom', customWidthMm: 2, customHeightMm: 56, count: 12 },
+  ];
   // #when
   const sheet = await read(
-    await generatePDF([copies], { pageSize: 'a4', numberDuplicates: false }),
+    await generatePDF(copies, { pageSize: 'a4', numberDuplicates: false, printerScale: 0.91 }),
   );
-  // #then  the bar spans exactly 100 mm, and no tick reaches past its ends
+  // #then  the first bar spans exactly 100 mm after printing, and later pages have none
   assert.deepEqual(
     sheet.scaleBars.map(({ page, marks }) => {
+      if (marks.length === 0) return { page, bars: 0 };
       const span = bounds(
         marks.flatMap((box) => [
           { x: box.left, y: box.bottom },
           { x: box.right, y: box.top },
         ]),
       );
-      return { page, left: asMm(span.left), length: widthMm(span) };
+      return { page, bars: 1, left: asMm(span.left), length: widthMm(span) };
     }),
     [
-      { page: 0, left: 10, length: 100 },
-      { page: 1, left: 10, length: 100 },
+      { page: 0, bars: 1, left: 0, length: 109.89011 },
+      { page: 1, bars: 0 },
     ],
   );
 });
 
-t('the scale bar says what length it must measure and what to do if it does not', async () => {
+t('the scale bar expands by the inverse printer scale before printing', async () => {
+  // #given  a printer that reduces a fitted page to 91% of its PDF size
+  const printerScale = 0.91;
+  // #when
+  const sheet = await read(
+    await generatePDF([entry], { pageSize: 'a4', numberDuplicates: false, printerScale }),
+  );
+  // #then  the print dialog reduces this PDF length to 100 mm on paper
+  assert.equal(widthMm(sheet.scaleBars[0].marks[0]), Number((100 / printerScale).toFixed(6)));
+});
+
+t('the printer scale test sheet has a 100 mm ruler inside one selected-size page', async () => {
+  // #given
+  const selectedSizes = [
+    ['a4', [210, 297]],
+    ['letter', [216, 279]],
+  ] as const;
+  // #when
+  const sheets = await Promise.all(
+    selectedSizes.map(async ([pageSize]) => read(await generatePrinterScaleTestSheet(pageSize))),
+  );
+  // #then
+  assert.deepEqual(
+    sheets.map((sheet) => {
+      const ruler = sheet.scaleBars[0].marks[0];
+      const page = sheet.pageSizes[0];
+      return {
+        pages: sheet.pages,
+        sizeMm: [asMm(page.width), asMm(page.height)],
+        rulerLengthMm: widthMm(ruler),
+        rulerInsidePage:
+          ruler.left > 0 && ruler.right < page.width && ruler.bottom > 0 && ruler.top < page.height,
+        instruction: sheet.scaleBars[0].notes.map((note) => note.label),
+      };
+    }),
+    [
+      {
+        pages: 1,
+        sizeMm: selectedSizes[0][1],
+        rulerLengthMm: 100,
+        rulerInsidePage: true,
+        instruction: ['Print with Scale to Fit, measure the ruler, then enter the measured length.'],
+      },
+      {
+        pages: 1,
+        sizeMm: selectedSizes[1][1],
+        rulerLengthMm: 100,
+        rulerInsidePage: true,
+        instruction: ['Print with Scale to Fit, measure the ruler, then enter the measured length.'],
+      },
+    ],
+  );
+});
+
+t('every cut mark stays inside the PDF page at the default printer scale', async () => {
+  // #given  a mix that places minis at every edge of the packable area
+  const entries = [{ ...entry, count: 12 }, { ...wide, count: 3 }];
+  // #when
+  const sheet = await read(
+    await generatePDFAtDefaultScale(entries, { pageSize: 'a4', numberDuplicates: false }),
+  );
+  // #then  the rendered cut-mark paths never reach beyond A4's physical edges
+  assert.equal(
+    sheet.shapes
+      .filter((shape) => shape.role === 'marks')
+      .every(
+        ({ box }) =>
+          box.left >= 0 && box.right <= 210 * PT_PER_MM && box.bottom >= 0 && box.top <= 297 * PT_PER_MM,
+      ),
+    true,
+  );
+});
+
+t('smaller printer scales enlarge PDF mini boxes instead of shrinking them', async () => {
+  // #given  the same Tiny mini, drawn for two fitted-page printer scales
+  const scales = [0.91, 0.8];
+  // #when
+  const sheets = await Promise.all(
+    scales.map(async (printerScale) =>
+      read(await generatePDF([entry], { pageSize: 'a4', numberDuplicates: false, printerScale })),
+    ),
+  );
+  // #then  each PDF box grows by the inverse scale, before Scale to Fit restores its paper size
+  assert.equal(
+    Number(
+      (
+        widthMm(sheets[1].minis[0].front.image) / widthMm(sheets[0].minis[0].front.image)
+      ).toFixed(6),
+    ),
+    1.1375,
+  );
+});
+
+t('the scale bar tells the player to print with Scale to Fit', async () => {
   // #when
   const sheet = await read(await generatePDF([entry], { pageSize: 'a4', numberDuplicates: false }));
   // #then
   assert.deepEqual(
     sheet.scaleBars.map((bar) => bar.notes.map((note) => note.label)),
-    [['Must measure 100 mm. If shorter, print at Actual size (100%).']],
+    [['Print with Scale to Fit. This bar should be 100 mm; if not, reprint the printer test sheet.']],
   );
 });
 
-t('the scale bar sits in the top margin, clear of the first row, on both pages', async () => {
-  // #given  a tall mini, so the first row starts right at the top margin
+t('the scale bar sits in its reserved band, clear of the first row, on both page sizes', async () => {
+  // #given  a tall mini, so the first row starts at the reserved band's edge
   const tall: Entry = { ...entry, heightSlot: 'large' };
   // #when
   const sheets = await Promise.all(
@@ -777,31 +886,72 @@ t('the scale bar sits in the top margin, clear of the first row, on both pages',
       read(await generatePDF([tall], { pageSize, numberDuplicates: false })),
     ),
   );
-  // #then  every mark and the note sit above the mini's own cut marks, and
-  //        the note starts after the bar ends
+  // #then  every mark and the note sit above the mini's own cut marks
   assert.deepEqual(
     sheets.map(({ scaleBars: [bar], minis: [mini] }) => {
-      const barRight = Math.max(...bar.marks.map((box) => box.right));
       return {
         marksAboveRow: bar.marks.every((box) => box.bottom > mini.marks.top),
         noteAboveRow: bar.notes.every((note) => note.position.y > mini.marks.top),
-        noteAfterBar: bar.notes.every((note) => note.position.x > barRight),
+        noteInsidePage: bar.notes.every((note) => note.position.x >= 0),
+        // The note starts at the bar's left end, so it must clear the bar and its ticks.
+        noteClearOfBar: bar.notes.every((note) =>
+          bar.marks.every((box) => note.position.y > box.top),
+        ),
       };
     }),
     [
-      { marksAboveRow: true, noteAboveRow: true, noteAfterBar: true },
-      { marksAboveRow: true, noteAboveRow: true, noteAfterBar: true },
+      { marksAboveRow: true, noteAboveRow: true, noteInsidePage: true, noteClearOfBar: true },
+      { marksAboveRow: true, noteAboveRow: true, noteInsidePage: true, noteClearOfBar: true },
     ],
   );
 });
 
-t('the PDF asks viewers to print at actual size', async () => {
-  // #when
-  const { printScaling } = await read(
-    await generatePDF([entry], { pageSize: 'a4', numberDuplicates: false }),
+t('the scale bar note stays inside A4 and Letter at the default and full printer scales', async () => {
+  // #given  the selected pages and the two supported scale states
+  const options = (['a4', 'letter'] as const).flatMap((pageSize) =>
+    [0.91, 1].map((printerScale) => ({ pageSize, printerScale })),
   );
-  // #then  /PrintScaling /None in the catalog's viewer preferences
-  assert.equal(printScaling, PrintScaling.None);
+  const fontDocument = await PDFDocument.create();
+  const font = await fontDocument.embedFont(StandardFonts.Helvetica);
+  // #when
+  const sheets = await Promise.all(
+    options.map(async ({ pageSize, printerScale }) =>
+      read(await generatePDF([entry], { pageSize, numberDuplicates: false, printerScale })),
+    ),
+  );
+  // #then  the physical PDF text's right edge stays inside its paper width
+  assert.equal(
+    sheets.every(({ pageSizes: [page], scaleBars: [bar] }, i) => {
+      const note = bar.notes[0];
+      return (
+        note.position.x + font.widthOfTextAtSize(note.label, note.size) / options[i].printerScale <=
+        page.width
+      );
+    }),
+    true,
+  );
+});
+
+t('the first sheet keeps minis below the scale bar and later sheets use the scaled top edge', async () => {
+  // #given  a layout that fills the short first sheet and the full-height second sheet
+  const copies: Entry[] = [
+    { ...entry, heightSlot: 'custom', customWidthMm: 2, customHeightMm: 10, count: 3 },
+    { ...entry, heightSlot: 'custom', customWidthMm: 2, customHeightMm: 56, count: 12 },
+  ];
+  // #when
+  const sheet = await read(
+    await generatePDF(copies, { pageSize: 'a4', numberDuplicates: false, printerScale: 0.91 }),
+  );
+  // #then  first-page marks stop below the reserved band, while page two reaches its top edge
+  const firstPageMarks = sheet.minis.filter((mini) => mini.page === 0).map((mini) => mini.marks.top);
+  const secondPageTops = sheet.minis.filter((mini) => mini.page === 1).map((mini) => mini.extent.top);
+  assert.deepEqual(
+    [
+      Math.max(...firstPageMarks) < 287 * PT_PER_MM,
+      Math.abs(asMm(Math.max(...secondPageTops)) - 297) < 0.001,
+    ],
+    [true, true],
+  );
 });
 
 // Folding along the fold line reflects the back half onto the front, so the

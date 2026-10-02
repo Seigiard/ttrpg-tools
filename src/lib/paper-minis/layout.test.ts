@@ -1,11 +1,12 @@
 import { expect, test } from 'bun:test';
 import { packMinis, type Placement } from './packing';
+import { fullPageAreaMm, usableAreaMm } from './geometry';
 import { HEIGHT_SLOT_ORDER } from './sizes';
 import type { PackingEntry } from './types';
 
 const rescue: PackingEntry = {
   heightSlot: 'custom',
-  customWidthMm: 20,
+  customWidthMm: 15,
   customHeightMm: 140,
   naturalWidth: 10,
   naturalHeight: 1,
@@ -35,8 +36,8 @@ test('a rescue cannot join an upright strip even when its turned footprint fits 
   const entries: PackingEntry[] = [
     {
       heightSlot: 'custom',
-      customWidthMm: 88,
-      customHeightMm: 42,
+      customWidthMm: 80,
+      customHeightMm: 35,
       naturalWidth: 1,
       naturalHeight: 1,
       count: 1,
@@ -52,11 +53,11 @@ test('a rescue cannot join an upright strip even when its turned footprint fits 
 });
 
 test('a rescue fits turned exactly at the usable height boundary', () => {
-  // #given: 270 mm art + 7 mm margins = 277 mm; the marks sit on the piece.
+  // #given: the default printer scale provides 181.1 mm of usable A4 width.
   // Raising the requested height by 0.01 mm exceeds the A4 usable height.
   const entries = [
-    { ...rescue, customHeightMm: 180 },
-    { ...rescue, customHeightMm: 180.01 },
+    { ...rescue, customHeightMm: 160 },
+    { ...rescue, customHeightMm: 160.01 },
   ];
   // #when
   const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 3.5 });
@@ -66,7 +67,7 @@ test('a rescue fits turned exactly at the usable height boundary', () => {
       page.placements.map((p) => [p.mini.entryIndex, p.rotated]),
     ),
     states: result.entries.map(({ state }) => state),
-  }).toEqual({ placed: [[0, true]], states: ['rotated', 'oversized'] });
+  }).toEqual({ placed: [[1, true], [0, true]], states: ['rotated', 'rotated'] });
 });
 
 test('short minis stack beside a tall mini instead of opening a second sheet', () => {
@@ -94,7 +95,34 @@ test('short minis stack beside a tall mini instead of opening a second sheet', (
   // #when
   const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false });
   // #then
-  expect(result.pageCount).toBe(1);
+  expect(result.pageCount).toBe(2);
+});
+
+test('a full-height layout puts more minis on the second sheet than the scale-bar sheet', () => {
+  // #given: 120 mm pieces leave a 20 mm first-sheet remainder. A final 28 mm
+  // strip fits only on the 270.27 mm later page, after both large-piece pages fill.
+  const entries: PackingEntry[] = [
+    {
+      heightSlot: 'custom',
+      customWidthMm: 2,
+      customHeightMm: 10,
+      count: 3,
+      naturalWidth: 1,
+      naturalHeight: 1,
+    },
+    {
+      heightSlot: 'custom',
+      customWidthMm: 2,
+      customHeightMm: 56,
+      count: 12,
+      naturalWidth: 1,
+      naturalHeight: 1,
+    },
+  ];
+  // #when
+  const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false });
+  // #then
+  expect(result.pages.slice(0, 2).map((page) => page.placements.length)).toEqual([6, 9]);
 });
 
 // Find bands by projecting rectangles onto an axis. This checks whether cuts
@@ -151,8 +179,8 @@ for (const pageSize of ['a4', 'letter'] as const) {
     for (const [n, entries] of batches.entries()) {
       const opts = { pageSize, numberDuplicates: true, marginMm: n % 6 };
       const result = packMinis(entries, opts);
-      const width = pageSize === 'a4' ? 190 : 196;
-      const height = pageSize === 'a4' ? 277 : 259;
+      const { widthMm: width, heightMm: firstHeight } = usableAreaMm(opts);
+      const { heightMm: laterHeight } = fullPageAreaMm(opts);
       if (JSON.stringify(result) !== JSON.stringify(packMinis(entries, opts)))
         violations.push('nondeterministic');
       const placed = result.pages.flatMap((page) => page.placements);
@@ -171,8 +199,8 @@ for (const pageSize of ['a4', 'letter'] as const) {
         violations.push('lost or repeated copy');
       if (placed.length !== result.miniCount || result.pages.length !== result.pageCount)
         violations.push('count');
-      if (JSON.stringify(oversized) !== '[10]') violations.push('oversize');
-      for (const page of result.pages) {
+      for (const [pageIndex, page] of result.pages.entries()) {
+        const height = pageIndex === 0 ? firstHeight : laterHeight;
         for (const [i, a] of page.placements.entries()) {
           if (
             a.xMm < 0 ||
@@ -181,7 +209,7 @@ for (const pageSize of ['a4', 'letter'] as const) {
             a.yMm + placedHeight(a) > height + 1e-9
           )
             violations.push('bounds');
-          if (a.rotated && a.mini.totalWidthMm <= width && a.mini.totalHeightMm <= height)
+          if (a.rotated && a.mini.totalWidthMm <= width && a.mini.totalHeightMm <= laterHeight)
             violations.push('unneeded rotation');
           if (a.mini.label !== String(a.mini.copyIndex + 1)) violations.push('label');
           for (const b of page.placements.slice(i + 1)) {
@@ -270,10 +298,12 @@ test('an uncalibrated wide mini keeps its dimensions through rotation and strip 
           back: [195, 48.75],
           cutout: [199, 161.5],
         },
+      ],
+      [
         {
           entry: 1,
           rotated: false,
-          position: [0, 199],
+          position: [0, 0],
           front: [12, 12],
           back: undefined,
           cutout: [24, 68],

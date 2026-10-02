@@ -322,6 +322,140 @@ test('direct and loaded settings reject the same invalid fields', () => {
   });
 });
 
+test('a printer measurement resolves to the scale used for layout and PDF generation', async () => {
+  // #given
+  let rendered: Parameters<PaperMinisRenderer> | undefined;
+  const store = setup(async (...input) => {
+    rendered = input;
+    return Uint8Array.from([1]);
+  });
+  const id = store.addBlank()!;
+  await store.setImage(id, artworkFile(10, 20));
+  // #when
+  store.setPrinterMeasurement('95');
+  await store.download();
+
+  // #then
+  expect({
+    canGenerate: store.$canGenerate.get(),
+    measurement: store.$settings.get().printerMeasurementMm,
+    input: store.$inputs.get().printerMeasurement,
+    renderedScale: rendered?.[2].printerScale,
+  }).toEqual({
+    canGenerate: true,
+    measurement: 95,
+    input: { text: '95', valid: true },
+    renderedScale: 0.95,
+  });
+});
+
+test('a printer measurement updates the estimated page count', async () => {
+  // #given  this batch fits one A4 page at 95% but needs two at the 91% default
+  const store = setup();
+  const id = store.addBlank()!;
+  store.setMargin('0');
+  store.setSize(id, 'custom');
+  store.setCustomDimensions(id, { width: '5', height: '35' });
+  store.setCount(id, '31');
+  await store.setImage(id, artworkFile(10, 20));
+
+  // #when
+  const defaultPages = store.$layout.get().pageCount;
+  store.setPrinterMeasurement('95');
+
+  // #then
+  expect([defaultPages, store.$layout.get().pageCount]).toEqual([2, 1]);
+});
+
+test.each(['79.9', '100.1', 'not a number'])(
+  'an invalid printer measurement %j keeps the previous scale',
+  (measurement) => {
+    // #given
+    const store = setup();
+    store.setPrinterMeasurement('95');
+
+    // #when
+    store.setPrinterMeasurement(measurement);
+
+    // #then
+    expect({
+      measurement: store.$settings.get().printerMeasurementMm,
+      input: store.$inputs.get().printerMeasurement,
+      valid: store.$inputsValid.get(),
+    }).toEqual({
+      measurement: 95,
+      input: { text: measurement, valid: false },
+      valid: false,
+    });
+  },
+);
+
+test('clearing a printer measurement restores the default scale', async () => {
+  // #given
+  let rendered: Parameters<PaperMinisRenderer> | undefined;
+  const store = setup(async (...input) => {
+    rendered = input;
+    return Uint8Array.from([1]);
+  });
+  const id = store.addBlank()!;
+  await store.setImage(id, artworkFile(10, 20));
+  store.setPrinterMeasurement('95');
+
+  // #when
+  store.setPrinterMeasurement('');
+  await store.download();
+
+  // #then
+  expect({
+    measurement: store.$settings.get().printerMeasurementMm,
+    input: store.$inputs.get().printerMeasurement,
+    renderedScale: rendered?.[2].printerScale,
+  }).toEqual({
+    measurement: undefined,
+    input: { text: '', valid: true },
+    renderedScale: 0.91,
+  });
+});
+
+test('a stored valid printer measurement is restored and an invalid one clears a previous measurement', () => {
+  // #given
+  const saved = setup();
+  saved.setPrinterMeasurement('91');
+  const valid = setup();
+  valid.loadSettings();
+  const invalid = setup();
+  invalid.setPrinterMeasurement('95');
+  localStorage.setItem('pmg-settings', JSON.stringify({ printerMeasurementMm: 101 }));
+
+  // #when
+  invalid.loadSettings();
+
+  // #then
+  expect({
+    valid: valid.$settings.get().printerMeasurementMm,
+    invalid: invalid.$settings.get().printerMeasurementMm,
+  }).toEqual({ valid: 91, invalid: undefined });
+});
+
+test('a printer measurement remains available when persistent storage is unavailable', () => {
+  // #given
+  const setItem = localStorage.setItem;
+  localStorage.setItem = () => {
+    throw new Error('Storage unavailable');
+  };
+  const store = setup();
+
+  try {
+    // #when
+    store.setPrinterMeasurement('92');
+
+    // #then
+    expect(store.$settings.get().printerMeasurementMm).toBe(92);
+  } finally {
+    localStorage.setItem = setItem;
+  }
+});
+
 test('download renders the layout shown by the counter and returns the renderer bytes', async () => {
   // #given
   const bytes = Uint8Array.from([11, 22, 33]);
@@ -352,7 +486,7 @@ test('download renders the layout shown by the counter and returns the renderer 
       pageSize: 'a4',
       marginMm: 2,
       numberDuplicates: false,
-      normalization: true,
+      printerScale: 0.91,
     },
     busy: false,
     message: 'PDF готов.',
@@ -1017,7 +1151,7 @@ test('a calibration session replaces an oversized warning when edited geometry f
       warning: 'Не помещается на лист. Уменьшите размер или поля. Эта миниатюра не попадёт в PDF.',
     },
     edited: {
-      printedHeightMm: 124,
+      printedHeightMm: 123.13499999999999,
       warning: 'Миниатюра уменьшена: лимит ширины, размер листа.',
     },
   });
@@ -1295,6 +1429,7 @@ test('generation keeps every draft commit locked until rendering settles', async
   await download;
   // #then
   expect(during).toEqual({
+    printerMeasurement: { text: '', valid: true },
     rows: {
       [id]: {
         count: { text: '', valid: false },

@@ -10,15 +10,15 @@ const reconstructions: Pdf70Reconstruction[] = ['rounded', 'raw'];
 
 for (const reconstruction of reconstructions) {
   for (const pageSize of ['a4', 'letter'] as const) {
-    test(`${reconstruction} PDF reconstruction meets the ${pageSize} printing budget without losing minis`, () => {
-      // #given: the independent prototype in #70 sets the printing budget.
+    test(`${reconstruction} PDF reconstruction fits the default printer-scale budget without losing minis`, () => {
+      // #given: the observed fixture and the default printer scale define the sheet budget.
       const entries = pdf70Entries(reconstruction);
       // #when
       const result = packMinis(entries, { pageSize, numberDuplicates: false });
-      // #then: a budget allows a future denser layout, but not dropped copies.
+      // #then: every mini remains printable, although the former #70 budget no longer applies.
       assert.deepEqual(
         {
-          withinBudget: result.pageCount <= (pageSize === 'a4' ? 4 : 3),
+          pages: result.pageCount,
           copies: result.pages
             .flatMap((page) => page.placements.map(({ mini }) => [mini.entryIndex, mini.copyIndex]))
             .toSorted((a, b) => a[0] - b[0]),
@@ -26,7 +26,7 @@ for (const reconstruction of reconstructions) {
           oversized: result.entries.some(({ state }) => state === 'oversized'),
         },
         {
-          withinBudget: true,
+          pages: 3,
           copies: Array.from({ length: 25 }, (_, index) => [index, 0]),
           placed: 25,
           oversized: false,

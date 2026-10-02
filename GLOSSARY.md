@@ -40,6 +40,9 @@ The zip of prepared paper minis that a batch upload restores.
 **Layout**:
 The arrangement of minis on sheets for printing and cutting.
 
+**Printer scale**:
+The fraction a printer applies when it prints a page with "Scale to Fit". Paper minis enlarges its PDF by the inverse of this value so figures print at their intended size.
+
 **Strip**:
 A full-width horizontal band of a sheet that can be cut off with one straight cut.
 
