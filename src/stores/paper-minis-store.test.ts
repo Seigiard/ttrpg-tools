@@ -275,6 +275,7 @@ test('export zip restores names, sizes and sides through batch ingest', async ()
   const goblin = store.addBlank({ name: 'Goblin', heightSlot: 'small' })!;
   await store.setImage(goblin, artworkFile(10, 20, 'goblin-front.png'));
   await store.setImage(goblin, artworkFile(11, 20, 'goblin-back.png'), true);
+  calibrate(store, goblin, { head: 0.2, feet: 0.8 });
   const empty = store.addBlank({ name: '', heightSlot: 'large' })!;
   await store.setImage(empty, artworkFile(12, 20, 'empty.png'));
   const duplicate = store.addBlank({ name: 'Goblin', heightSlot: 'small' })!;
@@ -298,6 +299,7 @@ test('export zip restores names, sizes and sides through batch ingest', async ()
     rows: restored.$rows.get().map((row) => ({
       name: row.name,
       heightSlot: row.heightSlot,
+      calibration: row.calibration,
       front: row.image?.name,
       back: row.backImage?.name,
     })),
@@ -305,8 +307,8 @@ test('export zip restores names, sizes and sides through batch ingest', async ()
     entryNames: [
       'Goblin-2-small-back.png',
       'Goblin-2-small-front.png',
-      'Goblin-small-back.png',
-      'Goblin-small-front.png',
+      'Goblin-small-back-h200-f800.png',
+      'Goblin-small-front-h200-f800.png',
       'mini-2-large-front.png',
     ],
     message: 'Архив готов.',
@@ -314,18 +316,21 @@ test('export zip restores names, sizes and sides through batch ingest', async ()
       {
         name: 'Goblin',
         heightSlot: 'small',
-        front: 'Goblin-small-front.png',
-        back: 'Goblin-small-back.png',
+        calibration: { head: 0.2, feet: 0.8 },
+        front: 'Goblin-small-front-h200-f800.png',
+        back: 'Goblin-small-back-h200-f800.png',
       },
       {
         name: 'Mini 2',
         heightSlot: 'large',
+        calibration: undefined,
         front: 'mini-2-large-front.png',
         back: undefined,
       },
       {
         name: 'Goblin 2',
         heightSlot: 'small',
+        calibration: undefined,
         front: 'Goblin-2-small-front.png',
         back: 'Goblin-2-small-back.png',
       },

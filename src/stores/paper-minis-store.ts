@@ -113,6 +113,13 @@ function exportSize(row: MiniRow): string {
   return row.heightSlot;
 }
 
+function exportCalibration(row: MiniRow): string {
+  if (calibrationGap(row.calibration) === undefined) return '';
+  const head = String(Math.round(row.calibration.head * 1000)).padStart(3, '0');
+  const feet = String(Math.round(row.calibration.feet * 1000)).padStart(3, '0');
+  return `-h${head}-f${feet}`;
+}
+
 async function artworkAsPng(artwork: PreparedArtwork): Promise<Uint8Array> {
   if (artwork.format === 'png') return artwork.bytes;
   const bitmap = await createImageBitmap(new Blob([artwork.bytes as BlobPart], { type: 'image/jpeg' }));
@@ -613,13 +620,16 @@ export function createPaperMinisStore({
         const sides = row.backArtwork ? (['front', 'back'] as const) : (['front'] as const);
         const base = exportName(row, index);
         const size = exportSize(row);
+        const calibration = exportCalibration(row);
         let suffix = 1;
-        let names = sides.map((side) => `${base}-${size}-${side}.png`);
-        while (names.some((name) => used.has(name))) {
+        let names = sides.map((side) => `${base}-${size}-${side}${calibration}.png`);
+        let collisionKeys = sides.map((side) => `${base}-${size}-${side}.png`);
+        while (collisionKeys.some((name) => used.has(name))) {
           suffix += 1;
-          names = sides.map((side) => `${base}-${suffix}-${size}-${side}.png`);
+          names = sides.map((side) => `${base}-${suffix}-${size}-${side}${calibration}.png`);
+          collisionKeys = sides.map((side) => `${base}-${suffix}-${size}-${side}.png`);
         }
-        for (const name of names) used.add(name);
+        for (const name of collisionKeys) used.add(name);
         entries[names[0]] = await artworkAsPng(row.artwork!);
         if (row.backArtwork) entries[names[1]] = await artworkAsPng(row.backArtwork);
       }
