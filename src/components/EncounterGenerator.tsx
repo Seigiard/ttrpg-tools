@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/preact';
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { ReferenceList } from '@/components/ReferenceList';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -50,12 +50,19 @@ function CheckSection({ table, roll, onRoll }: SectionProps) {
   const row = roll ? rows[roll.rowIndex] : null;
   const loading = !row;
   const [history, setHistory] = useState<Array<{ sum: number; label: string }>>([]);
+  const clearedRoll = useRef<RangePick | null>(null);
 
   useEffect(() => {
     if (!roll || !row) return;
+    if (clearedRoll.current === roll) return;
 
     setHistory((items) => [{ sum: roll.sum, label: row.ru }, ...items].slice(0, 5));
   }, [roll, row]);
+
+  const clearHistory = () => {
+    clearedRoll.current = roll;
+    setHistory([]);
+  };
 
   return (
     <section className="space-y-6">
@@ -88,7 +95,7 @@ function CheckSection({ table, roll, onRoll }: SectionProps) {
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <h3 className="font-display text-lg text-text">Последние проверки</h3>
-          <Button variant="outline" size="sm" onClick={() => setHistory([])} data-testid="check-history-clear">
+          <Button variant="outline" size="sm" onClick={clearHistory} data-testid="check-history-clear">
             Очистить
           </Button>
         </div>

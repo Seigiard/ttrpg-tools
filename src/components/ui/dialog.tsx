@@ -3,7 +3,7 @@ import { useContext, useEffect, useId, useRef, useState } from 'preact/hooks';
 
 import { cn } from '@/lib/utils';
 
-type DivProps = JSX.IntrinsicElements['div'];
+type DialogElementProps = JSX.IntrinsicElements['dialog'];
 type HeadingProps = JSX.IntrinsicElements['h2'];
 
 interface DialogContextValue {
@@ -36,13 +36,13 @@ function Dialog({ open, defaultOpen = false, onOpenChange, children }: DialogPro
   return <DialogContext.Provider value={{ open: currentOpen, setOpen, titleId }}>{children}</DialogContext.Provider>;
 }
 
-interface DialogContentProps extends DivProps {
+interface DialogContentProps extends DialogElementProps {
   finalFocus?: RefObject<HTMLElement | null>;
 }
 
-function DialogContent({ className, finalFocus, children, ...props }: DialogContentProps) {
+function DialogContent({ className, finalFocus, children, onClick, ...props }: DialogContentProps) {
   const context = useContext(DialogContext);
-  const popupRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDialogElement>(null);
   const setOpenRef = useRef<(open: boolean) => void>(() => {});
   const finalFocusRef = useRef<RefObject<HTMLElement | null> | undefined>(undefined);
   if (!context) throw new Error('DialogContent must be used inside Dialog');
@@ -56,8 +56,10 @@ function DialogContent({ className, finalFocus, children, ...props }: DialogCont
   useEffect(() => {
     if (!open) return;
 
+    const dialog = popupRef.current;
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const target = firstFocusable(popupRef.current) ?? popupRef.current;
+    if (dialog && !dialog.open) dialog.showModal();
+    const target = firstFocusable(dialog) ?? dialog;
     target?.focus();
     if (scrollLockDepth === 0) {
       previousBodyOverflow = document.body.style.overflow;
@@ -65,19 +67,23 @@ function DialogContent({ className, finalFocus, children, ...props }: DialogCont
     }
     scrollLockDepth += 1;
 
+    const onCancel = (event: Event) => {
+      event.preventDefault();
+      setOpenRef.current(false);
+    };
+
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        setOpenRef.current(false);
-      }
       if (event.key === 'Tab') {
-        trapFocus(event, popupRef.current);
+        trapFocus(event, dialog);
       }
     };
 
-    document.addEventListener('keydown', onKeyDown);
+    dialog?.addEventListener('cancel', onCancel);
+    dialog?.addEventListener('keydown', onKeyDown);
     return () => {
-      document.removeEventListener('keydown', onKeyDown);
+      dialog?.removeEventListener('cancel', onCancel);
+      dialog?.removeEventListener('keydown', onKeyDown);
+      if (dialog?.open) dialog.close();
       scrollLockDepth -= 1;
       if (scrollLockDepth === 0) document.body.style.overflow = previousBodyOverflow;
       const restoreTarget = finalFocusRef.current?.current ?? previousFocus;
@@ -88,30 +94,23 @@ function DialogContent({ className, finalFocus, children, ...props }: DialogCont
   if (!open) return null;
 
   return (
-    <>
-      <div className="fixed inset-0 z-50 bg-black/60" aria-hidden="true" />
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-4"
-        onClick={(event) => {
-          if (event.target === event.currentTarget) setOpen(false);
-        }}
-      >
-        <div
-          ref={popupRef}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={titleId}
-          tabIndex={-1}
-          className={cn(
-            'max-h-[90vh] w-full max-w-3xl overflow-auto rounded-xl border border-border bg-surface p-4 shadow-xl',
-            className,
-          )}
-          {...props}
-        >
-          {children}
-        </div>
-      </div>
-    </>
+    <dialog
+      ref={popupRef}
+      aria-modal="true"
+      aria-labelledby={titleId}
+      tabIndex={-1}
+      className={cn(
+        'fixed inset-0 z-50 m-auto max-h-[90vh] w-[calc(100%-2rem)] max-w-3xl overflow-auto rounded-xl border border-border bg-surface p-4 shadow-xl backdrop:bg-black/60',
+        className,
+      )}
+      {...props}
+      onClick={(event) => {
+        onClick?.(event);
+        if (!event.defaultPrevented && event.target === event.currentTarget) setOpen(false);
+      }}
+    >
+      {children}
+    </dialog>
   );
 }
 
@@ -143,10 +142,10 @@ function trapFocus(event: KeyboardEvent, container: HTMLElement | null) {
 
   const first = focusable[0];
   const last = focusable[focusable.length - 1];
-  if (event.shiftKey && document.activeElement === first) {
+  if (event.shiftKey && (document.activeElement === first || document.activeElement === container)) {
     event.preventDefault();
     last?.focus();
-  } else if (!event.shiftKey && document.activeElement === last) {
+  } else if (!event.shiftKey && (document.activeElement === last || document.activeElement === container)) {
     event.preventDefault();
     first?.focus();
   }

@@ -145,6 +145,23 @@ describe('EncounterGenerator (Preact presentation)', () => {
     expect(screen.getByTestId('check-history').querySelectorAll('li')).toHaveLength(0);
   });
 
+  test('очистка сразу после нового броска не возвращает его отложенным эффектом', async () => {
+    // #given mount: check d6=1; reaction. Затем новый бросок d6=2
+    restoreCrypto = mockCrypto([0, 0, 0, 1]);
+    render(<EncounterGenerator table={mausritterEncounters} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('check-history').querySelectorAll('li')).toHaveLength(1);
+    });
+
+    // #when the user clears before the new roll effect is flushed
+    fireEvent.click(screen.getByTestId('check-roll-button'));
+    fireEvent.click(screen.getByTestId('check-history-clear'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // #then history remains empty without another roll
+    expect(screen.getByTestId('check-history').querySelectorAll('li')).toHaveLength(0);
+  });
+
   test('результат реакции показывает отношение и вопрос', async () => {
     // #given reaction 2d6=12 (mock 5,5) → дружелюбное; check d6 (mock 0)
     restoreCrypto = mockCrypto([0, 5, 5]);

@@ -9,6 +9,8 @@ type TabValue = string | number;
 interface TabsContextValue {
   value: TabValue | null;
   setValue: (value: TabValue) => void;
+  focusedTabId: string | null;
+  setFocusedTabId: (id: string) => void;
   orientation: 'horizontal' | 'vertical';
   baseId: string;
 }
@@ -45,17 +47,19 @@ function Tabs({
 }: TabsProps) {
   const baseId = useId();
   const [uncontrolledValue, setUncontrolledValue] = useState<TabValue | null>(defaultValue ?? null);
+  const [focusedTabId, setFocusedTabId] = useState<string | null>(null);
   const currentValue = value !== undefined ? value : uncontrolledValue;
 
   const setValue = (next: TabValue) => {
     if (value === undefined) {
       setUncontrolledValue(next);
     }
+    setFocusedTabId(tabId(baseId, next));
     onValueChange?.(next);
   };
 
   return (
-    <TabsContext.Provider value={{ value: currentValue, setValue, orientation, baseId }}>
+    <TabsContext.Provider value={{ value: currentValue, setValue, focusedTabId, setFocusedTabId, orientation, baseId }}>
       <div
         data-slot="tabs"
         data-orientation={orientation}
@@ -109,16 +113,17 @@ function TabsTrigger({ className, value, disabled, onClick, onKeyDown, ...props 
   const context = useContext(TabsContext);
   if (!context) throw new Error('TabsTrigger must be used inside Tabs');
   const selected = context.value === value;
+  const id = tabId(context.baseId, value);
 
   return (
     <button
       type="button"
       role="tab"
-      id={tabId(context.baseId, value)}
+      id={id}
       aria-controls={panelId(context.baseId, value)}
       aria-selected={selected}
       disabled={disabled}
-      tabIndex={selected ? 0 : -1}
+      tabIndex={(context.focusedTabId ?? (selected ? id : null)) === id ? 0 : -1}
       data-slot="tabs-trigger"
       data-active={selected ? '' : undefined}
       className={cn(
@@ -135,7 +140,7 @@ function TabsTrigger({ className, value, disabled, onClick, onKeyDown, ...props 
       onKeyDown={(event) => {
         onKeyDown?.(event);
         if (event.defaultPrevented) return;
-        moveFocus(event, context.orientation);
+        moveFocus(event, context.orientation, context.setFocusedTabId);
       }}
       {...props}
     />
@@ -164,7 +169,11 @@ function TabsContent({ className, value, ...props }: TabsContentProps) {
   );
 }
 
-function moveFocus(event: ButtonKeyDownEvent, orientation: 'horizontal' | 'vertical') {
+function moveFocus(
+  event: ButtonKeyDownEvent,
+  orientation: 'horizontal' | 'vertical',
+  setFocusedTabId: (id: string) => void,
+) {
   const forwardKey = orientation === 'vertical' ? 'ArrowDown' : 'ArrowRight';
   const backwardKey = orientation === 'vertical' ? 'ArrowUp' : 'ArrowLeft';
   if (event.key !== forwardKey && event.key !== backwardKey && event.key !== 'Home' && event.key !== 'End') {
@@ -185,7 +194,10 @@ function moveFocus(event: ButtonKeyDownEvent, orientation: 'horizontal' | 'verti
         : event.key === forwardKey
           ? (currentIndex + 1) % tabs.length
           : (currentIndex - 1 + tabs.length) % tabs.length;
-  tabs[nextIndex]?.focus();
+  const next = tabs[nextIndex];
+  if (!next) return;
+  setFocusedTabId(next.id);
+  next.focus();
 }
 
 export { Tabs, TabsList, TabsTrigger, TabsContent, tabsListVariants };

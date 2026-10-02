@@ -44,8 +44,17 @@ describe('Preact Tabs', () => {
     // #when the user presses the horizontal next key
     fireEvent.keyDown(spring, { key: 'ArrowRight' });
 
-    // #then focus moves, while activation remains explicit
-    expect(document.activeElement).toBe(winter);
-    expect(winter.getAttribute('aria-selected')).toBe('false');
+    // #then focus and the next Tab entry point move, while activation remains explicit
+    expect({
+      active: document.activeElement,
+      winterSelected: winter.getAttribute('aria-selected'),
+      springTabIndex: spring.getAttribute('tabindex'),
+      winterTabIndex: winter.getAttribute('tabindex'),
+    }).toEqual({
+      active: winter,
+      winterSelected: 'false',
+      springTabIndex: '-1',
+      winterTabIndex: '0',
+    });
   });
 });

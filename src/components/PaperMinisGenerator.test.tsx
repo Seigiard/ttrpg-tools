@@ -23,6 +23,10 @@ function renderGenerator() {
   render(<PaperMinisGenerator store={currentStore} />);
 }
 
+function dispatchCancel(element: HTMLElement) {
+  element.dispatchEvent(new Event('cancel', { cancelable: true }));
+}
+
 beforeEach(() => {
   localStorage.setItem('pmg-settings', JSON.stringify({ normalization: false }));
   Object.defineProperty(HTMLElement.prototype, 'setPointerCapture', {
@@ -733,21 +737,25 @@ test('front height dialog applies calibration and row reset clears it', async ()
     configurable: true,
   });
   fireEvent.pointerDown(head, { button: 0, pointerId: 1, clientY: 25 });
-  fireEvent.pointerMove(area, { pointerId: 1, clientY: 90 });
+  fireEvent.pointerMove(area, { pointerId: 1, clientY: 50 });
   fireEvent.pointerUp(area, { pointerId: 1 });
-  await waitFor(() => expect(dialog.getByRole('slider', { name: 'Голова' }).getAttribute('aria-valuenow')).toBe('90'));
+  await waitFor(() => expect(dialog.getByRole('slider', { name: 'Голова' }).getAttribute('aria-valuenow')).toBe('50'));
   fireEvent.click(dialog.getByRole('button', { name: 'Применить' }));
   await waitFor(() => expect(currentStore.$rows.get()[0]?.calibration).toBeTruthy());
   await waitFor(() => expect(screen.queryByText('Рост задан вручную')).toBeTruthy());
+  await waitFor(() => expect(screen.queryByText('Миниатюра уменьшена: лимит ширины.')).toBeTruthy());
   const label = screen.getByText('Рост задан вручную');
+  const warning = screen.getByText('Миниатюра уменьшена: лимит ширины.');
   fireEvent.click(screen.getByRole('button', { name: 'Сбросить рост' }));
   await waitFor(() => expect(screen.queryByText('Рост задан вручную')).toBeNull());
   // #then
   expect({
     label: label.textContent,
+    warning: warning.textContent,
     reset: screen.queryByText('Рост задан вручную'),
   }).toEqual({
     label: 'Рост задан вручную',
+    warning: 'Миниатюра уменьшена: лимит ширины.',
     reset: null,
   });
 });
@@ -812,7 +820,7 @@ test('opening calibration moves focus inside and Escape cancels and restores the
   const dialog = await openCalibrationDialogElement();
   await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
   fireEvent.keyDown(screen.getByRole('slider', { name: 'Голова' }), { key: 'ArrowDown' });
-  fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+  dispatchCancel(dialog);
   // #then
   await waitFor(() =>
     expect({
