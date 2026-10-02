@@ -10,6 +10,7 @@ import {
   DEFAULT_CUSTOM_WIDTH_MM,
   HEIGHT_SLOT_ORDER,
   type FigureFitLimit,
+  type FigureFitMm,
   fitFigure,
   resolveFigureHeightMm,
   resolveSizeDimensionsMm,
@@ -181,7 +182,7 @@ function HeightCalibrationDialog({
   rowLabel,
   slotHeightMm,
   initial,
-  previewLimits,
+  previewFit,
   initialBack,
   onApply,
   onCancel,
@@ -191,7 +192,7 @@ function HeightCalibrationDialog({
   rowLabel: string;
   slotHeightMm: number;
   initial?: HeightCalibration;
-  previewLimits: (side: 'front' | 'back', calibration: HeightCalibration) => FigureFitLimit[];
+  previewFit: (side: 'front' | 'back', calibration: HeightCalibration) => FigureFitMm;
   initialBack?: HeightCalibration;
   onApply: (side: 'front' | 'back', calibration: HeightCalibration) => void;
   onCancel: () => void;
@@ -207,15 +208,21 @@ function HeightCalibrationDialog({
   );
   const lines = side === 'front' ? frontLines : backLines;
   const setLines = side === 'front' ? setFrontLines : setBackLines;
-  const printedHeightMm = slotHeightMm / Math.max(lines.feet - lines.head, minCalibrationGap);
-  const warning = fitLimitWarning(previewLimits(side, lines));
+  const fit = previewFit(side, lines);
+  const printedHeightMm = fit.imageHeightMm;
+  const warning = fitLimitWarning(fit.limits);
   const hasBack = !!backArtwork;
 
   function setLineFromClientY(which: 'head' | 'feet', clientY: number) {
     const box = artworkRef.current?.getBoundingClientRect();
     if (!box || box.height <= 0) return;
     const fraction = clamp((clientY - box.top) / box.height, 0, 1);
+    setLine(which, () => fraction);
+  }
+
+  function setLine(which: 'head' | 'feet', position: (current: number) => number) {
     setLines((current) => {
+      const fraction = position(current[which]);
       if (which === 'head')
         return { ...current, head: clamp(fraction, 0, current.feet - minCalibrationGap) };
       return { ...current, feet: clamp(fraction, current.head + minCalibrationGap, 1) };
@@ -233,7 +240,10 @@ function HeightCalibrationDialog({
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-2xl text-text">Задать рост</h2>
-            <p className="text-sm text-text-muted">{rowLabel}: перетащите линии головы и стоп.</p>
+            <p className="text-sm text-text-muted">
+              {rowLabel}: перетащите линии головы и стоп или используйте ↑/↓ — 1 пиксель, с Shift —
+              10.
+            </p>
           </div>
           <p className="text-sm font-medium text-text" aria-live="polite">
             Рост {Math.round(slotHeightMm)} мм · напечатается {Math.round(printedHeightMm)} мм
@@ -284,12 +294,20 @@ function HeightCalibrationDialog({
               key={key}
               type="button"
               role="slider"
-              aria-label={key === 'head' ? 'Head' : 'Feet'}
+              aria-label={key === 'head' ? 'Голова' : 'Ступни'}
+              aria-orientation="vertical"
               aria-valuemin={0}
               aria-valuemax={100}
-              aria-valuenow={Math.round(lines[key] * 100)}
+              aria-valuenow={lines[key] * 100}
+              aria-valuetext={`${Number((lines[key] * currentArtwork.height).toFixed(2))} пикселей от верха`}
               className="absolute left-0 right-0 h-8 -translate-y-1/2 cursor-row-resize border-y-2 border-primary bg-primary/10 text-left text-xs font-bold text-primary focus-visible:outline-2 focus-visible:outline-primary"
               style={lineStyle(lines[key])}
+              onKeyDown={(event) => {
+                if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+                event.preventDefault();
+                const step = (event.shiftKey ? 10 : 1) / currentArtwork.height;
+                setLine(key, (current) => current + (event.key === 'ArrowUp' ? -step : step));
+              }}
               onPointerDown={(event) => {
                 dragging.current = key;
                 event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -297,7 +315,7 @@ function HeightCalibrationDialog({
               }}
             >
               <span className="ml-2 rounded bg-surface/90 px-1">
-                {key === 'head' ? 'Head' : 'Feet'}
+                {key === 'head' ? 'Голова' : 'Ступни'}
               </span>
             </button>
           ))}
@@ -334,12 +352,12 @@ export default function PaperMinisGenerator() {
     margin.trim() !== '' && Number.isFinite(Number(margin)) && Number(margin) >= 0;
   const calibratingRow = rows.find((row) => row.id === calibratingId && row.artwork);
 
-  function previewFitLimits(
+  function previewFit(
     row: typeof calibratingRow,
     side: 'front' | 'back',
     calibration: HeightCalibration,
   ) {
-    if (!row?.artwork) return [];
+    if (!row?.artwork) return { imageWidthMm: 0, imageHeightMm: 0, limits: [] };
     const artwork = side === 'back' ? (row.backArtwork ?? row.artwork) : row.artwork;
     const tabHeightMm = resolveTabHeightMm(row);
     const usableHeightMm = PAGE_SIZES_MM[settings.pageSize].h - MARGIN_MM * 2;
@@ -353,7 +371,7 @@ export default function PaperMinisGenerator() {
       artwork.height,
       calibration,
       maxImageHeightMm,
-    ).limits;
+    );
   }
 
   useEffect(() => {
@@ -858,7 +876,7 @@ export default function PaperMinisGenerator() {
           rowLabel={calibratingRow.name || 'Миниатюра'}
           slotHeightMm={resolveFigureHeightMm(calibratingRow)}
           initial={calibratingRow.frontCalibration}
-          previewLimits={(side, calibration) => previewFitLimits(calibratingRow, side, calibration)}
+          previewFit={(side, calibration) => previewFit(calibratingRow, side, calibration)}
           initialBack={calibratingRow.backCalibration}
           onCancel={() => setCalibratingId(undefined)}
           onApply={(side, calibration) => {

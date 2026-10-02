@@ -25,9 +25,12 @@ async function addFront() {
 
 async function addBack() {
   await act(async () => {
-    fireEvent.change(screen.getByLabelText('Оборот: отражение лицевой стороны', { selector: 'input' }), {
-      target: { files: [new File([png], 'back.png', { type: 'image/png' })] },
-    });
+    fireEvent.change(
+      screen.getByLabelText('Оборот: отражение лицевой стороны', { selector: 'input' }),
+      {
+        target: { files: [new File([png], 'back.png', { type: 'image/png' })] },
+      },
+    );
   });
 }
 
@@ -114,9 +117,9 @@ test('a batch row is titled by its cleaned file name, or numbered when the name 
     });
   });
   // #then
-  expect(
-    screen.getAllByRole('article').map((row) => row.querySelector('h3')?.textContent),
-  ).toEqual(['Big bad wolf', 'Миниатюра 2']);
+  expect(screen.getAllByRole('article').map((row) => row.querySelector('h3')?.textContent)).toEqual(
+    ['Big bad wolf', 'Миниатюра 2'],
+  );
 });
 
 test('the back slot announces the selected file and returns to reflection after removal', async () => {
@@ -319,7 +322,7 @@ test('front height dialog applies pointer calibration and row reset clears it', 
     configurable: true,
     value: () => ({ left: 0, top: 0, width: 100, height: 100, right: 100, bottom: 100 }),
   });
-  fireEvent.pointerDown(within(dialog).getByRole('slider', { name: 'Head' }), {
+  fireEvent.pointerDown(within(dialog).getByRole('slider', { name: 'Голова' }), {
     pointerId: 1,
     clientY: 25,
   });
@@ -330,7 +333,11 @@ test('front height dialog applies pointer calibration and row reset clears it', 
   const warning = screen.getByText('Миниатюра уменьшена: лимит ширины.');
   fireEvent.click(screen.getByRole('button', { name: 'Сбросить рост' }));
   // #then
-  expect({ label: label.textContent, warning: warning.textContent, reset: screen.queryByText('Рост задан вручную') }).toEqual({
+  expect({
+    label: label.textContent,
+    warning: warning.textContent,
+    reset: screen.queryByText('Рост задан вручную'),
+  }).toEqual({
     label: 'Рост задан вручную',
     warning: 'Миниатюра уменьшена: лимит ширины.',
     reset: null,
@@ -349,13 +356,13 @@ test('front height dialog cancel leaves the row unchanged and keeps a 10 percent
     configurable: true,
     value: () => ({ left: 0, top: 0, width: 100, height: 100, right: 100, bottom: 100 }),
   });
-  const head = within(dialog).getByRole('slider', { name: 'Head' });
-  const feet = within(dialog).getByRole('slider', { name: 'Feet' });
+  const head = within(dialog).getByRole('slider', { name: 'Голова' });
+  const feet = within(dialog).getByRole('slider', { name: 'Ступни' });
   fireEvent.pointerDown(head, { pointerId: 1, clientY: 0 });
   fireEvent.pointerMove(artwork, { pointerId: 1, clientY: 96 });
   fireEvent.pointerUp(artwork, { pointerId: 1, clientY: 96 });
   const positions = [head.getAttribute('aria-valuenow'), feet.getAttribute('aria-valuenow')];
-  const readout = within(dialog).getByText('Рост 35 мм · напечатается 350 мм');
+  const readout = within(dialog).getByText('Рост 35 мм · напечатается 53 мм');
   const warning = within(dialog).getByText('Миниатюра уменьшена: лимит высоты 2×, лимит ширины.');
   fireEvent.click(within(dialog).getByRole('button', { name: 'Отмена' }));
   // #then
@@ -366,7 +373,7 @@ test('front height dialog cancel leaves the row unchanged and keeps a 10 percent
     label: screen.queryByText('Рост задан вручную'),
   }).toEqual({
     positions: ['90', '100'],
-    readout: 'Рост 35 мм · напечатается 350 мм',
+    readout: 'Рост 35 мм · напечатается 53 мм',
     warning: 'Миниатюра уменьшена: лимит высоты 2×, лимит ширины.',
     label: null,
   });
@@ -389,7 +396,7 @@ test('height dialog shows side tabs only with a back and applies back calibratio
     configurable: true,
     value: () => ({ left: 0, top: 0, width: 100, height: 100, right: 100, bottom: 100 }),
   });
-  fireEvent.pointerDown(within(dialog).getByRole('slider', { name: 'Head' }), {
+  fireEvent.pointerDown(within(dialog).getByRole('slider', { name: 'Голова' }), {
     pointerId: 1,
     clientY: 25,
   });
