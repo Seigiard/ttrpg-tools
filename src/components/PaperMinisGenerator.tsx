@@ -184,7 +184,12 @@ function HeightCalibrationDialog({
     const box = artworkRef.current?.getBoundingClientRect();
     if (!box || box.height <= 0) return;
     const fraction = clamp((clientY - box.top) / box.height, 0, 1);
+    setLine(which, () => fraction);
+  }
+
+  function setLine(which: 'head' | 'feet', position: (current: number) => number) {
     setLines((current) => {
+      const fraction = position(current[which]);
       if (which === 'head')
         return { ...current, head: clamp(fraction, 0, current.feet - minCalibrationGap) };
       return { ...current, feet: clamp(fraction, current.head + minCalibrationGap, 1) };
@@ -202,7 +207,10 @@ function HeightCalibrationDialog({
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-2xl text-text">Задать рост</h2>
-            <p className="text-sm text-text-muted">{rowLabel}: перетащите линии головы и стоп.</p>
+            <p className="text-sm text-text-muted">
+              {rowLabel}: перетащите линии головы и стоп или используйте ↑/↓ — 1 пиксель, с Shift —
+              10.
+            </p>
           </div>
           <p className="text-sm font-medium text-text" aria-live="polite">
             Рост {Math.round(slotHeightMm)} мм · напечатается {Math.round(printedHeightMm)} мм
@@ -226,12 +234,20 @@ function HeightCalibrationDialog({
               key={key}
               type="button"
               role="slider"
-              aria-label={key === 'head' ? 'Head' : 'Feet'}
+              aria-label={key === 'head' ? 'Голова' : 'Ступни'}
+              aria-orientation="vertical"
               aria-valuemin={0}
               aria-valuemax={100}
-              aria-valuenow={Math.round(lines[key] * 100)}
+              aria-valuenow={lines[key] * 100}
+              aria-valuetext={`${Number((lines[key] * artwork.height).toFixed(2))} пикселей от верха`}
               className="absolute left-0 right-0 h-8 -translate-y-1/2 cursor-row-resize border-y-2 border-primary bg-primary/10 text-left text-xs font-bold text-primary focus-visible:outline-2 focus-visible:outline-primary"
               style={lineStyle(lines[key])}
+              onKeyDown={(event) => {
+                if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+                event.preventDefault();
+                const step = (event.shiftKey ? 10 : 1) / artwork.height;
+                setLine(key, (current) => current + (event.key === 'ArrowUp' ? -step : step));
+              }}
               onPointerDown={(event) => {
                 dragging.current = key;
                 event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -239,7 +255,7 @@ function HeightCalibrationDialog({
               }}
             >
               <span className="ml-2 rounded bg-surface/90 px-1">
-                {key === 'head' ? 'Head' : 'Feet'}
+                {key === 'head' ? 'Голова' : 'Ступни'}
               </span>
             </button>
           ))}
@@ -371,121 +387,121 @@ export default function PaperMinisGenerator() {
         <div className="grid gap-6 xl:block">
           <div className="xl:absolute xl:right-full xl:h-full xl:w-60">
             <aside className="space-y-6 rounded-lg border border-border bg-surface-elevated p-4 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
-            <div>
-              <h2 className="text-2xl text-text">Настройки</h2>
-              <p className="mt-1 text-sm leading-relaxed text-text-muted">
-                Общие параметры печати.
-              </p>
-            </div>
-            <label className="block text-sm">
-              Размер бумаги
-              <select
-                className={field}
-                value={settings.pageSize}
-                onChange={(event) =>
-                  store.settings({ pageSize: event.target.value as 'a4' | 'letter' })
-                }
-              >
-                <option value="a4">A4 (210 × 297 мм)</option>
-                <option value="letter">Letter (216 × 279 мм)</option>
-              </select>
-            </label>
-            <label className="block text-sm">
-              Поля, мм
-              <input
-                className={field}
-                type="number"
-                min="0"
-                step="any"
-                required
-                value={margin}
-                aria-invalid={!marginValid}
-                onChange={(event) => {
-                  if (store.$busy.get()) return;
-                  setMargin(event.target.value);
-                  const n = event.target.valueAsNumber;
-                  if (Number.isFinite(n) && n >= 0) store.settings({ marginMm: n });
-                }}
-              />
-            </label>
-            {rows.length > 0 && (
+              <div>
+                <h2 className="text-2xl text-text">Настройки</h2>
+                <p className="mt-1 text-sm leading-relaxed text-text-muted">
+                  Общие параметры печати.
+                </p>
+              </div>
               <label className="block text-sm">
-                Высота всех фигурок
+                Размер бумаги
                 <select
                   className={field}
-                  value=""
-                  onChange={(event) => {
-                    for (const row of rows)
-                      store.patch(row.id, { heightSlot: event.target.value as MiniSize });
-                  }}
+                  value={settings.pageSize}
+                  onChange={(event) =>
+                    store.settings({ pageSize: event.target.value as 'a4' | 'letter' })
+                  }
                 >
-                  <option value="" disabled>
-                    Выберите…
-                  </option>
-                  <SizeOptions />
+                  <option value="a4">A4 (210 × 297 мм)</option>
+                  <option value="letter">Letter (216 × 279 мм)</option>
                 </select>
               </label>
-            )}
-            <div className="space-y-2 border-y border-border py-3">
-              <label className="flex min-h-11 items-center gap-3 text-sm">
+              <label className="block text-sm">
+                Поля, мм
                 <input
-                  type="checkbox"
-                  checked={settings.numberDuplicates}
-                  onChange={(event) => store.settings({ numberDuplicates: event.target.checked })}
+                  className={field}
+                  type="number"
+                  min="0"
+                  step="any"
+                  required
+                  value={margin}
+                  aria-invalid={!marginValid}
+                  onChange={(event) => {
+                    if (store.$busy.get()) return;
+                    setMargin(event.target.value);
+                    const n = event.target.valueAsNumber;
+                    if (Number.isFinite(n) && n >= 0) store.settings({ marginMm: n });
+                  }}
                 />
-                Нумеровать копии
               </label>
-              <label className="flex min-h-11 items-center gap-3 text-sm">
-                <input
-                  type="checkbox"
-                  checked={settings.normalization}
-                  onChange={(event) => store.settings({ normalization: event.target.checked })}
-                />
-                Обрезать пустые поля
-              </label>
-            </div>
-            <div className="space-y-3">
-              <h3 className="text-xl text-text">PDF</h3>
-              <p aria-live="polite" className="text-sm">
-                {rows.length
-                  ? `Миниатюр: ${packed.miniCount} → листов: ${packed.pageCount} (${settings.pageSize === 'a4' ? 'A4' : 'Letter'})`
-                  : 'Добавьте изображения для печати миниатюр.'}
-              </p>
-              {message && (
-                <p role="status" className="text-sm">
-                  {message}
-                </p>
+              {rows.length > 0 && (
+                <label className="block text-sm">
+                  Высота всех фигурок
+                  <select
+                    className={field}
+                    value=""
+                    onChange={(event) => {
+                      for (const row of rows)
+                        store.patch(row.id, { heightSlot: event.target.value as MiniSize });
+                    }}
+                  >
+                    <option value="" disabled>
+                      Выберите…
+                    </option>
+                    <SizeOptions />
+                  </select>
+                </label>
               )}
-              <p role="status" className="text-sm">
-                {busy
-                  ? 'Создаём PDF. Редактирование временно недоступно.'
-                  : preparing
-                    ? 'Обрабатываем изображения. PDF будет доступен после завершения.'
-                    : ''}
-              </p>
-              {!marginValid && (
-                <p role="status" className="text-sm text-danger">
-                  Поля должны быть числом от 0 мм.
-                </p>
-              )}
-              <div className="space-y-2">
-                <Button
-                  className="min-h-11 w-full"
-                  disabled={busy || preparing || !packed.miniCount || !marginValid}
-                  onClick={() => void generate(false)}
-                >
-                  {busy ? 'Подготовка PDF…' : 'Скачать PDF'}
-                </Button>
-                <Button
-                  variant="outline"
-                  className="min-h-11 w-full"
-                  disabled={busy || preparing || !packed.miniCount || !marginValid}
-                  onClick={() => void generate(true)}
-                >
-                  {preview ? 'Обновить предпросмотр' : 'Предпросмотр PDF'}
-                </Button>
+              <div className="space-y-2 border-y border-border py-3">
+                <label className="flex min-h-11 items-center gap-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={settings.numberDuplicates}
+                    onChange={(event) => store.settings({ numberDuplicates: event.target.checked })}
+                  />
+                  Нумеровать копии
+                </label>
+                <label className="flex min-h-11 items-center gap-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={settings.normalization}
+                    onChange={(event) => store.settings({ normalization: event.target.checked })}
+                  />
+                  Обрезать пустые поля
+                </label>
               </div>
-            </div>
+              <div className="space-y-3">
+                <h3 className="text-xl text-text">PDF</h3>
+                <p aria-live="polite" className="text-sm">
+                  {rows.length
+                    ? `Миниатюр: ${packed.miniCount} → листов: ${packed.pageCount} (${settings.pageSize === 'a4' ? 'A4' : 'Letter'})`
+                    : 'Добавьте изображения для печати миниатюр.'}
+                </p>
+                {message && (
+                  <p role="status" className="text-sm">
+                    {message}
+                  </p>
+                )}
+                <p role="status" className="text-sm">
+                  {busy
+                    ? 'Создаём PDF. Редактирование временно недоступно.'
+                    : preparing
+                      ? 'Обрабатываем изображения. PDF будет доступен после завершения.'
+                      : ''}
+                </p>
+                {!marginValid && (
+                  <p role="status" className="text-sm text-danger">
+                    Поля должны быть числом от 0 мм.
+                  </p>
+                )}
+                <div className="space-y-2">
+                  <Button
+                    className="min-h-11 w-full"
+                    disabled={busy || preparing || !packed.miniCount || !marginValid}
+                    onClick={() => void generate(false)}
+                  >
+                    {busy ? 'Подготовка PDF…' : 'Скачать PDF'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="min-h-11 w-full"
+                    disabled={busy || preparing || !packed.miniCount || !marginValid}
+                    onClick={() => void generate(true)}
+                  >
+                    {preview ? 'Обновить предпросмотр' : 'Предпросмотр PDF'}
+                  </Button>
+                </div>
+              </div>
             </aside>
           </div>
 

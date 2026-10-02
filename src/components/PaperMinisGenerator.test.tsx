@@ -106,9 +106,9 @@ test('a batch row is titled by its cleaned file name, or numbered when the name 
     });
   });
   // #then
-  expect(
-    screen.getAllByRole('article').map((row) => row.querySelector('h3')?.textContent),
-  ).toEqual(['Big bad wolf', 'Миниатюра 2']);
+  expect(screen.getAllByRole('article').map((row) => row.querySelector('h3')?.textContent)).toEqual(
+    ['Big bad wolf', 'Миниатюра 2'],
+  );
 });
 
 test('the back slot announces the selected file and returns to reflection after removal', async () => {
@@ -311,7 +311,7 @@ test('front height dialog applies pointer calibration and row reset clears it', 
     configurable: true,
     value: () => ({ left: 0, top: 0, width: 100, height: 100, right: 100, bottom: 100 }),
   });
-  fireEvent.pointerDown(within(dialog).getByRole('slider', { name: 'Head' }), {
+  fireEvent.pointerDown(within(dialog).getByRole('slider', { name: 'Голова' }), {
     pointerId: 1,
     clientY: 25,
   });
@@ -339,8 +339,8 @@ test('front height dialog cancel leaves the row unchanged and keeps a 10 percent
     configurable: true,
     value: () => ({ left: 0, top: 0, width: 100, height: 100, right: 100, bottom: 100 }),
   });
-  const head = within(dialog).getByRole('slider', { name: 'Head' });
-  const feet = within(dialog).getByRole('slider', { name: 'Feet' });
+  const head = within(dialog).getByRole('slider', { name: 'Голова' });
+  const feet = within(dialog).getByRole('slider', { name: 'Ступни' });
   fireEvent.pointerDown(head, { pointerId: 1, clientY: 0 });
   fireEvent.pointerMove(artwork, { pointerId: 1, clientY: 96 });
   fireEvent.pointerUp(artwork, { pointerId: 1, clientY: 96 });
@@ -348,11 +348,13 @@ test('front height dialog cancel leaves the row unchanged and keeps a 10 percent
   const readout = within(dialog).getByText('Рост 35 мм · напечатается 350 мм');
   fireEvent.click(within(dialog).getByRole('button', { name: 'Отмена' }));
   // #then
-  expect({ positions, readout: readout.textContent, label: screen.queryByText('Рост задан вручную') }).toEqual(
-    {
-      positions: ['90', '100'],
-      readout: 'Рост 35 мм · напечатается 350 мм',
-      label: null,
-    },
-  );
+  expect({
+    positions,
+    readout: readout.textContent,
+    label: screen.queryByText('Рост задан вручную'),
+  }).toEqual({
+    positions: ['90', '100'],
+    readout: 'Рост 35 мм · напечатается 350 мм',
+    label: null,
+  });
 });
