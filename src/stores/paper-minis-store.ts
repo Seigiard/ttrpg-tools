@@ -5,9 +5,11 @@ import {
   type ArtworkPreparation,
   type PaperMinisArtwork,
 } from '@/lib/paper-minis/artwork';
+import { artworkMimeType } from '@/lib/paper-minis/artwork-formats';
 import { planBatch } from '@/lib/paper-minis/batch-plan';
 import { calibrationAfterChange } from '@/lib/paper-minis/calibration-reset-policy';
 import {
+  calibrationGap,
   calibrationRange,
   calibrationSessionResult,
   moveCalibrationLine as moveSessionLine,
@@ -17,6 +19,7 @@ import {
   type CalibrationRange,
   type CalibrationSession as CalibrationDraft,
 } from '@/lib/paper-minis/calibration-session';
+import { canvasToPngBytes } from '@/lib/paper-minis/canvas';
 import {
   DEFAULT_FIGURE_MARGIN_MM,
   entryStatusWarning,
@@ -32,7 +35,7 @@ import {
 } from '@/lib/paper-minis/sizes';
 import type {
   Entry,
-  HeightSlot,
+  HeightCalibration,
   MiniSize,
   PreparedArtwork,
 } from '@/lib/paper-minis/types';
@@ -80,6 +83,17 @@ export type CalibrationSession = CalibrationDraft & {
 const storageKey = 'pmg-settings';
 const successMessage = 'PDF готов.';
 const failureMessage = 'Не удалось создать PDF. Попробуйте ещё раз или уменьшите изображения.';
+const exportSuccessMessage = 'Архив готов.';
+const exportFailureMessage = 'Не удалось создать архив. Попробуйте ещё раз.';
+const unzipFailureMessage =
+  'Не удалось распаковать архив. Добавьте изображения вручную или попробуйте другой файл.';
+const skippedFilesMessage = 'Некоторые файлы пропущены: поддерживаются PNG, JPG и WebP.';
+const artworkTypesByExtension: Record<string, string> = {
+  jpg: artworkMimeType('jpg'),
+  jpeg: artworkMimeType('jpg'),
+  png: artworkMimeType('png'),
+  webp: artworkMimeType('webp'),
+};
 
 function parseNumericInput(text: string, accepts: (value: number) => boolean) {
   if (text.trim() === '') return { input: { text, valid: false } };
@@ -87,6 +101,85 @@ function parseNumericInput(text: string, accepts: (value: number) => boolean) {
   return Number.isFinite(value) && accepts(value)
     ? { input: { text, valid: true }, value }
     : { input: { text, valid: false } };
+}
+
+const nameSeparators = /[-_\s\\/:*?"<>|]+/;
+
+function exportName(row: MiniRow, index: number): string {
+  const name = row.name?.trim() ?? '';
+  const safe = name
+    .split(nameSeparators)
+    .filter((part) => part !== '')
+    .join('-');
+  return safe || `mini-${index + 1}`;
+}
+
+function exportSize(row: MiniRow): string {
+  if (row.heightSlot === 'custom') {
+    const width = row.customWidthMm ?? DEFAULT_CUSTOM_WIDTH_MM;
+    const height = row.customHeightMm ?? DEFAULT_CUSTOM_HEIGHT_MM;
+    return `custom-${width}x${height}`;
+  }
+  return row.heightSlot;
+}
+
+function exportCount(row: MiniRow): string {
+  return row.count > 1 ? `-x${row.count}` : '';
+}
+
+function exportCalibration(row: MiniRow): string {
+  const calibration = row.calibration;
+  if (!calibration || calibrationGap(calibration) === undefined) return '';
+  const head = String(Math.round(calibration.head * 1000)).padStart(3, '0');
+  const feet = String(Math.round(calibration.feet * 1000)).padStart(3, '0');
+  return `-h${head}-f${feet}`;
+}
+
+function fileExtension(name: string): string {
+  const dot = name.lastIndexOf('.');
+  return dot < 0 ? '' : name.slice(dot + 1).toLowerCase();
+}
+
+function flattenedFileName(path: string): string | undefined {
+  return path.split(/[\\/]/).findLast((part) => part !== '');
+}
+
+function isIgnoredZipEntry(path: string): boolean {
+  const name = flattenedFileName(path);
+  return (
+    path.endsWith('/') ||
+    path.startsWith('__MACOSX/') ||
+    name === undefined ||
+    name.startsWith('._') ||
+    name === '.DS_Store'
+  );
+}
+
+function isZipFile(file: File): boolean {
+  return file.type.toLowerCase() === 'application/zip' || fileExtension(file.name) === 'zip';
+}
+
+function artworkTypeFromName(name: string): string | undefined {
+  return artworkTypesByExtension[fileExtension(name)];
+}
+
+async function artworkAsPng(artwork: PreparedArtwork): Promise<Uint8Array> {
+  if (artwork.format === 'png') return artwork.bytes;
+  const bitmap = await createImageBitmap(new Blob([artwork.bytes as BlobPart], { type: artworkMimeType('jpg') }), {
+    imageOrientation: 'none',
+  });
+  const canvas = document.createElement('canvas');
+  try {
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Could not get 2D canvas context');
+    ctx.drawImage(bitmap, 0, 0);
+    return canvasToPngBytes(canvas);
+  } finally {
+    bitmap.close();
+    canvas.width = canvas.height = 0;
+  }
 }
 
 export function createPaperMinisStore({
@@ -138,6 +231,7 @@ export function createPaperMinisStore({
     (preview, revision) => preview !== undefined && preview.revision !== revision,
   );
   let nextId = 0;
+  let nextLoadId = 0;
   const loads = new Map<string, object>();
 
   function calibrationSession(
@@ -179,7 +273,9 @@ export function createPaperMinisStore({
   }
 
   function openCalibration(id: number) {
-    if ($busy.get()) return false;
+    // Only zip expansion blocks: its rows do not exist yet, and an open session would make
+    // the finished expansion drop them. A single image loading never touches a ready row.
+    if ($busy.get() || [...loads.keys()].some((key) => key.startsWith('zip:'))) return false;
     const row = $rows.get().find((candidate) => candidate.id === id);
     if (!row?.artwork) return false;
     const draft = openCalibrationSession(
@@ -258,7 +354,21 @@ export function createPaperMinisStore({
       cancelCalibration();
     changed();
   }
-  function addBlank({ name, heightSlot }: { name?: string; heightSlot?: HeightSlot } = {}) {
+  function addBlank({
+    name,
+    heightSlot,
+    customWidthMm,
+    customHeightMm,
+    count,
+    calibration,
+  }: {
+    name?: string;
+    heightSlot?: MiniSize;
+    customWidthMm?: number;
+    customHeightMm?: number;
+    count?: number;
+    calibration?: HeightCalibration;
+  } = {}) {
     if ($busy.get()) return;
     const row: MiniRow = {
       id: nextId++,
@@ -266,7 +376,10 @@ export function createPaperMinisStore({
       image: null,
       artwork: null,
       heightSlot: heightSlot ?? DEFAULT_HEIGHT_SLOT,
-      count: 1,
+      count: count ?? 1,
+      ...(customWidthMm === undefined ? {} : { customWidthMm }),
+      ...(customHeightMm === undefined ? {} : { customHeightMm }),
+      ...(calibration === undefined ? {} : { calibration }),
     };
     $rows.set([...$rows.get(), row]);
     $inputs.set({
@@ -274,9 +387,15 @@ export function createPaperMinisStore({
       rows: {
         ...$inputs.get().rows,
         [row.id]: {
-          count: { text: '1', valid: true },
-          customWidthMm: { text: '', valid: false },
-          customHeightMm: { text: '', valid: false },
+          count: { text: String(row.count), valid: true },
+          customWidthMm: {
+            text: customWidthMm === undefined ? '' : String(customWidthMm),
+            valid: customWidthMm !== undefined,
+          },
+          customHeightMm: {
+            text: customHeightMm === undefined ? '' : String(customHeightMm),
+            valid: customHeightMm !== undefined,
+          },
         },
       },
     });
@@ -398,15 +517,15 @@ export function createPaperMinisStore({
       id,
       back
         ? {
-             backImage: file,
-             backArtwork: null,
-             calibration,
+            backImage: file,
+            backArtwork: null,
+            calibration,
             backWarning: undefined,
           }
         : {
-             image: file,
-             artwork: null,
-             calibration,
+            image: file,
+            artwork: null,
+            calibration,
             normalizationWarning: undefined,
             frontError: undefined,
           },
@@ -442,16 +561,70 @@ export function createPaperMinisStore({
       $preparing.set(loads.size > 0);
     }
   }
-  function ingest(files: File[]) {
+  async function ingest(files: File[]) {
     if (!$acceptsFiles.get()) return;
-    const valid = files.filter(isSupportedArtwork);
-    $message.set(
-      valid.length < files.length
-        ? 'Некоторые файлы пропущены: поддерживаются PNG, JPG и WebP.'
-        : '',
-    );
-    for (const planned of planBatch(valid)) {
-      const id = addBlank({ name: planned.name, heightSlot: planned.heightSlot });
+    const hasZip = files.some(isZipFile);
+    if (!hasZip) {
+      const valid = files.filter(isSupportedArtwork);
+      $message.set(valid.length < files.length ? skippedFilesMessage : '');
+      ingestArtworkFiles(valid);
+      return;
+    }
+    const key = `zip:${nextLoadId++}`;
+    const token = {};
+    loads.set(key, token);
+    $preparing.set(true);
+    try {
+      const { unzipSync } = await import('fflate');
+      const expanded = await Promise.all(
+        files.map(async (file): Promise<{ files: File[]; skipped: boolean; failed: boolean }> => {
+          if (!isZipFile(file)) {
+            return isSupportedArtwork(file)
+              ? { files: [file], skipped: false, failed: false }
+              : { files: [], skipped: true, failed: false };
+          }
+          try {
+            const entries = unzipSync(new Uint8Array(await file.arrayBuffer()));
+            const extracted: File[] = [];
+            let skipped = false;
+            for (const [path, bytes] of Object.entries(entries)) {
+              if (isIgnoredZipEntry(path)) continue;
+              const name = flattenedFileName(path);
+              const type = name && artworkTypeFromName(name);
+              if (!name || !type) {
+                if (name) skipped = true;
+                continue;
+              }
+              extracted.push(new File([bytes], name, { type }));
+            }
+            return { files: extracted, skipped, failed: false };
+          } catch {
+            return { files: [], skipped: false, failed: true };
+          }
+        }),
+      );
+      if (!$acceptsFiles.get()) {
+        $message.set(unzipFailureMessage);
+        return;
+      }
+      const valid = expanded.flatMap((item) => item.files);
+      const failed = expanded.some((item) => item.failed);
+      const skipped = expanded.some((item) => item.skipped);
+      $message.set(failed ? unzipFailureMessage : skipped ? skippedFilesMessage : '');
+      ingestArtworkFiles(valid);
+    } catch {
+      if (!$acceptsFiles.get()) return;
+      const valid = files.filter((file) => !isZipFile(file) && isSupportedArtwork(file));
+      $message.set(unzipFailureMessage);
+      ingestArtworkFiles(valid);
+    } finally {
+      if (loads.get(key) === token) loads.delete(key);
+      $preparing.set(loads.size > 0);
+    }
+  }
+  function ingestArtworkFiles(files: File[]) {
+    for (const planned of planBatch(files)) {
+      const id = addBlank(planned);
       if (id === undefined) continue;
       void setImage(id, planned.front);
       if (planned.back) void setImage(id, planned.back, true);
@@ -549,6 +722,46 @@ export function createPaperMinisStore({
       $busy.set(false);
     }
   }
+  async function exportZip() {
+    if ($busy.get() || $preparing.get()) return;
+    const rows = $rows.get();
+    const ready = rows
+      .map((row, index) => ({ row, index }))
+      .filter(({ row }) => row.artwork);
+    if (!ready.length) return;
+    $busy.set(true);
+    $message.set('');
+    try {
+      const { zipSync } = await import('fflate');
+      const entries: Record<string, Uint8Array> = {};
+      const used = new Set<string>();
+      for (const { row, index } of ready) {
+        const sides = row.backArtwork ? (['front', 'back'] as const) : (['front'] as const);
+        const base = exportName(row, index);
+        const size = exportSize(row);
+        const count = exportCount(row);
+        const calibration = exportCalibration(row);
+        let suffix = 1;
+        let collisionKeys = sides.map((side) => `${base}-${size}-${side}.png`);
+        let names = sides.map((side) => `${base}-${size}-${side}${count}${calibration}.png`);
+        while (collisionKeys.some((name) => used.has(name.toLowerCase()))) {
+          suffix += 1;
+          collisionKeys = sides.map((side) => `${base}-${suffix}-${size}-${side}.png`);
+          names = sides.map((side) => `${base}-${suffix}-${size}-${side}${count}${calibration}.png`);
+        }
+        for (const name of collisionKeys) used.add(name.toLowerCase());
+        entries[names[0]] = await artworkAsPng(row.artwork!);
+        if (row.backArtwork) entries[names[1]] = await artworkAsPng(row.backArtwork);
+      }
+      const bytes = zipSync(entries, { level: 0 });
+      $message.set(exportSuccessMessage);
+      return bytes;
+    } catch {
+      $message.set(exportFailureMessage);
+    } finally {
+      $busy.set(false);
+    }
+  }
   return {
     $rows: readonlyType($rows),
     $settings: readonlyType($settings),
@@ -585,9 +798,13 @@ export function createPaperMinisStore({
     reportPdfFailure() {
       $message.set(failureMessage);
     },
+    reportExportFailure() {
+      $message.set(exportFailureMessage);
+    },
     async download() {
       return (await render())?.bytes;
     },
+    exportZip,
     async refreshPreview() {
       const preview = await render();
       if (preview) $preview.set(preview);
