@@ -60,6 +60,91 @@ describe('EncounterGenerator (Preact presentation)', () => {
     });
   });
 
+  test('история проверок растёт от нового к старому', async () => {
+    // #given mount: check d6=1; reaction. Затем клики: d6=2, d6=3
+    restoreCrypto = mockCrypto([0, 0, 0, 1, 2]);
+    render(<EncounterGenerator table={mausritterEncounters} />);
+
+    // #when
+    await waitFor(() => {
+      expect(screen.getByTestId('check-history').querySelectorAll('li')).toHaveLength(1);
+    });
+    fireEvent.click(screen.getByTestId('check-roll-button'));
+    await waitFor(() => {
+      expect(screen.getByTestId('check-history').querySelectorAll('li')).toHaveLength(2);
+    });
+    fireEvent.click(screen.getByTestId('check-roll-button'));
+
+    // #then
+    await waitFor(() => {
+      const entries = Array.from(screen.getByTestId('check-history').querySelectorAll('li'));
+      expect(entries.map((entry) => entry.textContent)).toEqual([
+        'd6 = 3Ничего',
+        'd6 = 2Предзнаменование',
+        'd6 = 1Столкновение',
+      ]);
+    });
+  });
+
+  test('история проверок хранит не больше пяти записей', async () => {
+    // #given mount: check d6=1; reaction. Затем клики: d6=2..6
+    restoreCrypto = mockCrypto([0, 0, 0, 1, 2, 3, 4, 5]);
+    render(<EncounterGenerator table={mausritterEncounters} />);
+
+    // #when
+    await waitFor(() => {
+      expect(screen.getByTestId('check-history').querySelectorAll('li')).toHaveLength(1);
+    });
+    fireEvent.click(screen.getByTestId('check-roll-button'));
+    await waitFor(() => {
+      expect(screen.getByTestId('check-history').querySelectorAll('li')).toHaveLength(2);
+    });
+    fireEvent.click(screen.getByTestId('check-roll-button'));
+    await waitFor(() => {
+      expect(screen.getByTestId('check-history').querySelectorAll('li')).toHaveLength(3);
+    });
+    fireEvent.click(screen.getByTestId('check-roll-button'));
+    await waitFor(() => {
+      expect(screen.getByTestId('check-history').querySelectorAll('li')).toHaveLength(4);
+    });
+    fireEvent.click(screen.getByTestId('check-roll-button'));
+    await waitFor(() => {
+      expect(screen.getByTestId('check-history').querySelectorAll('li')).toHaveLength(5);
+    });
+    fireEvent.click(screen.getByTestId('check-roll-button'));
+
+    // #then
+    await waitFor(() => {
+      const entries = Array.from(screen.getByTestId('check-history').querySelectorAll('li'));
+      expect(entries.map((entry) => entry.textContent)).toEqual([
+        'd6 = 6Ничего',
+        'd6 = 5Ничего',
+        'd6 = 4Ничего',
+        'd6 = 3Ничего',
+        'd6 = 2Предзнаменование',
+      ]);
+    });
+  });
+
+  test('кнопка очистки удаляет историю проверок', async () => {
+    // #given mount: check d6=1; reaction. Затем клик: d6=2
+    restoreCrypto = mockCrypto([0, 0, 0, 1]);
+    render(<EncounterGenerator table={mausritterEncounters} />);
+
+    // #when
+    await waitFor(() => {
+      expect(screen.getByTestId('check-history').querySelectorAll('li')).toHaveLength(1);
+    });
+    fireEvent.click(screen.getByTestId('check-roll-button'));
+    await waitFor(() => {
+      expect(screen.getByTestId('check-history').querySelectorAll('li')).toHaveLength(2);
+    });
+    fireEvent.click(screen.getByTestId('check-history-clear'));
+
+    // #then
+    expect(screen.getByTestId('check-history').querySelectorAll('li')).toHaveLength(0);
+  });
+
   test('результат реакции показывает отношение и вопрос', async () => {
     // #given reaction 2d6=12 (mock 5,5) → дружелюбное; check d6 (mock 0)
     restoreCrypto = mockCrypto([0, 5, 5]);

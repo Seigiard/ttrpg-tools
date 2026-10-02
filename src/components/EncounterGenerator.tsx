@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/preact';
-import { useEffect, useMemo } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'preact/hooks';
 import { ReferenceList } from '@/components/ReferenceList';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -49,6 +49,14 @@ function CheckSection({ table, roll, onRoll }: SectionProps) {
   const rows = table.check.rows;
   const row = roll ? rows[roll.rowIndex] : null;
   const loading = !row;
+  const [history, setHistory] = useState<Array<{ sum: number; label: string }>>([]);
+
+  useEffect(() => {
+    if (!roll || !row) return;
+
+    setHistory((items) => [{ sum: roll.sum, label: row.ru }, ...items].slice(0, 5));
+  }, [roll, row]);
+
   return (
     <section className="space-y-6">
       <h2 className="font-display text-2xl text-text">Проверка столкновения</h2>
@@ -76,6 +84,23 @@ function CheckSection({ table, roll, onRoll }: SectionProps) {
           </div>
         </CardContent>
       </Card>
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="font-display text-lg text-text">Последние проверки</h3>
+          <Button variant="outline" size="sm" onClick={() => setHistory([])} data-testid="check-history-clear">
+            Очистить
+          </Button>
+        </div>
+        <ul className="space-y-2" data-testid="check-history">
+          {history.map((item, index) => (
+            <li key={`${item.sum}-${item.label}-${index}`} className="flex items-center justify-between rounded-lg border border-border bg-surface px-3 py-2 text-sm">
+              <span className="font-mono text-xs text-text-muted">d6 = {item.sum}</span>
+              <span className="font-semibold text-text">{item.label}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
 
       <ReferenceList title="Исходы · d6" testId="check-reference" rows={rows} hitIndex={roll ? roll.rowIndex : null} label={formatRangeLabel}>
         {(referenceRow) => (
