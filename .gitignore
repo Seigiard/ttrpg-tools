@@ -39,3 +39,6 @@ test-results/
 # Keep the project review profile; ignore local revmux state and overrides.
 .revmux/*
 !.revmux/profile.md
+
+# Global gitignore excludes mise.toml; this repo commits it.
+!mise.toml
