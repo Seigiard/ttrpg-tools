@@ -2,24 +2,23 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode, type Re
 import { useStore } from '@nanostores/react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { createPaperMinisStore } from '@/stores/paper-minis-store';
+import {
+  createPaperMinisStore,
+  type CalibrationSession,
+} from '@/stores/paper-minis-store';
 import { isSupportedArtwork } from '@/lib/paper-minis/artwork';
+import type { CalibrationLine } from '@/lib/paper-minis/calibration';
+import { fitLimitWarning } from '@/lib/paper-minis/fit-limits';
 import { buildFilename } from '@/lib/paper-minis/pdf';
-import { fitMiniFaces } from '@/lib/paper-minis/packing';
 import {
   DEFAULT_CUSTOM_HEIGHT_MM,
   DEFAULT_CUSTOM_WIDTH_MM,
   HEIGHT_SLOT_ORDER,
-  MIN_CALIBRATION_GAP,
-  type FigureFitLimit,
-  resolveFigureHeightMm,
   slotLabel,
   slotGeometryLabel,
   slotName,
 } from '@/lib/paper-minis/sizes';
 import type { HeightCalibration, MiniSize, PreparedArtwork } from '@/lib/paper-minis/types';
-
-const DEFAULT_CALIBRATION: HeightCalibration = { head: 0, feet: 1 };
 
 const field =
   'min-h-11 w-full rounded-lg border border-border bg-surface-elevated px-3 text-text focus-visible:outline-2 focus-visible:outline-primary';
@@ -78,17 +77,6 @@ function ArtworkFrame({
       </span>
     </span>
   );
-}
-
-const fitLimitLabels: Record<FigureFitLimit, string> = {
-  height: 'лимит высоты 2×',
-  width: 'лимит ширины',
-  page: 'размер листа',
-};
-
-function fitLimitWarning(limits: FigureFitLimit[]) {
-  if (!limits.length) return undefined;
-  return `Миниатюра уменьшена: ${limits.map((limit) => fitLimitLabels[limit]).join(', ')}.`;
 }
 
 function SizeOptions({ custom = false }: { custom?: boolean }) {
@@ -245,59 +233,31 @@ function CalibrationArtwork({
 }
 
 function HeightCalibrationDialog({
-  artwork,
-  backArtwork,
-  rowLabel,
-  slotHeightMm,
-  initial,
-  previewFit,
+  session,
+  onSetLine,
+  onMoveLine,
   onApply,
   onCancel,
   returnFocus,
 }: {
-  artwork: PreparedArtwork;
-  backArtwork?: PreparedArtwork | null;
-  rowLabel: string;
-  slotHeightMm: number;
-  initial?: HeightCalibration;
-  previewFit: (calibration?: HeightCalibration) => ReturnType<typeof fitMiniFaces>;
-  onApply: (calibration?: HeightCalibration) => void;
+  session: CalibrationSession;
+  onSetLine: (line: CalibrationLine, fraction: number) => void;
+  onMoveLine: (line: CalibrationLine, pixels: number) => void;
+  onApply: () => void;
   onCancel: () => void;
   returnFocus: React.RefObject<HTMLButtonElement | null>;
 }) {
+  const { artwork, backArtwork, lines } = session;
   const frontUrl = useArtworkUrl(artwork);
   const backUrl = useArtworkUrl(backArtwork);
   const artworkRef = useRef<HTMLSpanElement>(null);
   const dragging = useRef<'head' | 'feet' | null>(null);
-  const [lines, setLines] = useState(initial ?? DEFAULT_CALIBRATION);
-  const startingLines = initial ?? DEFAULT_CALIBRATION;
-  const unchanged =
-    Math.abs(lines.head - startingLines.head) <= Number.EPSILON * 8 &&
-    Math.abs(lines.feet - startingLines.feet) <= Number.EPSILON * 8;
-  const draft = unchanged ? initial : lines;
-  const fits = previewFit(draft);
-  const printedHeightMm = fits.front.imageHeightMm;
-  const warning = fitLimitWarning([
-    ...new Set([...fits.front.limits, ...(fits.back?.limits ?? [])]),
-  ]);
-  const keyboardHeight = Math.max(artwork.height, backArtwork?.height ?? 0);
 
   function setLineFromClientY(which: 'head' | 'feet', clientY: number) {
     const box = artworkRef.current?.getBoundingClientRect();
     if (!box || box.height <= 0) return;
     const fraction = clamp((clientY - box.top) / box.height, 0, 1);
-    setLine(which, () => fraction);
-  }
-
-  function setLine(which: 'head' | 'feet', position: (current: number) => number) {
-    setLines((previous) => {
-      const fraction = position(previous[which]);
-      const next =
-        which === 'head'
-          ? clamp(fraction, 0, previous.feet - MIN_CALIBRATION_GAP)
-          : clamp(fraction, previous.head + MIN_CALIBRATION_GAP, 1);
-      return next === previous[which] ? previous : { ...previous, [which]: next };
-    });
+    onSetLine(which, fraction);
   }
 
   return (
@@ -312,17 +272,18 @@ function HeightCalibrationDialog({
           <div>
             <DialogTitle className="text-2xl text-text">Задать рост</DialogTitle>
             <p className="text-sm text-text-muted">
-              {rowLabel}: перетащите линии головы и стоп или используйте ↑/↓ — 1 пиксель, с Shift —
-              10.
+              {session.rowLabel}: перетащите линии головы и стоп или используйте ↑/↓ — 1 пиксель, с
+              Shift — 10.
             </p>
           </div>
           <p className="text-sm font-medium text-text" aria-live="polite">
-            Рост {Math.round(slotHeightMm)} мм · напечатается {Math.round(printedHeightMm)} мм
+            Рост {Math.round(session.slotHeightMm)} мм · напечатается{' '}
+            {Math.round(session.printedHeightMm)} мм
           </p>
         </div>
-        {warning && (
+        {session.warning && (
           <p role="status" className="mt-3 border-l-2 border-warning pl-3 text-sm text-warning">
-            {warning}
+            {session.warning}
           </p>
         )}
         <div
@@ -362,17 +323,17 @@ function HeightCalibrationDialog({
                     role="slider"
                     aria-label={key === 'head' ? 'Голова' : 'Ступни'}
                     aria-orientation="vertical"
-                    aria-valuemin={key === 'feet' ? (lines.head + MIN_CALIBRATION_GAP) * 100 : 0}
-                    aria-valuemax={key === 'head' ? (lines.feet - MIN_CALIBRATION_GAP) * 100 : 100}
+                    aria-valuemin={session.ranges[key].min * 100}
+                    aria-valuemax={session.ranges[key].max * 100}
                     aria-valuenow={lines[key] * 100}
-                    aria-valuetext={`${Number((lines[key] * keyboardHeight).toFixed(2))} пикселей от верха`}
+                    aria-valuetext={`${Number((lines[key] * session.artworkHeight).toFixed(2))} пикселей от верха`}
                     className={`absolute left-1/2 h-11 w-1/2 min-w-11 -translate-y-1/2 cursor-row-resize text-left text-xs font-bold text-primary focus-visible:outline-2 focus-visible:outline-primary ${key === 'head' ? '-translate-x-full' : ''}`}
                     style={lineStyle(lines[key])}
                     onKeyDown={(event) => {
                       if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
                       event.preventDefault();
-                      const step = (event.shiftKey ? 10 : 1) / keyboardHeight;
-                      setLine(key, (current) => current + (event.key === 'ArrowUp' ? -step : step));
+                      const pixels = (event.shiftKey ? 10 : 1) * (event.key === 'ArrowUp' ? -1 : 1);
+                      onMoveLine(key, pixels);
                     }}
                     onPointerDown={(event) => {
                       if (event.button !== 0 || event.ctrlKey) return;
@@ -394,7 +355,7 @@ function HeightCalibrationDialog({
           <Button variant="ghost" className="min-h-11" onClick={onCancel}>
             Отмена
           </Button>
-          <Button className="min-h-11" onClick={() => onApply(unchanged ? undefined : lines)}>
+          <Button className="min-h-11" onClick={onApply}>
             Применить
           </Button>
         </div>
@@ -413,15 +374,14 @@ export default function PaperMinisGenerator() {
   const preparing = useStore(store.$preparing);
   const preview = useStore(store.$preview);
   const previewStale = useStore(store.$previewStale);
+  const calibration = useStore(store.$calibration);
   const [previewUrl, setPreviewUrl] = useState<string>();
-  const [calibratingId, setCalibratingId] = useState<number>();
   const calibrationOpener = useRef<HTMLButtonElement>(null);
   const [dragging, setDragging] = useState(false);
   const files = useRef<HTMLInputElement>(null);
   const packed = useMemo(() => store.pack(), [store, rows, settings]);
   const marginValid =
     margin.trim() !== '' && Number.isFinite(Number(margin)) && Number(margin) >= 0;
-  const calibratingRow = rows.find((row) => row.id === calibratingId && row.artwork);
 
   useEffect(() => {
     store.loadSettings();
@@ -448,10 +408,10 @@ export default function PaperMinisGenerator() {
     const hasFiles = (event: DragEvent) =>
       Array.from(event.dataTransfer?.types ?? []).includes('Files');
     const enter = (event: DragEvent) => {
-      if (hasFiles(event) && calibratingId === undefined) {
+      if (hasFiles(event) && store.$acceptsFiles.get()) {
         event.preventDefault();
         depth++;
-        if (!store.$busy.get()) setDragging(true);
+        setDragging(true);
       }
     };
     const over = (event: DragEvent) => {
@@ -469,7 +429,7 @@ export default function PaperMinisGenerator() {
     const drop = (event: DragEvent) => {
       if (hasFiles(event)) {
         event.preventDefault();
-        if (calibratingId === undefined) store.ingest(Array.from(event.dataTransfer?.files ?? []));
+        store.ingest(Array.from(event.dataTransfer?.files ?? []));
       }
     };
     window.addEventListener('dragenter', enter);
@@ -484,7 +444,7 @@ export default function PaperMinisGenerator() {
       window.removeEventListener('drop', clear, true);
       window.removeEventListener('drop', drop);
     };
-  }, [store, calibratingId]);
+  }, [store]);
 
   async function download() {
     const bytes = await store.download();
@@ -744,7 +704,7 @@ export default function PaperMinisGenerator() {
                             disabled={!row.artwork}
                             onClick={(event) => {
                               calibrationOpener.current = event.currentTarget;
-                              setCalibratingId(row.id);
+                              store.openCalibration(row.id);
                             }}
                           >
                             Задать рост
@@ -753,7 +713,7 @@ export default function PaperMinisGenerator() {
                             <Button
                               variant="ghost"
                               className="min-h-11"
-                              onClick={() => store.clearCalibration(row.id)}
+                              onClick={() => store.resetCalibration(row.id)}
                             >
                               Сбросить рост
                             </Button>
@@ -919,32 +879,14 @@ export default function PaperMinisGenerator() {
           Отпустите файлы, чтобы добавить миниатюры
         </div>
       )}
-      {calibratingRow?.artwork && (
+      {calibration && (
         <HeightCalibrationDialog
           returnFocus={calibrationOpener}
-          artwork={calibratingRow.artwork}
-          backArtwork={calibratingRow.backArtwork}
-          rowLabel={calibratingRow.name || 'Миниатюра'}
-          slotHeightMm={resolveFigureHeightMm(calibratingRow)}
-          initial={calibratingRow.calibration}
-          previewFit={(calibration) =>
-            fitMiniFaces(
-              {
-                ...calibratingRow,
-                calibration,
-                naturalWidth: calibratingRow.artwork!.width,
-                naturalHeight: calibratingRow.artwork!.height,
-                backNaturalWidth: calibratingRow.backArtwork?.width,
-                backNaturalHeight: calibratingRow.backArtwork?.height,
-              },
-              settings,
-            )
-          }
-          onCancel={() => setCalibratingId(undefined)}
-          onApply={(calibration) => {
-            if (calibration) store.setCalibration(calibratingRow.id, calibration);
-            setCalibratingId(undefined);
-          }}
+          session={calibration}
+          onSetLine={store.setCalibrationLine}
+          onMoveLine={store.moveCalibrationLine}
+          onCancel={store.cancelCalibration}
+          onApply={store.applyCalibration}
         />
       )}
     </div>

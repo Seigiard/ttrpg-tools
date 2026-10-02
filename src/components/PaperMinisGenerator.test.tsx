@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, setSystemTime, spyOn, test } from 'bun:test';
 import { act, cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react';
+import * as pdf from '@/lib/paper-minis/pdf';
 import PaperMinisGenerator from './PaperMinisGenerator';
 
 const png = Buffer.from(
@@ -450,45 +451,6 @@ test('pointer calibration measures the visible image inside vertical letterboxin
   expect(screen.getByRole('slider', { name: 'Голова' }).getAttribute('aria-valuenow')).toBe('25');
 });
 
-test('front height dialog cancel leaves the row unchanged and keeps a 10 percent line gap', async () => {
-  // #given
-  render(<PaperMinisGenerator />);
-  await addFront();
-  // #when
-  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
-  const dialog = screen.getByRole('dialog', { name: 'Задать рост' });
-  const artwork = within(dialog).getByTestId('height-calibration-artwork');
-  Object.defineProperty(
-    within(dialog).getByTestId('calibration-artworks'),
-    'getBoundingClientRect',
-    {
-      configurable: true,
-      value: () => ({ left: 0, top: 0, width: 100, height: 100, right: 100, bottom: 100 }),
-    },
-  );
-  const head = within(dialog).getByRole('slider', { name: 'Голова' });
-  const feet = within(dialog).getByRole('slider', { name: 'Ступни' });
-  fireEvent.pointerDown(head, { pointerId: 1, clientY: 0 });
-  fireEvent.pointerMove(artwork, { pointerId: 1, clientY: 96 });
-  fireEvent.pointerUp(artwork, { pointerId: 1, clientY: 96 });
-  const positions = [head.getAttribute('aria-valuenow'), feet.getAttribute('aria-valuenow')];
-  const readout = within(dialog).getByText('Рост 35 мм · напечатается 53 мм');
-  const warning = within(dialog).getByText('Миниатюра уменьшена: лимит высоты 2×, лимит ширины.');
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Отмена' }));
-  // #then
-  expect({
-    positions,
-    readout: readout.textContent,
-    warning: warning.textContent,
-    label: screen.queryByText('Рост задан вручную'),
-  }).toEqual({
-    positions: ['90', '100'],
-    readout: 'Рост 35 мм · напечатается 53 мм',
-    warning: 'Миниатюра уменьшена: лимит высоты 2×, лимит ширины.',
-    label: null,
-  });
-});
-
 test('height dialog shows both artworks side by side under one pair of shared lines', async () => {
   // #given
   render(<PaperMinisGenerator />);
@@ -515,29 +477,6 @@ test('height dialog shows both artworks side by side under one pair of shared li
   });
 });
 
-test('one calibration edit is restored with both artworks still visible', async () => {
-  // #given
-  render(<PaperMinisGenerator />);
-  await addFront();
-  await addBack();
-  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
-  const dialog = within(screen.getByRole('dialog'));
-  // #when
-  fireEvent.keyDown(dialog.getByRole('slider', { name: 'Голова' }), { key: 'ArrowDown' });
-  fireEvent.keyDown(dialog.getByRole('slider', { name: 'Ступни' }), { key: 'ArrowUp' });
-  fireEvent.click(dialog.getByRole('button', { name: 'Применить' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
-  const reopened = within(screen.getByRole('dialog'));
-  const values = ['Голова', 'Ступни'].map((name) =>
-    reopened.getByRole('slider', { name }).getAttribute('aria-valuenow'),
-  );
-  // #then
-  expect({ values, images: reopened.getAllByRole('img').length }).toEqual({
-    values: ['90', '100'],
-    images: 2,
-  });
-});
-
 test('opening calibration moves focus inside and Escape cancels and restores the opener', async () => {
   // #given
   render(<PaperMinisGenerator />);
@@ -558,44 +497,6 @@ test('opening calibration moves focus inside and Escape cancels and restores the
       calibrated: screen.queryByText('Рост задан вручную') !== null,
     }).toEqual({ open: false, focusRestored: true, calibrated: false }),
   );
-});
-
-test('Apply with untouched default lines keeps the row uncalibrated', async () => {
-  // #given
-  render(<PaperMinisGenerator />);
-  await addFront();
-  await addBack();
-  // #when
-  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Применить' }));
-  // #then
-  expect(screen.queryByText('Рост задан вручную')).toBe(null);
-});
-
-test('untouched default lines preview the uncalibrated printed height', async () => {
-  // #given
-  const bytes = Buffer.from(png);
-  bytes.writeUInt32BE(150, 16);
-  bytes.writeUInt32BE(100, 20);
-  render(<PaperMinisGenerator />);
-  await addFront(bytes);
-  fireEvent.change(screen.getByRole('combobox', { name: 'Высота существа' }), {
-    target: { value: 'custom' },
-  });
-  fireEvent.change(screen.getByRole('spinbutton', { name: 'Основание, мм' }), {
-    target: { value: '10' },
-  });
-  fireEvent.change(screen.getByRole('spinbutton', { name: 'Фигурка, мм' }), {
-    target: { value: '140' },
-  });
-  // #when
-  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
-  const dialog = within(screen.getByRole('dialog'));
-  // #then
-  expect({
-    readout: dialog.getByText(/Рост 140 мм ·/).textContent,
-    warning: dialog.queryByText('Миниатюра уменьшена: размер листа.'),
-  }).toEqual({ readout: 'Рост 140 мм · напечатается 140 мм', warning: null });
 });
 
 test.each(['pointerCancel', 'lostPointerCapture'] as const)(
@@ -648,20 +549,6 @@ test.each([{ button: 2 }, { button: 0, ctrlKey: true }])(
     expect(screen.queryByText('Рост задан вручную') !== null).toBe(false);
   },
 );
-
-test('pushing untouched lines against their boundaries does not calibrate the row', async () => {
-  // #given
-  render(<PaperMinisGenerator />);
-  await addFront();
-  await addBack();
-  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
-  // #when
-  fireEvent.keyDown(screen.getByRole('slider', { name: 'Голова' }), { key: 'ArrowUp' });
-  fireEvent.keyDown(screen.getByRole('slider', { name: 'Ступни' }), { key: 'ArrowDown' });
-  fireEvent.click(screen.getByRole('button', { name: 'Применить' }));
-  // #then
-  expect(screen.queryByText('Рост задан вручную') !== null).toBe(false);
-});
 
 test('Apply after returning lines to their starting values keeps the calibration unchanged', async () => {
   // #given

@@ -1,16 +1,33 @@
 import { atom, computed } from 'nanostores';
 import { prepareArtwork, isSupportedArtwork } from '@/lib/paper-minis/artwork';
 import { planBatch } from '@/lib/paper-minis/batch-plan';
+import {
+  calibrationChanged,
+  calibrationGap,
+  calibrationRange,
+  DEFAULT_CALIBRATION,
+  setCalibrationLine as setLine,
+  type CalibrationLine,
+  type CalibrationRange,
+} from '@/lib/paper-minis/calibration';
+import { fitLimitWarning } from '@/lib/paper-minis/fit-limits';
 import { normalizeArtwork } from '@/lib/paper-minis/normalization';
 import { generatePDF } from '@/lib/paper-minis/pdf';
 import {
   DEFAULT_FIGURE_MARGIN_MM,
+  fitMiniFaces,
   packEntries,
+  toPackingEntry,
   type PackResult,
   type PageSizeKey,
 } from '@/lib/paper-minis/packing';
-import { DEFAULT_HEIGHT_SLOT } from '@/lib/paper-minis/sizes';
-import type { Entry, HeightCalibration, HeightSlot } from '@/lib/paper-minis/types';
+import { DEFAULT_HEIGHT_SLOT, resolveFigureHeightMm } from '@/lib/paper-minis/sizes';
+import type {
+  Entry,
+  HeightCalibration,
+  HeightSlot,
+  PreparedArtwork,
+} from '@/lib/paper-minis/types';
 
 export type MiniRow = Entry & { id: number; frontError?: string };
 export type PaperMinisSettings = {
@@ -25,6 +42,18 @@ export type PaperMinisRenderer = (
   settings: Readonly<PaperMinisSettings>,
 ) => Promise<Uint8Array>;
 type Preview = { bytes: Uint8Array; revision: number };
+export type CalibrationSession = {
+  rowId: number;
+  rowLabel: string;
+  artwork: PreparedArtwork;
+  backArtwork?: PreparedArtwork | null;
+  lines: HeightCalibration;
+  artworkHeight: number;
+  ranges: Record<CalibrationLine, CalibrationRange>;
+  slotHeightMm: number;
+  printedHeightMm: number;
+  warning?: string;
+};
 const storageKey = 'pmg-settings';
 const successMessage = 'PDF готов.';
 const failureMessage = 'Не удалось создать PDF. Попробуйте ещё раз или уменьшите изображения.';
@@ -42,6 +71,11 @@ export function createPaperMinisStore(renderer: PaperMinisRenderer = generatePDF
   const $busy = atom(false);
   const $preparing = atom(false);
   const $preview = atom<Preview | undefined>(undefined);
+  const $calibration = atom<CalibrationSession | undefined>(undefined);
+  const $acceptsFiles = computed(
+    [$busy, $calibration],
+    (busy, calibration) => !busy && calibration === undefined,
+  );
   const $previewStale = computed(
     [$preview, $revision],
     (preview, revision) => preview !== undefined && preview.revision !== revision,
@@ -51,13 +85,93 @@ export function createPaperMinisStore(renderer: PaperMinisRenderer = generatePDF
   let packedRows: MiniRow[] | undefined;
   let packedSettings: PaperMinisSettings | undefined;
   let packed: PackResult | undefined;
+  let initialCalibration: HeightCalibration | undefined;
+
+  function calibrationSession(row: MiniRow, lines: HeightCalibration): CalibrationSession {
+    const calibration = calibrationChanged(lines, initialCalibration) ? lines : initialCalibration;
+    const packingEntry = { ...toPackingEntry(row), calibration };
+    const fits = fitMiniFaces(
+      {
+        ...packingEntry,
+        naturalWidth: row.artwork!.width,
+        naturalHeight: row.artwork!.height,
+      },
+      $settings.get(),
+    );
+    return {
+      rowId: row.id,
+      rowLabel: row.name || 'Миниатюра',
+      artwork: row.artwork!,
+      backArtwork: row.backArtwork,
+      lines,
+      artworkHeight: Math.max(row.artwork!.height, row.backArtwork?.height ?? 0),
+      ranges: {
+        head: calibrationRange(lines, 'head'),
+        feet: calibrationRange(lines, 'feet'),
+      },
+      slotHeightMm: resolveFigureHeightMm(row),
+      printedHeightMm: fits.front.imageHeightMm,
+      warning: fitLimitWarning([...new Set([...fits.front.limits, ...(fits.back?.limits ?? [])])]),
+    };
+  }
+
+  function cancelCalibration() {
+    initialCalibration = undefined;
+    $calibration.set(undefined);
+  }
+
+  function openCalibration(id: number) {
+    if ($busy.get()) return false;
+    const row = $rows.get().find((candidate) => candidate.id === id);
+    if (!row?.artwork) return false;
+    initialCalibration = calibrationGap(row.calibration) === undefined ? undefined : row.calibration;
+    const lines = { ...(initialCalibration ?? DEFAULT_CALIBRATION) };
+    $calibration.set(calibrationSession(row, lines));
+    return true;
+  }
+
+  function updateCalibration(line: CalibrationLine, fraction: number) {
+    const session = $calibration.get();
+    if (!session) return;
+    const row = $rows.get().find((candidate) => candidate.id === session.rowId);
+    if (!row?.artwork) {
+      cancelCalibration();
+      return;
+    }
+    const lines = setLine(session.lines, line, fraction);
+    if (lines !== session.lines) $calibration.set(calibrationSession(row, lines));
+  }
+
+  function applyCalibration() {
+    const session = $calibration.get();
+    if (!session || calibrationGap(session.lines) === undefined) return false;
+    const changedByValue = calibrationChanged(session.lines, initialCalibration);
+    if (changedByValue) patch(session.rowId, { calibration: session.lines });
+    cancelCalibration();
+    return true;
+  }
+
+  function resetCalibration(id: number) {
+    const row = $rows.get().find((candidate) => candidate.id === id);
+    if (!row?.calibration) return;
+    patch(id, { calibration: undefined });
+  }
 
   function changed() {
     $revision.set($revision.get() + 1);
   }
   function patch(id: number, fields: Partial<Entry> & { frontError?: string }) {
     if ($busy.get()) return;
+    const previous = $rows.get().find((row) => row.id === id);
     $rows.set($rows.get().map((row) => (row.id === id ? { ...row, ...fields } : row)));
+    const next = $rows.get().find((row) => row.id === id);
+    if (
+      $calibration.get()?.rowId === id &&
+      previous &&
+      next &&
+      (previous.artwork !== next.artwork || previous.backArtwork !== next.backArtwork)
+    )
+      cancelCalibration();
     changed();
   }
   function addBlank({ name, heightSlot }: { name?: string; heightSlot?: HeightSlot } = {}) {
@@ -75,7 +189,7 @@ export function createPaperMinisStore(renderer: PaperMinisRenderer = generatePDF
     return row.id;
   }
   async function setImage(id: number, file: File, back = false) {
-    if ($busy.get()) return;
+    if (!$acceptsFiles.get()) return;
     if (!isSupportedArtwork(file)) {
       $message.set('Выберите PNG, JPG или WebP.');
       return;
@@ -140,7 +254,7 @@ export function createPaperMinisStore(renderer: PaperMinisRenderer = generatePDF
     }
   }
   function ingest(files: File[]) {
-    if ($busy.get()) return;
+    if (!$acceptsFiles.get()) return;
     const valid = files.filter(isSupportedArtwork);
     $message.set(
       valid.length < files.length
@@ -166,6 +280,7 @@ export function createPaperMinisStore(renderer: PaperMinisRenderer = generatePDF
       /* Storage is optional. */
     }
     if (previous.normalization !== next.normalization) {
+      cancelCalibration();
       $rows.set($rows.get().map((row) => Object.assign({}, row, { calibration: undefined })));
       for (const row of $rows.get()) {
         if (row.image) void setImage(row.id, row.image);
@@ -232,18 +347,24 @@ export function createPaperMinisStore(renderer: PaperMinisRenderer = generatePDF
     $preparing,
     $preview,
     $previewStale,
+    $calibration,
+    $acceptsFiles,
     patch,
     addBlank,
     setImage,
     ingest,
     settings,
     loadSettings,
-    setCalibration(id: number, calibration: HeightCalibration) {
-      patch(id, { calibration });
+    openCalibration,
+    setCalibrationLine: updateCalibration,
+    moveCalibrationLine(line: CalibrationLine, pixels: number) {
+      const session = $calibration.get();
+      if (!session || session.artworkHeight <= 0) return;
+      updateCalibration(line, session.lines[line] + pixels / session.artworkHeight);
     },
-    clearCalibration(id: number) {
-      patch(id, { calibration: undefined });
-    },
+    applyCalibration,
+    cancelCalibration,
+    resetCalibration,
     pack,
     async download() {
       return (await render())?.bytes;
@@ -265,6 +386,7 @@ export function createPaperMinisStore(renderer: PaperMinisRenderer = generatePDF
     },
     remove(id: number) {
       if ($busy.get()) return;
+      if ($calibration.get()?.rowId === id) cancelCalibration();
       loads.delete(`${id}:true`);
       loads.delete(`${id}:false`);
       $rows.set($rows.get().filter((row) => row.id !== id));

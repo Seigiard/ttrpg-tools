@@ -1,4 +1,5 @@
 import type { Entry, MiniSize, PackingEntry } from './types';
+import { calibrationGap } from './calibration';
 import {
   type FigureFitLimit,
   type FigureFitMm,
@@ -6,7 +7,6 @@ import {
   hasPackableDimensions,
   resolveSizeDimensionsMm,
   resolveTabHeightMm,
-  validCalibrationGap,
 } from './sizes.ts';
 
 // Page and layout constants. These live here (not in pdf.ts) so the packing
@@ -102,7 +102,7 @@ export function fitMiniFaces(
   const usableWidthMm = PAGE_SIZES_MM[opts.pageSize].w - MARGIN_MM * 2;
   const marginMm = opts.marginMm ?? DEFAULT_FIGURE_MARGIN_MM;
   const imageSpaceMm = (usableHeightMm - marginMm * 2 - resolveTabHeightMm(e) * 4) / 2;
-  const calibrated = validCalibrationGap(e.calibration);
+  const calibrated = calibrationGap(e.calibration);
   // Page fitting belongs to the whole calibrated mini. Do not promise a page
   // fit when the base/tabs alone cannot fit.
   const maxImageHeightMm = (aspect: number) =>
@@ -155,20 +155,28 @@ export function isBackArtworkLoading(entry: Entry): boolean {
   return entry.backImage != null && entry.backArtwork == null;
 }
 
+export function toPackingEntry(entry: Entry): PackingEntry {
+  return {
+    heightSlot: entry.heightSlot,
+    customWidthMm: entry.customWidthMm,
+    customHeightMm: entry.customHeightMm,
+    count: entry.count,
+    calibration: entry.calibration,
+    naturalWidth: entry.artwork?.width,
+    naturalHeight: entry.artwork?.height,
+    backNaturalWidth: entry.backArtwork?.width,
+    backNaturalHeight: entry.backArtwork?.height,
+  };
+}
+
 // Project prepared artwork into packing geometry without changing entry indices.
 export function packEntries(entries: Entry[], opts: PackOptions): PackResult {
   return packMinis(
-    entries.map((entry) => ({
-      heightSlot: entry.heightSlot,
-      customWidthMm: entry.customWidthMm,
-      customHeightMm: entry.customHeightMm,
-      count: entry.count,
-      calibration: entry.calibration,
-      naturalWidth: isBackArtworkLoading(entry) ? undefined : entry.artwork?.width,
-      naturalHeight: isBackArtworkLoading(entry) ? undefined : entry.artwork?.height,
-      backNaturalWidth: entry.backArtwork?.width,
-      backNaturalHeight: entry.backArtwork?.height,
-    })),
+    entries.map((entry) =>
+      isBackArtworkLoading(entry)
+        ? { ...toPackingEntry(entry), naturalWidth: undefined, naturalHeight: undefined }
+        : toPackingEntry(entry),
+    ),
     opts,
   );
 }
