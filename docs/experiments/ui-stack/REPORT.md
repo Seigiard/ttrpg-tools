@@ -16,11 +16,11 @@ Both candidates pass the gate.
 | Check | React | Preact | Svelte |
 | --- | --- | --- | --- |
 | Lint, format, typecheck, build | pass | pass | pass |
-| Unit and component tests | 518 | 529 | 526 |
+| Unit and component tests | 518 | 531 | 530 |
 | Browser tests (main's paper-minis suite + parity suite) | 12/12 | 12/12 | 12/12 |
 | React runtime in `dist/` | — | none | none |
 
-Before the follow-up change the candidates had 526 and 523 unit tests. Each React component test was ported with the same test count, or more, and the same assertion intent. The parity suite runs the same specs against all three builds. It selects only by role, label or `data-testid`. It covers:
+Each React component test was ported with the same test count, or more, and the same assertion intent. The parity suite runs the same specs against all three builds. It selects only by role, label or `data-testid`. It covers:
 
 - static content without JavaScript;
 - hydration with no console errors;
@@ -30,7 +30,7 @@ Before the follow-up change the candidates had 526 and 523 unit tests. Each Reac
 - a dialog focus trap;
 - no horizontal scroll at 390 px.
 
-Main's own paper-minis browser suite (zip export, WebP, trimming, decode failure) also passes on both candidates.
+Main's own paper-minis browser suite (WebP decoding, trimming, decode failure, front-and-back PDF) also passes on both candidates. Zip export and import are covered by component tests only, as on main.
 
 Behaviour that had to be rebuilt by hand, because Base UI has no Preact or Svelte version:
 
@@ -47,21 +47,25 @@ The Preact dialog passes the focus-trap test, but its background is not `inert`.
 
 The figures are static analysis of `dist/` and count every JS chunk the route loads, following imports (gzip, bytes). They agree with the cold network transfer measured in Chromium (second table).
 
+Initial-load JS:
+
 | Route | React | Preact | Svelte |
 | --- | ---: | ---: | ---: |
-| encounters | 87,400 | 21,413 | 33,950 |
+| encounters | 87,400 | 21,688 | 34,312 |
 | weather | 95,222 | 23,217 | 35,301 |
 | locations | 96,440 | 24,368 | 36,878 |
 | prices | 95,813 | 23,852 | 35,891 |
-| paper-minis | 296,499 | 213,012 | 227,851 |
+| paper-minis | 296,499 | 213,031 | 227,940 |
+
+Lazy JS, loaded only on demand: the zip export chunk on paper minis (6.1 KB in every build). Preact adds 3.0 KB on every island page for `@preact/signals`, which `@astrojs/preact` imports dynamically. The candidates' encounters page includes the follow-up change (about 300 B); React's does not.
 
 Cold load, all bytes transferred (HTML + CSS + JS, uncompressed transfer from `vite preview`):
 
 | Route | React | Preact | Svelte |
 | --- | ---: | ---: | ---: |
-| encounters | 104,332 | 38,833 | 52,287 |
-| weather | 113,287 | 41,423 | 53,090 |
-| paper-minis | 312,146 | 228,914 | 243,341 |
+| encounters | 104,332 | 39,316 | 52,295 |
+| weather | 113,287 | 41,423 | 53,098 |
+| paper-minis | 312,146 | 228,935 | 243,460 |
 
 Warm loads are 1.1–1.7 KB in all three (cache revalidation only).
 
@@ -80,13 +84,17 @@ Ten repeats per scenario in Playwright Chromium 153 on an Apple M1 Pro. Values a
 
 | Scenario | React | Preact | Svelte |
 | --- | --- | --- | --- |
-| weather click-to-result | 82 (62–116) | 63 (58–75) | 58 (51–89) |
-| prices tab switch | 95 (74–133) | 74 (58–79) | 75 (65–78) |
-| paper-minis upload-to-row | 51 (48–65) | 39 (37–44) | 44 (42–49) |
-| paper-minis preview ready | 70 (62–76) | 82 (72–85) | 72 (66–80) |
-| paper-minis PDF generation | 76 (60–82) | 77 (63–80) | 73 (62–78) |
+| weather click-to-result | 71 (61–85) | 63 (60–76) | 58 (55–88) |
+| prices tab switch | 41 (40–57) | 80 (78–83) | 51 (49–55) |
+| paper-minis upload-to-row | 51 (49–57) | 39 (38–40) | 43 (43–53) |
+| paper-minis preview ready | 73 (68–84) | 80 (67–87) | 75 (64–84) |
+| paper-minis PDF generation | 69 (65–84) | 76 (61–86) | 73 (61–76) |
 
-These timings include Playwright round trips. Other agents were running builds on the same machine during the runs. The differences are tens of milliseconds and the ranges overlap. They show no interaction problem in either candidate; they do not rank the frameworks.
+These timings include Playwright round trips. Most ranges overlap and show no interaction problem.
+
+The one clear gap is the prices tab switch on Preact: 80 ms, with ranges that do not overlap React's 41 ms. The scenario stops when the URL changes, and the URL is written in an effect. Preact runs `useEffect` after the next paint, while React flushes it right after a discrete click. So the likely cause is a later URL write, not a slower tab render; this was not profiled. A `useLayoutEffect` for the URL sync would test the hypothesis.
+
+An earlier version of this table measured the prices tab switch on clicks into an already selected tab. Review caught it, and all three builds were remeasured.
 
 ## Expressiveness and reuse
 
@@ -124,7 +132,7 @@ Diffs: `results/{react,preact,svelte}/followup.diff`. The Svelte diff contains f
 | Dependencies | −10, +5 | −10, +7 |
 | Type checking | `astro check` covers `.tsx` as before | `astro check` does **not** check `.svelte` types (verified with a deliberate error); `svelte-check` added to `typecheck` |
 | Formatting | `oxfmt` as before | `oxfmt` for TS + `prettier-plugin-svelte` for `.svelte` |
-| Unit tests under Bun | work as before | needs a 60-line Bun preload plugin that compiles `.svelte` and redirects `svelte` to its client build. Plain `bun test` fails 25 tests, because parallel files share one happy-dom document. CI runs `bun test --parallel=1` |
+| Unit tests under Bun | work as before; component tests need explicit waits after store updates | needs a 60-line Bun preload plugin that compiles `.svelte` and redirects `svelte` to its client build. Plain `bun test` fails 25 tests, because parallel files share one happy-dom document. CI runs `bun test --parallel=1` |
 | UI library | none left; own Tabs/Dialog to maintain | none left; own Tabs/Dialog to maintain |
 
 Both candidates drop the shadcn CLI package. The nine Tailwind variants the primitives use (`data-active:`, `data-horizontal/…`) are vendored into `global.css`. The first cut of each candidate got this wrong: Preact silently lost the variants, and Svelte kept an import of a removed package that only built because of a stale `node_modules`.
