@@ -18,7 +18,6 @@ import type { PreparedArtwork, Entry } from './types';
 import type { PackResult } from './packing.ts';
 import {
   CUT_MARK_ARM_MM,
-  CUT_MARK_EXTENT_MM,
   CUT_MARK_STROKE_MM,
   PAGE_SIZES_MM,
   SCALE_BAR_BAND_MM,
@@ -100,8 +99,7 @@ export async function generatePDF(
     pdfPage.pushOperators(pushGraphicsState(), concatTransformationMatrix(1 / scale, 0, 0, 1 / scale, 0, 0));
     for (const { mini, xMm, yMm, rotated } of page.placements) {
       if (rotated) {
-        // Turn the whole local drawing clockwise. The reserved footprint
-        // includes the corner arms, so inset the cut-out without scaling it.
+        // Turn the whole local drawing clockwise about the footprint's top-left.
         pdfPage.pushOperators(
           pushGraphicsState(),
           concatTransformationMatrix(
@@ -109,8 +107,8 @@ export async function generatePDF(
             -1,
             1,
             0,
-            mm(CUT_MARK_EXTENT_MM + xMm + CUT_MARK_EXTENT_MM),
-            mm(scaledPageHmm - SCALE_BAR_BAND_MM - CUT_MARK_EXTENT_MM - yMm - CUT_MARK_EXTENT_MM),
+            mm(xMm),
+            mm(scaledPageHmm - SCALE_BAR_BAND_MM - yMm),
           ),
         );
         drawMini(pdfPage, mini, faces.get(mini.entryIndex)!, 0, mini.totalHeightMm, font);
@@ -121,8 +119,8 @@ export async function generatePDF(
         pdfPage,
         mini,
         faces.get(mini.entryIndex)!,
-        CUT_MARK_EXTENT_MM + xMm,
-        scaledPageHmm - SCALE_BAR_BAND_MM - CUT_MARK_EXTENT_MM - yMm,
+        xMm,
+        scaledPageHmm - SCALE_BAR_BAND_MM - yMm,
         font,
       );
     }
@@ -254,18 +252,19 @@ function drawMini(
   drawCutMarks(pdfPage, mini, x, yBottom);
 }
 
-// Cut marks in the Printable Heroes style, drawn outside the piece so no line
-// is left on it once cut: a cross at each outer corner and at the fold between
-// the faces, and a half mark on each edge where a strip folds. The piece is
-// the whole column, so every strip is as wide as the figure's margins.
-// All of it is one stroked path, drawn last, which is how pdf.test.ts finds
-// where one mini ends.
+// Cut marks drawn on the piece's own edges, so neighbours can share a cut
+// line with no gap between them. Each arm runs along a cut edge or a fold,
+// where a line belongs anyway, so nothing stray is left once the piece is cut.
+// The bottom and top corners get an inward corner; each fold between strips,
+// and the fold between the faces, gets a tick on the edge with its arm
+// pointing into the piece. All of it is one stroked path, drawn last, which is
+// how pdf.test.ts finds where one mini ends.
 function drawCutMarks(pdfPage: PDFPage, mini: PackedMini, x: number, yBottom: number) {
   const arm = mm(CUT_MARK_ARM_MM);
   const left = x;
   const right = x + mm(mini.totalWidthMm);
-  const crosses = mini.levels.cutMarks.crossesMm.map((level) => yBottom + mm(level));
-  const halves = mini.levels.cutMarks.halvesMm.map((level) => yBottom + mm(level));
+  const [bottom, top] = mini.levels.cutMarks.cornersMm.map((level) => yBottom + mm(level));
+  const ticks = mini.levels.cutMarks.edgeTicksMm.map((level) => yBottom + mm(level));
 
   const ops = [
     pushGraphicsState(),
@@ -275,13 +274,13 @@ function drawCutMarks(pdfPage: PDFPage, mini: PackedMini, x: number, yBottom: nu
   const segment = (x1: number, y1: number, x2: number, y2: number) =>
     ops.push(moveTo(x1, y1), lineTo(x2, y2));
   for (const edge of [left, right]) {
-    const outward = edge === left ? -arm : arm;
-    for (const y of crosses) {
-      segment(edge - arm, y, edge + arm, y);
-      segment(edge, y - arm, edge, y + arm);
-    }
-    for (const y of halves) {
-      segment(edge, y, edge + outward, y);
+    const inward = edge === left ? arm : -arm;
+    segment(edge + inward, bottom, edge, bottom);
+    segment(edge, bottom, edge, bottom + arm);
+    segment(edge + inward, top, edge, top);
+    segment(edge, top, edge, top - arm);
+    for (const y of ticks) {
+      segment(edge, y, edge + inward, y);
       segment(edge, y - arm, edge, y + arm);
     }
   }

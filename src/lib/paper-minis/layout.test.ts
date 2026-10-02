@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
-import { packMinis, packRows, type Placement } from './packing';
-import { packableAreaMm, resolveMinis } from './geometry';
+import { packMinis, type Placement } from './packing';
+import { packableAreaMm } from './geometry';
 import { HEIGHT_SLOT_ORDER } from './sizes';
 import type { PackingEntry } from './types';
 
@@ -15,7 +15,7 @@ const rescue: PackingEntry = {
 
 for (const pageSize of ['a4', 'letter'] as const) {
   test(`${pageSize}: rescued minis own strips even when a neighbour would fit beside them`, () => {
-    // #given: a turned 89.2×217.2 footprint leaves room beside it for a Tiny,
+    // #given: a turned 86×214 footprint leaves room beside it for a Tiny,
     // but its dedicated strip leaves too little height below for the 68 mm Tiny.
     const entries: PackingEntry[] = [
       rescue,
@@ -24,17 +24,15 @@ for (const pageSize of ['a4', 'letter'] as const) {
     const opts = { pageSize, numberDuplicates: false };
     // #when
     const result = packMinis(entries, opts);
-    const rows = packRows(resolveMinis(entries, opts), opts);
     // #then
-    expect({
-      pages: result.pages.map((page) => page.placements.map((p) => [p.mini.entryIndex, p.rotated])),
-      rowPages: rows.pages.map((p) => p.rows.map((r) => [r.items.length, r.rotated ?? false])),
-    }).toEqual({ pages: [[[0, true]], [[1, false]]], rowPages: [[[1, false]], [[1, true]]] });
+    expect(
+      result.pages.map((page) => page.placements.map((p) => [p.mini.entryIndex, p.rotated])),
+    ).toEqual([[[0, true]], [[1, false]]]);
   });
 }
 
 test('a rescue cannot join an upright strip even when its turned footprint fits beside it', () => {
-  // #given: 92×264 upright plus 89.2×217.2 turned would fit side by side.
+  // #given: 92×264 upright plus 86×214 turned would fit side by side.
   const entries: PackingEntry[] = [
     {
       heightSlot: 'custom',
@@ -54,47 +52,15 @@ test('a rescue cannot join an upright strip even when its turned footprint fits 
   ).toEqual([[[0, false]], [[1, true]]]);
 });
 
-test('row rescues scan earlier sheets before opening another dedicated strip', () => {
-  // #given: a 109×35 row on page one; a 109×35 and 44×264 row on page two.
-  // The 217.2 mm rescue strip fits below the first row, but not the second.
-  const entries: PackingEntry[] = [
-    {
-      heightSlot: 'custom',
-      customWidthMm: 5,
-      customHeightMm: 70,
-      naturalWidth: 10,
-      naturalHeight: 1,
-      count: 2,
-    },
-    {
-      heightSlot: 'custom',
-      customWidthMm: 40,
-      customHeightMm: 90,
-      naturalWidth: 1,
-      naturalHeight: 100,
-      count: 1,
-    },
-    rescue,
-  ];
-  // #when
-  const opts = { pageSize: 'a4', numberDuplicates: false } as const;
-  const result = packRows(resolveMinis(entries, opts), opts);
-  // #then
-  expect(result.pages.map((p) => p.rows.map((r) => r.items.map((m) => m.entryIndex)))).toEqual([
-    [[0], [0]],
-    [[2]],
-  ]);
-});
-
-test('rescue fitting includes the stroked marks at the usable height boundary', () => {
-  // #given: the first turned footprint fits the default scaled A4 width exactly.
-  // Raising the requested height by 0.01 mm exceeds that boundary.
+test('a rescue fits turned exactly at the usable height boundary', () => {
+  // #given: the default printer scale provides 181.1 mm of usable A4 width.
+  // Raising the requested height by 0.01 mm exceeds the A4 usable height.
   const entries = [
     { ...rescue, customHeightMm: 160 },
     { ...rescue, customHeightMm: 160.01 },
   ];
   // #when
-  const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 1.9 });
+  const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 3.5 });
   // #then
   expect({
     placed: result.pages.flatMap((page) =>
@@ -106,8 +72,8 @@ test('rescue fitting includes the stroked marks at the usable height boundary', 
 
 test('short minis stack beside a tall mini instead of opening a second sheet', () => {
   // #given: one 92×264 and four 44×124 footprints on 190×277 paper.
-  // A tall column plus two short columns is 188 mm wide. Each short column
-  // holds two minis (252 mm). Rows need 264+4+124 mm and thus two sheets.
+  // A tall column plus two short columns is 180 mm wide. Each short column
+  // holds two minis (248 mm), so all five fit one sheet.
   const entries: PackingEntry[] = [
     {
       heightSlot: 'custom',
@@ -134,11 +100,8 @@ test('short minis stack beside a tall mini instead of opening a second sheet', (
 
 // Find bands by projecting rectangles onto an axis. This checks whether cuts
 // exist in the result, without consulting the packer's strips or columns.
-// A rotated reservation holds the cut-out and 1.6 mm of stroked marks per edge.
-const placedWidth = (p: Placement) =>
-  p.rotated ? p.mini.totalHeightMm + 3.2 : p.mini.totalWidthMm;
-const placedHeight = (p: Placement) =>
-  p.rotated ? p.mini.totalWidthMm + 3.2 : p.mini.totalHeightMm;
+const placedWidth = (p: Placement) => (p.rotated ? p.mini.totalHeightMm : p.mini.totalWidthMm);
+const placedHeight = (p: Placement) => (p.rotated ? p.mini.totalWidthMm : p.mini.totalHeightMm);
 function bands(items: Placement[], axis: 'x' | 'y'): Placement[][] {
   const start = (p: Placement) => (axis === 'x' ? p.xMm : p.yMm);
   const end = (p: Placement) => start(p) + (axis === 'x' ? placedWidth(p) : placedHeight(p));
@@ -153,9 +116,9 @@ function bands(items: Placement[], axis: 'x' | 'y'): Placement[][] {
 }
 
 for (const pageSize of ['a4', 'letter'] as const) {
-  test(`${pageSize}: mixed layouts stay in bounds, keep gaps, conserve copies and allow straight cuts`, () => {
+  test(`${pageSize}: mixed layouts stay in bounds, never overlap, conserve copies and allow straight cuts`, () => {
     // #given: varied sizes, aspect ratios, counts, backs and custom dimensions.
-    // The oracle is physical paper (190×277 / 196×259), a 4 mm gap and the
+    // The oracle is physical paper (190×277 / 196×259), shared cut lines and the
     // independent input inventory. The row candidate retains its original tests.
     const batches = Array.from({ length: 36 }, (_, n): PackingEntry[] => [
       ...HEIGHT_SLOT_ORDER.map((heightSlot, i) => ({
@@ -190,7 +153,6 @@ for (const pageSize of ['a4', 'letter'] as const) {
       const opts = { pageSize, numberDuplicates: true, marginMm: n % 6 };
       const result = packMinis(entries, opts);
       const { widthMm: width, heightMm: height } = packableAreaMm(opts);
-      if (result.pageCount > packRows(resolveMinis(entries, opts), opts).pageCount) violations.push('more sheets');
       if (JSON.stringify(result) !== JSON.stringify(packMinis(entries, opts)))
         violations.push('nondeterministic');
       const placed = result.pages.flatMap((page) => page.placements);
@@ -223,11 +185,11 @@ for (const pageSize of ['a4', 'letter'] as const) {
           if (a.mini.label !== String(a.mini.copyIndex + 1)) violations.push('label');
           for (const b of page.placements.slice(i + 1)) {
             const separated =
-              a.xMm + placedWidth(a) + 4 <= b.xMm + 1e-9 ||
-              b.xMm + placedWidth(b) + 4 <= a.xMm + 1e-9 ||
-              a.yMm + placedHeight(a) + 4 <= b.yMm + 1e-9 ||
-              b.yMm + placedHeight(b) + 4 <= a.yMm + 1e-9;
-            if (!separated) violations.push('gap');
+              a.xMm + placedWidth(a) <= b.xMm + 1e-9 ||
+              b.xMm + placedWidth(b) <= a.xMm + 1e-9 ||
+              a.yMm + placedHeight(a) <= b.yMm + 1e-9 ||
+              b.yMm + placedHeight(b) <= a.yMm + 1e-9;
+            if (!separated) violations.push('overlap');
           }
         }
         for (const strip of bands(page.placements, 'y')) {
@@ -261,7 +223,7 @@ test('empty and unprepared inputs have no placements, and unprepared rows report
 
 test('an uncalibrated wide mini keeps its dimensions through rotation and strip packing', () => {
   // #given: the 8:1 front and 4:1 back hit the slot width cap independently.
-  // The 199 mm cut-out only fits turned, including marks. A Tiny fits below it.
+  // The 199 mm cut-out only fits turned. A Tiny fits below it.
   const entries: PackingEntry[] = [
     {
       heightSlot: 'custom',
@@ -322,9 +284,9 @@ test('an uncalibrated wide mini keeps its dimensions through rotation and strip 
   });
 });
 
-test('later small minis backfill the first sheet; guillotine wins a sheet-count tie', () => {
+test('later small minis backfill the first sheet', () => {
   // #given: two 74×224 columns on page one, the third on page two.
-  // A 24×68 Tiny still fits beside the first two columns (180 mm in total).
+  // A 24×68 Tiny still fits beside the first two columns (172 mm in total).
   const entries: PackingEntry[] = [
     {
       heightSlot: 'custom',
@@ -343,49 +305,4 @@ test('later small minis backfill the first sheet; guillotine wins a sheet-count 
     [0, 0, 1],
     [0],
   ]);
-});
-
-test.each([
-  { extra: [], pages: 4, rotated: 0 },
-  { extra: [rescue], pages: 5, rotated: 1 },
-])('the row candidate saves a sheet with $rotated rescued minis', ({ extra, pages, rotated }) => {
-  // #given: A=42×120 (3 copies), B=46×214 (5), C=58×176 (5).
-  // Width-sorted rows are CCC / CCB / BBB / BAAA, each on its own sheet.
-  // Height-first gives BBB / BBC / CCC / CAA / A: no remaining column
-  // has 46 mm for A plus its gap, and no strip can stack a second mini.
-  // A rescue adds its own sheet to either candidate; rows must retain its turn.
-  const entries: PackingEntry[] = [
-    {
-      heightSlot: 'custom',
-      customWidthMm: 38,
-      customHeightMm: 20,
-      count: 3,
-      naturalWidth: 1,
-      naturalHeight: 1,
-    },
-    {
-      heightSlot: 'custom',
-      customWidthMm: 35,
-      customHeightMm: 70,
-      count: 5,
-      naturalWidth: 60,
-      naturalHeight: 100,
-    },
-    {
-      heightSlot: 'custom',
-      customWidthMm: 54,
-      customHeightMm: 32,
-      count: 5,
-      naturalWidth: 1,
-      naturalHeight: 1,
-    },
-    ...extra,
-  ];
-  // #when
-  const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false });
-  // #then
-  expect({
-    pages: result.pageCount,
-    rotated: result.pages.flatMap((p) => p.placements).filter((p) => p.rotated).length,
-  }).toEqual({ pages, rotated });
 });

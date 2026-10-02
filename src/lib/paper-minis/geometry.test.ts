@@ -110,8 +110,7 @@ t('a custom size honours both of its numbers', () => {
 });
 
 // Mini geometry asserted through the packer's interface: what each placement
-// carries and each row's status. row-packing.test.ts pins the row candidate's
-// layout; layout.test.ts covers where minis land.
+// carries and each row's status. layout.test.ts covers where minis land.
 
 // Helper: build an entry with square art at a given size/count.
 const entry = (over: Partial<Entry>): Entry => ({
@@ -246,7 +245,7 @@ t('calibration too tall for the page scales to fit and is reported instead of le
       mini.fitLimits,
       result.entries,
     ],
-    [1, 118.535, usableH, ['page'], [{ state: 'upright', limits: ['page'] }]],
+    [1, 120.13499999999999, usableH, ['page'], [{ state: 'upright', limits: ['page'] }]],
   );
 });
 
@@ -306,7 +305,7 @@ t('a calibrated custom figure fits both page dimensions without changing its asp
     {
       count: 1,
       entries: [{ state: 'upright', limits: ['width', 'page'] }],
-      geometry: [[174.8025, 116.535, 178.8025, 257.07, false]],
+      geometry: [[177.2025, 118.13499999999999, 181.2025, 260.27, false]],
     },
   );
 });
@@ -346,7 +345,7 @@ t('a page-width cap shrinks both calibrated faces to the same height', () => {
     {
       count: 1,
       entries: [{ state: 'upright', limits: ['width', 'page'] }],
-      geometry: [[58.2675, 116.535, 174.8025, 116.535, 178.8025, 257.07]],
+      geometry: [[59.067499999999995, 118.13499999999999, 177.2025, 118.13499999999999, 181.2025, 260.27]],
     },
   );
 });
@@ -380,7 +379,7 @@ t('page fit prints the former too-wide page-cap case at zero margin', () => {
     },
     {
       entries: [{ state: 'upright', limits: ['width', 'page'] }],
-      geometry: [[177.8025, 118.535, 177.8025, 257.07]],
+      geometry: [[180.2025, 120.135, 180.2025, 260.27]],
     },
   );
 });
@@ -418,7 +417,7 @@ t('page fit gives both calibrated faces the same height under the wider face cap
     },
     {
       entries: [{ state: 'upright', limits: ['width', 'page'] }],
-      geometry: [[29.13375, 116.535, 174.8025, 116.535, 178.8025, 257.07]],
+      geometry: [[29.533749999999998, 118.13499999999999, 177.2025, 118.13499999999999, 181.2025, 260.27]],
     },
   );
 });
@@ -558,8 +557,8 @@ t('shared calibration is capped to the page and reports every active limit', () 
     },
     {
       count: 1,
-      front: 115.535,
-      back: { imageWidthMm: 115.535, imageHeightMm: 115.535, imageOffsetXMm: 0 },
+      front: 117.13499999999999,
+      back: { imageWidthMm: 117.13499999999999, imageHeightMm: 117.13499999999999, imageOffsetXMm: 0 },
       entries: [{ state: 'upright', limits: ['height', 'width', 'page'] }],
     },
   );
@@ -593,9 +592,9 @@ t('shared calibration fits an oversized custom front and back onto the page', ()
     },
     {
       count: 1,
-      front: [59.2675, 118.535],
-      back: [29.63375, 118.535],
-      total: 257.07,
+      front: [60.067499999999995, 120.13499999999999],
+      back: [30.033749999999998, 120.13499999999999],
+      total: 260.27,
       entries: [{ state: 'upright', limits: ['page'] }],
     },
   );
@@ -814,8 +813,8 @@ t('a Medium resolves every internal level and the back badge offset in millimetr
         backFaceTopMm: 111.5,
         topMm: 124,
         cutMarks: {
-          crossesMm: [0, 74.5, 124],
-          halvesMm: [25, 37.5, 111.5],
+          cornersMm: [0, 124],
+          edgeTicksMm: [25, 37.5, 74.5, 111.5],
         },
       },
       backBadgeOffsetXMm: 5,
@@ -838,8 +837,8 @@ t('resolved levels cover a taller back, a custom margin and a rotated rescue', (
       expected: {
         orientation: false,
         levels: [25, 37.5, 72.5, 74.5, 76.5, 111.5, 124],
-        crosses: [0, 74.5, 124],
-        halves: [25, 37.5, 111.5],
+        corners: [0, 124],
+        ticks: [25, 37.5, 74.5, 111.5],
         badge: 5,
         totalMatchesTop: true,
       },
@@ -850,8 +849,8 @@ t('resolved levels cover a taller back, a custom margin and a rotated rescue', (
       expected: {
         orientation: false,
         levels: [25, 37.5, 72.5, 77.5, 82.5, 117.5, 130],
-        crosses: [0, 77.5, 130],
-        halves: [25, 37.5, 117.5],
+        corners: [0, 130],
+        ticks: [25, 37.5, 77.5, 117.5],
         badge: 5,
         totalMatchesTop: true,
       },
@@ -868,8 +867,8 @@ t('resolved levels cover a taller back, a custom margin and a rotated rescue', (
       expected: {
         orientation: true,
         levels: [20, 30, 51, 53, 55, 76, 86],
-        crosses: [0, 53, 86],
-        halves: [20, 30, 76],
+        corners: [0, 86],
+        ticks: [20, 30, 53, 76],
         badge: 95,
         totalMatchesTop: true,
       },
@@ -890,8 +889,8 @@ t('resolved levels cover a taller back, a custom margin and a rotated rescue', (
         levels.backFaceTopMm,
         levels.topMm,
       ],
-      crosses: levels.cutMarks.crossesMm,
-      halves: levels.cutMarks.halvesMm,
+      corners: levels.cutMarks.cornersMm,
+      ticks: levels.cutMarks.edgeTicksMm,
       badge: backBadgeOffsetXMm,
       totalMatchesTop: totalHeightMm === levels.topMm,
     };
@@ -1075,7 +1074,7 @@ t('the default printer scale leaves the Letter page cap to report oversized slot
     ]),
     [
       [HEIGHT_SLOT_ORDER.length, 0],
-      [6, 3],
+      [7, 2],
     ],
   );
 });
@@ -1100,7 +1099,7 @@ t('the default printer scale reports Letter slots lost at a 5 mm figure margin',
       result.entries.filter(({ state }) => state === 'oversized').length,
     ]),
     [
-      [7, 2],
+      [9, 0],
       [6, 3],
     ],
   );

@@ -14,33 +14,33 @@ const entry = (count: number, artwork: PreparedArtwork | null = square): Entry =
   count,
 });
 
-t('8 prepared medium squares fit one A4 sheet', () => {
+t('10 prepared medium squares fit one A4 sheet', () => {
   // #given
-  const entries = [entry(8)];
+  const entries = [entry(10)];
   // #when
   const result = packEntries(entries, opts);
   // #then
-  assert.deepEqual([result.miniCount, result.pageCount], [8, 1]);
+  assert.deepEqual([result.miniCount, result.pageCount], [10, 1]);
 });
 
-t('9 prepared medium squares require two A4 sheets at the default printer scale', () => {
+t('11 prepared medium squares require two A4 sheets', () => {
   // #given
-  const entries = [entry(9)];
+  const entries = [entry(11)];
   // #when
   const result = packEntries(entries, opts);
   // #then
-  assert.deepEqual([result.miniCount, result.pageCount], [9, 2]);
+  assert.deepEqual([result.miniCount, result.pageCount], [11, 2]);
 });
 
 t('packEntries uses the current artwork height', () => {
-  // #given  9 squares need two sheets; taller art prints narrower than its
-  //         25 mm base, so six stand in a row and 9 fit one
-  const e = entry(9);
+  // #given  11 squares need two sheets; taller art prints narrower than its
+  //         25 mm base, so seven stand in a row and 11 fit one
+  const e = entry(11);
   // #when
   e.artwork = { ...square, height: 150 };
   const result = packEntries([e], opts);
   // #then
-  assert.deepEqual([result.miniCount, result.pageCount], [9, 1]);
+  assert.deepEqual([result.miniCount, result.pageCount], [11, 1]);
 });
 
 t('unprepared entries preserve the source indices of packed and oversized entries', () => {

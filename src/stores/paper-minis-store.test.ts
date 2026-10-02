@@ -356,7 +356,7 @@ test('a printer measurement updates the estimated page count', async () => {
   store.setMargin('0');
   store.setSize(id, 'custom');
   store.setCustomDimensions(id, { width: '5', height: '35' });
-  store.setCount(id, '25');
+  store.setCount(id, '31');
   await store.setImage(id, artworkFile(10, 20));
 
   // #when
@@ -1151,7 +1151,7 @@ test('a calibration session replaces an oversized warning when edited geometry f
       warning: 'Не помещается на лист. Уменьшите размер или поля. Эта миниатюра не попадёт в PDF.',
     },
     edited: {
-      printedHeightMm: 116.535,
+      printedHeightMm: 118.13499999999999,
       warning: 'Миниатюра уменьшена: лимит ширины, размер листа.',
     },
   });

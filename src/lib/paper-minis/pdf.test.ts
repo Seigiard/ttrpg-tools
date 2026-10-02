@@ -69,14 +69,14 @@ type ScaleBar = { page: number; marks: Box[]; notes: Text[] };
 // `xobject` names the embedded image a face draws, so tests can tell artworks apart.
 type Face = { image: Box; mirror: Mirror; xobject: string; badge?: Box; text?: Text };
 // A level is a height where the cut marks name a line across the piece: a
-// cross where the piece is cut or folds between the faces, a half mark where a
-// strip folds. `outward` says the half marks' arms stay off the piece.
-type Level = { y: number; kind: 'cross' | 'half' };
+// corner where the piece ends, a tick where a strip or the faces fold.
+// `inward` says every arm stays on the piece, so neighbours can share an edge.
+type Level = { y: number; kind: 'corner' | 'tick' };
 type Mini = {
   extent: Box;
   marks: Box;
   levels: Level[];
-  outward: boolean;
+  inward: boolean;
   fold: number;
   front: Face;
   back: Face;
@@ -212,15 +212,20 @@ function minis(shapes: Shape[]): Mini[] {
     const horizontal = segments
       .filter(([a, b]) => a.y === b.y)
       .map(([a, b]) => ({ y: a.y, from: Math.min(a.x, b.x), to: Math.max(a.x, b.x) }));
+    const vertical = segments
+      .filter(([a, b]) => a.x === b.x)
+      .map(([a, b]) => ({ from: Math.min(a.y, b.y), to: Math.max(a.y, b.y) }));
     const ys = [...new Set(horizontal.map((h) => h.y))].sort((a, b) => a - b);
+    // A tick's vertical arm runs both ways from its level; a corner's only one.
     const levels = ys.map(
       (y): Level => ({
         y,
-        kind: horizontal.some((h) => h.y === y && h.from < left && h.to > left) ? 'cross' : 'half',
+        kind: vertical.some((v) => v.from < y && v.to > y) ? 'tick' : 'corner',
       }),
     );
-    const halves = horizontal.filter((h) => levels.find((l) => l.y === h.y)!.kind === 'half');
-    const outward = halves.every((h) => h.to <= left || h.from >= right);
+    const inward =
+      horizontal.every((h) => h.from >= left && h.to <= right) &&
+      vertical.every((v) => v.from >= ys[0] && v.to <= ys[ys.length - 1]);
     const face = (flipped: boolean): Face => ({
       image: pick('image', flipped)!.box,
       mirror: pick('image', flipped)!.mirror!,
@@ -228,14 +233,13 @@ function minis(shapes: Shape[]): Mini[] {
       badge: pick('badge', flipped)?.box,
       text: pick('text', flipped)?.text,
     });
-    const crosses = levels.filter((l) => l.kind === 'cross');
     return {
       extent: { left, right, bottom: ys[0], top: ys[ys.length - 1] },
       marks: marks.box,
       levels,
-      outward,
-      // Of the three crosses, the middle one is the fold between the faces.
-      fold: crosses[1].y,
+      inward,
+      // Levels run floor strip, front tab, fold, back tab between the corners.
+      fold: levels[3].y,
       front: face(false),
       back: face(true),
     };
@@ -287,7 +291,7 @@ for (const separateBack of [false, true]) {
   t(
     `clockwise rescue turns the complete drawing (${separateBack ? 'separate' : 'reflected'} back)`,
     async () => {
-      // #given: 214×86 cut-out, 89.2×217.2 footprint including stroked corner arms.
+      // #given: a 214×86 cut-out, turned into an 86×214 footprint.
       const wideMini: Entry = {
         ...entry,
         heightSlot: 'custom',
@@ -334,13 +338,13 @@ for (const separateBack of [false, true]) {
         {
           pages: 1,
           images: [
-            [33.2, 71.8, 54.2, 281.8],
-            [separateBack ? 68.7 : 58.2, 71.8, 79.2, 281.8],
+            [30, 75, 51, 285],
+            [separateBack ? 65.5 : 55, 75, 76, 285],
           ],
           axes: [[0, -1, 1, 0], separateBack ? [0, 1, -1, 0] : [0, -1, -1, 0]],
-          marks: [1.7, 68.3, 90.7, 285.3],
-          folds: [3.2, 23.2, 33.2, 56.2, 79.2, 89.2],
-          badge: [80, 181.6, 83.74, 186],
+          marks: [0, 73, 86, 287],
+          folds: [0, 20, 30, 53, 76, 86],
+          badge: [76.8, 184.8, 80.54, 189.2],
           label: [['1', 0, 1]],
           scale: [0, 100, 1],
         },
@@ -349,8 +353,8 @@ for (const separateBack of [false, true]) {
   );
 }
 
-t('a turned mini and an upright neighbour print with separate stroked cut marks', async () => {
-  // #given: a 217.2 mm rescue strip followed by a 34 mm upright strip fits A4.
+t('a turned mini and an upright neighbour share a cut line', async () => {
+  // #given: a 214 mm rescue strip followed by a 34 mm upright strip fits A4.
   const entries: Entry[] = [
     {
       ...entry,
@@ -367,12 +371,12 @@ t('a turned mini and an upright neighbour print with separate stroked cut marks'
     false,
   );
   const marks = sheet.shapes.filter((s) => s.role === 'marks').map((s) => s.box);
-  // #then: the 4 mm strip gap leaves 2.4 mm after the upright mark's 1.6 mm reach.
+  // #then: the upright strip starts where the turned cut-out ends.
   assert.deepEqual(
     {
       pages: sheet.pages,
       marks: marks.length,
-      clearMm: asMm(marks[0].bottom - marks[1].top - 0.2 * PT_PER_MM),
+      sharedEdgeMm: asMm(marks[0].bottom - marks[1].top),
       images: sheet.shapes.filter((s) => s.role === 'image').length,
       badges: sheet.shapes.filter((s) => s.role === 'badge').length,
       labels: sheet.texts.map((text) => [text.label, text.direction, text.verticalDirection]),
@@ -380,7 +384,7 @@ t('a turned mini and an upright neighbour print with separate stroked cut marks'
     {
       pages: 1,
       marks: 2,
-      clearMm: 2.4,
+      sharedEdgeMm: 0,
       images: 4,
       badges: 2,
       labels: [
@@ -391,7 +395,7 @@ t('a turned mini and an upright neighbour print with separate stroked cut marks'
   );
 });
 
-t('stacked minis print on one sheet with separate cut marks and complete faces', async () => {
+t('stacked minis print on one sheet without overlapping and with complete faces', async () => {
   // #given: one 92×264 footprint beside two stacks of two 44×124 footprints.
   const entries: Entry[] = [
     { ...entry, heightSlot: 'custom', customWidthMm: 88, customHeightMm: 42 },
@@ -404,16 +408,16 @@ t('stacked minis print on one sheet with separate cut marks and complete faces',
     {
       pages: sheet.pages,
       minis: sheet.minis.length,
-      touching: sheet.minis.some((a, i) =>
+      overlapping: sheet.minis.some((a, i) =>
         sheet.minis
           .slice(i + 1)
           .some(
             (b) =>
               !(
-                a.marks.right < b.marks.left ||
-                b.marks.right < a.marks.left ||
-                a.marks.top < b.marks.bottom ||
-                b.marks.top < a.marks.bottom
+                asMm(a.extent.right) <= asMm(b.extent.left) ||
+                asMm(b.extent.right) <= asMm(a.extent.left) ||
+                asMm(a.extent.top) <= asMm(b.extent.bottom) ||
+                asMm(b.extent.top) <= asMm(a.extent.bottom)
               ),
           ),
       ),
@@ -425,7 +429,7 @@ t('stacked minis print on one sheet with separate cut marks and complete faces',
       ),
       labels: sheet.texts.map((text) => text.label).toSorted(),
     },
-    { pages: 1, minis: 5, touching: false, complete: true, labels: ['1', '1', '2', '3', '4'] },
+    { pages: 1, minis: 5, overlapping: false, complete: true, labels: ['1', '1', '2', '3', '4'] },
   );
 });
 
@@ -620,7 +624,7 @@ t('the drawer places images and cut marks at the resolved levels', async () => {
     backFaceBottomMm: 75,
     backFaceTopMm: 110,
     topMm: 125,
-    cutMarks: { crossesMm: [0, 70, 125], halvesMm: [20, 30, 110] },
+    cutMarks: { cornersMm: [0, 125], edgeTicksMm: [20, 30, 70, 110] },
   } satisfies MiniLevels;
   placement.mini = { ...placement.mini, levels, totalHeightMm: levels.topMm };
   // #when
@@ -636,7 +640,7 @@ t('the drawer places images and cut marks at the resolved levels', async () => {
     },
     {
       levels: [0, 20, 30, 70, 110, 125],
-      kinds: ['cross', 'half', 'half', 'cross', 'half', 'cross'],
+      kinds: ['corner', 'tick', 'tick', 'tick', 'tick', 'corner'],
       frontOnTab: 30,
       backUnderTab: 110,
     },
@@ -682,11 +686,10 @@ t('every strip spans the whole cut-out, overhang and margins included', async ()
   );
 });
 
-// Marks drawn onto the piece would stay visible on the cut mini. Crosses sit on
-// the cut line or the fold, where a line belongs anyway; half marks name a fold
-// between strips and must point away from the piece.
-t('half marks point away from the piece and neighbours never touch', async () => {
-  // #given  a row of copies, so neighbours' marks face each other across the gap
+// Minis abut, so a mark reaching off the piece would land on its neighbour.
+// Every arm runs along a cut edge or a fold, where a line belongs anyway.
+t('marks stay on the piece and neighbours share a cut line', async () => {
+  // #given  a row of copies, so neighbours meet edge to edge
   const copies: Entry = { ...entry, heightSlot: 'medium', count: 4 };
   // #when
   const { minis } = await read(
@@ -695,10 +698,12 @@ t('half marks point away from the piece and neighbours never touch', async () =>
   // #then
   assert.deepEqual(
     {
-      outward: minis.map((mini) => mini.outward),
-      clear: minis.slice(1).map((mini, i) => mini.marks.left > minis[i].marks.right),
+      inward: minis.map((mini) => mini.inward),
+      shared: minis
+        .slice(1)
+        .map((mini, i) => asMm(mini.extent.left) === asMm(minis[i].extent.right)),
     },
-    { outward: [true, true, true, true], clear: [true, true, true] },
+    { inward: [true, true, true, true], shared: [true, true, true] },
   );
 });
 
@@ -728,7 +733,7 @@ t('the badge marks the base, a fixed step inside it', async () => {
 // A print dialog on "Fit to page" shrinks the sheet by a few per cent. The bar
 // is how the user finds out before cutting, so it has to be a true 100 mm.
 t('every sheet carries a 100 mm scale bar starting at the page edge', async () => {
-  // #given  nine Medium squares, which spill onto a second A4 sheet
+  // #given  nine Medium squares fit one A4 sheet with shared cut lines
   const copies: Entry = { ...entry, heightSlot: 'medium', count: 9 };
   // #when
   const sheet = await read(
@@ -745,10 +750,7 @@ t('every sheet carries a 100 mm scale bar starting at the page edge', async () =
       );
       return { page, left: asMm(span.left), length: widthMm(span) };
     }),
-    [
-      { page: 0, left: 0, length: 100 },
-      { page: 1, left: 0, length: 100 },
-    ],
+    [{ page: 0, left: 0, length: 100 }],
   );
 });
 
@@ -966,7 +968,7 @@ t('a back artwork prints rotated half a turn, standing on the back tab', async (
       front: { x: false, y: false },
       back: { x: true, y: true },
       levels: [0, 25, 37.5, 74.5, 111.5, 124],
-      kinds: ['cross', 'half', 'half', 'cross', 'half', 'cross'],
+      kinds: ['corner', 'tick', 'tick', 'tick', 'tick', 'corner'],
       piece: 56.5,
       frontInset: 10.75,
       frontWidth: 35,

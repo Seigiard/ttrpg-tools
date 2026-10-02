@@ -11,6 +11,10 @@ export default defineConfig({
 
   vite: {
     plugins: [tailwindcss()],
-    server: { strictPort: true }
+    server: { strictPort: true },
+    // fflate is only imported dynamically, on the first zip export or import.
+    // Discovered that late, Vite re-optimizes deps mid-session and the pending
+    // request fails with 504 "Outdated Optimize Dep".
+    optimizeDeps: { include: ['fflate'] }
   }
 });
