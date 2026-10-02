@@ -260,18 +260,17 @@ test('empty and unprepared inputs have no placements or skipped copies', () => {
   );
 });
 
-test('a calibrated inherited back keeps matching heights through rotation and strip packing', () => {
-  // #given: the 4:1 back caps both faces at 48.75 mm high. Its 199 mm
-  // cut-out only fits turned, including cut marks. A Tiny fits below its strip.
+test('an uncalibrated wide mini keeps its dimensions through rotation and strip packing', () => {
+  // #given: the 8:1 front and 4:1 back hit the slot width cap independently.
+  // The 199 mm cut-out only fits turned, including marks. A Tiny fits below it.
   const entries: PackingEntry[] = [
     {
       heightSlot: 'custom',
       customWidthMm: 30,
       customHeightMm: 130,
       count: 1,
-      naturalWidth: 50,
+      naturalWidth: 800,
       naturalHeight: 100,
-      frontCalibration: { head: 0.25, feet: 0.75 },
       backNaturalWidth: 400,
       backNaturalHeight: 100,
     },
@@ -297,14 +296,14 @@ test('a calibrated inherited back keeps matching heights through rotation and st
   }).toEqual({
     count: 2,
     skipped: [],
-    warnings: [{ entryIndex: 0, limits: ['width'] }],
+    warnings: [],
     pages: [
       [
         {
           entry: 0,
           rotated: true,
           position: [0, 0],
-          front: [24.375, 48.75],
+          front: [195, 24.375],
           back: [195, 48.75],
           cutout: [199, 161.5],
         },

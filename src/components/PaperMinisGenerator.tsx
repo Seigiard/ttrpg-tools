@@ -675,203 +675,203 @@ export default function PaperMinisGenerator() {
 
             <section aria-label="Миниатюры" className="space-y-5">
               <h2 className="sr-only">Миниатюры</h2>
-              {rows.map((row, index) => (
-                <article
-                  key={row.id}
-                  aria-label={`Миниатюра ${index + 1}`}
-                  className="border-y border-border py-5"
-                >
-                  <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <h3 className="break-all text-xl text-text">
-                      {row.name || `Миниатюра ${index + 1}`}
-                    </h3>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="ghost"
-                        className="min-h-11"
-                        onClick={() => store.duplicate(row.id)}
-                      >
-                        Дублировать
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        className="min-h-11"
-                        onClick={() => store.remove(row.id)}
-                      >
-                        Удалить
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <ArtworkSlot
-                      artwork={row.artwork}
-                      calibration={row.frontCalibration}
-                      label="Лицевая сторона"
-                      hint="Выбрать лицевую сторону"
-                      loading={!!row.image && !row.artwork && !row.frontError}
-                      onFile={(file) => void store.setImage(row.id, file)}
-                    />
-                    <div className="space-y-2">
-                      <ArtworkSlot
-                        artwork={row.backArtwork}
-                        calibration={row.backCalibration}
-                        label={
-                          row.backImage
-                            ? `Оборот: ${row.backImage.name}`
-                            : 'Оборот: отражение лицевой стороны'
-                        }
-                        displayLabel="Оборот"
-                        hint="Добавить свой оборот или оставить отражение"
-                        loading={!!row.backImage && !row.backArtwork}
-                        onFile={(file) => void store.setImage(row.id, file, true)}
-                      />
-                      {(row.backImage || row.backWarning) && (
+              {rows.map((row, index) => {
+                const fitWarning = fitLimitWarning(
+                  packed.limitedEntryFitLimits.find((warning) => warning.entryIndex === index)
+                    ?.limits ?? [],
+                );
+                return (
+                  <article
+                    key={row.id}
+                    aria-label={`Миниатюра ${index + 1}`}
+                    className="border-y border-border py-5"
+                  >
+                    <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <h3 className="break-all text-xl text-text">
+                        {row.name || `Миниатюра ${index + 1}`}
+                      </h3>
+                      <div className="flex gap-2">
                         <Button
                           variant="ghost"
-                          className="min-h-11 w-full"
-                          onClick={() => store.clearBack(row.id)}
-                        >
-                          Убрать оборот
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid gap-3 rounded-lg bg-muted/50 p-3 sm:grid-cols-2">
-                    <div className="space-y-2 sm:col-span-2">
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          variant="outline"
                           className="min-h-11"
-                          disabled={!row.artwork}
-                          onClick={(event) => {
-                            calibrationOpener.current = event.currentTarget;
-                            setCalibratingId(row.id);
-                          }}
+                          onClick={() => store.duplicate(row.id)}
                         >
-                          Задать рост
+                          Дублировать
                         </Button>
-                        {(row.frontCalibration || row.backCalibration) && (
+                        <Button
+                          variant="ghost"
+                          className="min-h-11"
+                          onClick={() => store.remove(row.id)}
+                        >
+                          Удалить
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <ArtworkSlot
+                        artwork={row.artwork}
+                        calibration={row.frontCalibration}
+                        label="Лицевая сторона"
+                        hint="Выбрать лицевую сторону"
+                        loading={!!row.image && !row.artwork && !row.frontError}
+                        onFile={(file) => void store.setImage(row.id, file)}
+                      />
+                      <div className="space-y-2">
+                        <ArtworkSlot
+                          artwork={row.backArtwork}
+                          calibration={row.backCalibration}
+                          label={
+                            row.backImage
+                              ? `Оборот: ${row.backImage.name}`
+                              : 'Оборот: отражение лицевой стороны'
+                          }
+                          displayLabel="Оборот"
+                          hint="Добавить свой оборот или оставить отражение"
+                          loading={!!row.backImage && !row.backArtwork}
+                          onFile={(file) => void store.setImage(row.id, file, true)}
+                        />
+                        {(row.backImage || row.backWarning) && (
                           <Button
                             variant="ghost"
-                            className="min-h-11"
-                            onClick={() => {
-                              store.clearFrontCalibration(row.id);
-                              store.clearBackCalibration(row.id);
-                            }}
+                            className="min-h-11 w-full"
+                            onClick={() => store.clearBack(row.id)}
                           >
-                            Сбросить рост
+                            Убрать оборот
                           </Button>
                         )}
                       </div>
-                      {(row.frontCalibration || row.backCalibration) && (
-                        <p className="text-sm font-medium text-text">Рост задан вручную</p>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 rounded-lg bg-muted/50 p-3 sm:grid-cols-2">
+                      <div className="space-y-2 sm:col-span-2">
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            variant="outline"
+                            className="min-h-11"
+                            disabled={!row.artwork}
+                            onClick={(event) => {
+                              calibrationOpener.current = event.currentTarget;
+                              setCalibratingId(row.id);
+                            }}
+                          >
+                            Задать рост
+                          </Button>
+                          {(row.frontCalibration || row.backCalibration) && (
+                            <Button
+                              variant="ghost"
+                              className="min-h-11"
+                              onClick={() => {
+                                store.clearFrontCalibration(row.id);
+                                store.clearBackCalibration(row.id);
+                              }}
+                            >
+                              Сбросить рост
+                            </Button>
+                          )}
+                        </div>
+                        {(row.frontCalibration || row.backCalibration) && (
+                          <p className="text-sm font-medium text-text">Рост задан вручную</p>
+                        )}
+                      </div>
+                      <label className="block text-sm">
+                        Высота существа
+                        <select
+                          className={field}
+                          value={row.heightSlot}
+                          title={slotGeometryLabel(row.heightSlot)}
+                          onChange={(event) =>
+                            store.patch(row.id, {
+                              heightSlot: event.target.value as MiniSize,
+                              customHeightMm: row.customHeightMm ?? DEFAULT_CUSTOM_HEIGHT_MM,
+                              customWidthMm: row.customWidthMm ?? DEFAULT_CUSTOM_WIDTH_MM,
+                            })
+                          }
+                        >
+                          <SizeOptions custom />
+                        </select>
+                      </label>
+                      <label className="block text-sm">
+                        Количество копий
+                        <input
+                          className={field}
+                          type="number"
+                          min="1"
+                          step="1"
+                          defaultValue={row.count}
+                          onChange={(event) =>
+                            store.patch(row.id, {
+                              count: Math.max(1, Math.floor(event.target.valueAsNumber) || 1),
+                            })
+                          }
+                          onBlur={(event) => {
+                            event.currentTarget.value = String(row.count);
+                          }}
+                        />
+                      </label>
+                      {row.heightSlot === 'custom' && (
+                        <div className="grid grid-cols-2 gap-2 sm:col-span-2">
+                          {(['customWidthMm', 'customHeightMm'] as const).map((key, i) => (
+                            <label key={key} className="text-sm">
+                              {i === 0 ? 'Основание, мм' : 'Фигурка, мм'}
+                              <input
+                                className={field}
+                                type="number"
+                                min="1"
+                                step="0.5"
+                                value={row[key] ?? ''}
+                                onChange={(event) =>
+                                  store.patch(row.id, {
+                                    [key]:
+                                      Number.isFinite(event.target.valueAsNumber) &&
+                                      event.target.valueAsNumber > 0
+                                        ? event.target.valueAsNumber
+                                        : undefined,
+                                  })
+                                }
+                              />
+                            </label>
+                          ))}
+                        </div>
                       )}
                     </div>
-                    <label className="block text-sm">
-                      Высота существа
-                      <select
-                        className={field}
-                        value={row.heightSlot}
-                        title={slotGeometryLabel(row.heightSlot)}
-                        onChange={(event) =>
-                          store.patch(row.id, {
-                            heightSlot: event.target.value as MiniSize,
-                            customHeightMm: row.customHeightMm ?? DEFAULT_CUSTOM_HEIGHT_MM,
-                            customWidthMm: row.customWidthMm ?? DEFAULT_CUSTOM_WIDTH_MM,
-                          })
-                        }
-                      >
-                        <SizeOptions custom />
-                      </select>
-                    </label>
-                    <label className="block text-sm">
-                      Количество копий
-                      <input
-                        className={field}
-                        type="number"
-                        min="1"
-                        step="1"
-                        defaultValue={row.count}
-                        onChange={(event) =>
-                          store.patch(row.id, {
-                            count: Math.max(1, Math.floor(event.target.valueAsNumber) || 1),
-                          })
-                        }
-                        onBlur={(event) => {
-                          event.currentTarget.value = String(row.count);
-                        }}
-                      />
-                    </label>
-                    {row.heightSlot === 'custom' && (
-                      <div className="grid grid-cols-2 gap-2 sm:col-span-2">
-                        {(['customWidthMm', 'customHeightMm'] as const).map((key, i) => (
-                          <label key={key} className="text-sm">
-                            {i === 0 ? 'Основание, мм' : 'Фигурка, мм'}
-                            <input
-                              className={field}
-                              type="number"
-                              min="1"
-                              step="0.5"
-                              value={row[key] ?? ''}
-                              onChange={(event) =>
-                                store.patch(row.id, {
-                                  [key]:
-                                    Number.isFinite(event.target.valueAsNumber) &&
-                                    event.target.valueAsNumber > 0
-                                      ? event.target.valueAsNumber
-                                      : undefined,
-                                })
-                              }
-                            />
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                  </div>
 
-                  <p className="mt-3 text-xs leading-relaxed text-text-muted">
-                    {row.backImage
-                      ? 'В PDF попадёт отдельное изображение оборота.'
-                      : 'Без отдельного файла лицевая сторона будет отражена автоматически.'}
-                  </p>
-                  {packed.oversizedEntryIndices.includes(index) && (
-                    <p
-                      role="status"
-                      className="mt-3 border-l-2 border-danger pl-3 text-sm text-danger"
-                    >
-                      Не помещается на лист. Уменьшите размер или поля. Эта миниатюра не попадёт в
-                      PDF.
+                    <p className="mt-3 text-xs leading-relaxed text-text-muted">
+                      {row.backImage
+                        ? 'В PDF попадёт отдельное изображение оборота.'
+                        : 'Без отдельного файла лицевая сторона будет отражена автоматически.'}
                     </p>
-                  )}
-                  {fitLimitWarning(
-                    packed.limitedEntryFitLimits.find((warning) => warning.entryIndex === index)
-                      ?.limits ?? [],
-                  ) && (
-                    <p
-                      role="status"
-                      className="mt-3 border-l-2 border-warning pl-3 text-sm text-warning"
-                    >
-                      {fitLimitWarning(
-                        packed.limitedEntryFitLimits.find((warning) => warning.entryIndex === index)
-                          ?.limits ?? [],
-                      )}
-                    </p>
-                  )}
-                  {[row.frontError, row.normalizationWarning, row.backWarning]
-                    .filter(Boolean)
-                    .map((warning, i) => (
+                    {packed.oversizedEntryIndices.includes(index) && (
                       <p
-                        key={i}
+                        role="status"
+                        className="mt-3 border-l-2 border-danger pl-3 text-sm text-danger"
+                      >
+                        Не помещается на лист. Уменьшите размер или поля. Эта миниатюра не попадёт в
+                        PDF.
+                      </p>
+                    )}
+                    {fitWarning && (
+                      <p
                         role="status"
                         className="mt-3 border-l-2 border-warning pl-3 text-sm text-warning"
                       >
-                        {warning}
+                        {fitWarning}
                       </p>
-                    ))}
-                </article>
-              ))}
+                    )}
+                    {[row.frontError, row.normalizationWarning, row.backWarning]
+                      .filter(Boolean)
+                      .map((warning, i) => (
+                        <p
+                          key={i}
+                          role="status"
+                          className="mt-3 border-l-2 border-warning pl-3 text-sm text-warning"
+                        >
+                          {warning}
+                        </p>
+                      ))}
+                  </article>
+                );
+              })}
             </section>
           </div>
         </div>

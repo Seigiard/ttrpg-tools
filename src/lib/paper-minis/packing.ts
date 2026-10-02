@@ -109,9 +109,9 @@ export function fitMiniFaces(
   );
   // Page fitting belongs to the whole calibrated mini, including an unmarked
   // front. Do not promise a page fit when the base/tabs alone cannot fit.
-  const maxImageHeightMm =
+  const maxImageHeightMm = (aspect: number) =>
     calibrated && imageSpaceMm > 0 && dimensions.baseWidthMm + marginMm * 2 <= usableWidthMm
-      ? imageSpaceMm
+      ? Math.min(imageSpaceMm, (usableWidthMm - marginMm * 2) / aspect)
       : undefined;
   let faces: { front: FigureFitMm; back?: FigureFitMm };
   if (
@@ -128,7 +128,7 @@ export function fitMiniFaces(
       Math.max(frontAspect, backAspect),
       1,
       e.frontCalibration,
-      maxImageHeightMm,
+      maxImageHeightMm(Math.max(frontAspect, backAspect)),
     );
     faces = {
       front: { ...shared, imageWidthMm: frontAspect * shared.imageHeightMm },
@@ -141,7 +141,7 @@ export function fitMiniFaces(
         e.naturalWidth,
         e.naturalHeight,
         e.frontCalibration,
-        maxImageHeightMm,
+        maxImageHeightMm(e.naturalWidth / e.naturalHeight),
       ),
       back:
         e.backNaturalWidth && e.backNaturalHeight
@@ -150,18 +150,10 @@ export function fitMiniFaces(
               e.backNaturalWidth,
               e.backNaturalHeight,
               e.backCalibration,
-              maxImageHeightMm,
+              maxImageHeightMm(e.backNaturalWidth / e.backNaturalHeight),
             )
           : undefined,
     };
-  }
-  if (
-    Math.max(dimensions.baseWidthMm, faces.front.imageWidthMm, faces.back?.imageWidthMm ?? 0) +
-      marginMm * 2 >
-    usableWidthMm
-  ) {
-    faces.front.limits = faces.front.limits.filter((limit) => limit !== 'page');
-    if (faces.back) faces.back.limits = faces.back.limits.filter((limit) => limit !== 'page');
   }
   return faces;
 }
@@ -466,23 +458,24 @@ export function packRows(
     }
   }
 
+  const placedLimits = new Map<number, FigureFitLimit[]>();
+  for (const sheet of pages) {
+    for (const { items } of sheet.rows) {
+      for (const mini of items) {
+        if (mini.fitLimits.length) placedLimits.set(mini.entryIndex, mini.fitLimits);
+      }
+    }
+  }
+
   return {
     pages,
     pageCount: pages.length,
     miniCount: placed,
     skipped,
     oversizedEntryIndices: [...oversized],
-    limitedEntryFitLimits: [...new Set(minis.map((mini) => mini.entryIndex))]
-      .map((entryIndex) => ({
-        entryIndex,
-        limits: [
-          ...new Set(
-            minis
-              .filter((mini) => mini.entryIndex === entryIndex)
-              .flatMap((mini) => mini.fitLimits),
-          ),
-        ],
-      }))
-      .filter(({ limits }) => limits.length > 0),
+    limitedEntryFitLimits: [...placedLimits].map(([entryIndex, limits]) => ({
+      entryIndex,
+      limits,
+    })),
   };
 }
