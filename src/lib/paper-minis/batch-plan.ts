@@ -19,7 +19,10 @@ type Side = 'front' | 'back';
 type ParsedFile = {
   file: File;
   side: Side;
-  heightSlot?: HeightSlot;
+  heightSlot?: MiniSize;
+  customWidthMm?: number;
+  customHeightMm?: number;
+  count?: number;
   name: string;
   key: string;
 };
@@ -50,6 +53,11 @@ export function planBatch(files: readonly File[]): PlannedRow[] {
       if (back) row.back = back.file;
       const heightSlot = front.heightSlot ?? back?.heightSlot;
       if (heightSlot) row.heightSlot = heightSlot;
+      const customWidthMm = front.customWidthMm ?? back?.customWidthMm;
+      if (customWidthMm !== undefined) row.customWidthMm = customWidthMm;
+      const customHeightMm = front.customHeightMm ?? back?.customHeightMm;
+      if (customHeightMm !== undefined) row.customHeightMm = customHeightMm;
+      if (front.count !== undefined) row.count = front.count;
       return row;
     });
 }
@@ -57,19 +65,28 @@ export function planBatch(files: readonly File[]): PlannedRow[] {
 // An unsized side fits any size, so one shared back covers every size of a creature.
 function compatible(front: ParsedFile, back: ParsedFile): boolean {
   if (front.key !== back.key) return false;
-  return !front.heightSlot || !back.heightSlot || front.heightSlot === back.heightSlot;
+  return !front.heightSlot || !back.heightSlot || sizeKey(front) === sizeKey(back);
+}
+
+function sizeKey(file: ParsedFile): string | undefined {
+  if (!file.heightSlot) return undefined;
+  if (file.heightSlot !== 'custom') return file.heightSlot;
+  return `custom-${file.customWidthMm}x${file.customHeightMm}`;
 }
 
 function parseFile(file: File): ParsedFile {
   const tokens = stem(file.name)
     .split(separators)
     .filter((token) => token !== '');
-  const { nameTokens, side, heightSlot } = readMarkers(tokens);
+  const { nameTokens, side, heightSlot, customWidthMm, customHeightMm, count } = readMarkers(tokens);
   const raw = nameTokens.join(' ');
   return {
     file,
     side,
     heightSlot,
+    customWidthMm,
+    customHeightMm,
+    count,
     // An empty name stays empty: the view owns the "Миниатюра N" fallback.
     name: raw.charAt(0).toUpperCase() + raw.slice(1),
     key: raw.toLowerCase(),
@@ -80,15 +97,34 @@ function parseFile(file: File): ParsedFile {
 function readMarkers(tokens: readonly string[]) {
   let end = tokens.length;
   let side: Side | undefined;
-  let heightSlot: HeightSlot | undefined;
+  let heightSlot: MiniSize | undefined;
+  let customWidthMm: number | undefined;
+  let customHeightMm: number | undefined;
+  let count: number | undefined;
   while (end > 0) {
     const token = tokens[end - 1].toLowerCase();
+    if (count === undefined && token.startsWith('x')) {
+      const parsed = parseCount(token);
+      if (parsed !== undefined) count = parsed;
+      end -= 1;
+      continue;
+    }
     if (side === undefined && (token === 'front' || token === 'back')) {
       side = token;
       end -= 1;
       continue;
     }
     if (heightSlot === undefined) {
+      const custom = end > 1 ? parseCustomSize(tokens[end - 2], token) : undefined;
+      if (custom) {
+        if (custom.valid) {
+          heightSlot = 'custom';
+          customWidthMm = custom.width;
+          customHeightMm = custom.height;
+        }
+        end -= 2;
+        continue;
+      }
       // The two-token id wins, so `ogre-large-tall` is Large tall, not "Ogre large" + `tall`.
       const pair = end > 1 ? slotById.get(`${tokens[end - 2].toLowerCase()}-${token}`) : undefined;
       const slot = pair ?? slotById.get(token);
@@ -100,7 +136,32 @@ function readMarkers(tokens: readonly string[]) {
     }
     break;
   }
-  return { nameTokens: tokens.slice(0, end), side: side ?? 'front', heightSlot };
+  return {
+    nameTokens: tokens.slice(0, end),
+    side: side ?? 'front',
+    heightSlot,
+    customWidthMm,
+    customHeightMm,
+    count,
+  };
+}
+
+function parseCount(token: string): number | undefined {
+  const value = Number(token.slice(1));
+  return Number.isInteger(value) && value > 1 ? value : undefined;
+}
+
+function parseCustomSize(label: string, dimensions: string) {
+  if (label.toLowerCase() !== 'custom') return undefined;
+  if (!dimensions.includes('x')) return undefined;
+  const [rawWidth, rawHeight, extra] = dimensions.split('x');
+  if (extra !== undefined || rawWidth === undefined || rawHeight === undefined)
+    return { valid: false } as const;
+  const width = Number(rawWidth);
+  const height = Number(rawHeight);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0)
+    return { valid: false } as const;
+  return { valid: true, width, height } as const;
 }
 
 function stem(fileName: string) {

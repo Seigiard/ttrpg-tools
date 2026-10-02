@@ -113,6 +113,10 @@ function exportSize(row: MiniRow): string {
   return row.heightSlot;
 }
 
+function exportCount(row: MiniRow): string {
+  return row.count > 1 ? `-x${row.count}` : '';
+}
+
 async function artworkAsPng(artwork: PreparedArtwork): Promise<Uint8Array> {
   if (artwork.format === 'png') return artwork.bytes;
   const bitmap = await createImageBitmap(new Blob([artwork.bytes as BlobPart], { type: 'image/jpeg' }));
@@ -613,13 +617,16 @@ export function createPaperMinisStore({
         const sides = row.backArtwork ? (['front', 'back'] as const) : (['front'] as const);
         const base = exportName(row, index);
         const size = exportSize(row);
+        const count = exportCount(row);
         let suffix = 1;
-        let names = sides.map((side) => `${base}-${size}-${side}.png`);
-        while (names.some((name) => used.has(name))) {
+        let collisionNames = sides.map((side) => `${base}-${size}-${side}.png`);
+        let names = sides.map((side) => `${base}-${size}-${side}${count}.png`);
+        while (collisionNames.some((name) => used.has(name))) {
           suffix += 1;
-          names = sides.map((side) => `${base}-${suffix}-${size}-${side}.png`);
+          collisionNames = sides.map((side) => `${base}-${suffix}-${size}-${side}.png`);
+          names = sides.map((side) => `${base}-${suffix}-${size}-${side}${count}.png`);
         }
-        for (const name of names) used.add(name);
+        for (const name of collisionNames) used.add(name);
         entries[names[0]] = await artworkAsPng(row.artwork!);
         if (row.backArtwork) entries[names[1]] = await artworkAsPng(row.backArtwork);
       }

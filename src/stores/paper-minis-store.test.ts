@@ -269,14 +269,19 @@ test('download renders the layout shown by the counter and returns the renderer 
   });
 });
 
-test('export zip restores names, sizes and sides through batch ingest', async () => {
+test('export zip restores names, sizes, counts and sides through batch ingest', async () => {
   // #given
   const store = setup();
   const goblin = store.addBlank({ name: 'Goblin', heightSlot: 'small' })!;
+  store.setCount(goblin, '2');
   await store.setImage(goblin, artworkFile(10, 20, 'goblin-front.png'));
   await store.setImage(goblin, artworkFile(11, 20, 'goblin-back.png'), true);
   const empty = store.addBlank({ name: '', heightSlot: 'large' })!;
   await store.setImage(empty, artworkFile(12, 20, 'empty.png'));
+  const custom = store.addBlank({ name: 'Dragon', heightSlot: 'custom' })!;
+  store.setCustomDimensions(custom, { width: '30', height: '45' });
+  store.setCount(custom, '3');
+  await store.setImage(custom, artworkFile(12, 24, 'dragon.png'));
   const duplicate = store.addBlank({ name: 'Goblin', heightSlot: 'small' })!;
   await store.setImage(duplicate, artworkFile(13, 20, 'duplicate.png'));
   await store.setImage(duplicate, artworkFile(13, 20, 'duplicate-back.png'), true);
@@ -298,15 +303,20 @@ test('export zip restores names, sizes and sides through batch ingest', async ()
     rows: restored.$rows.get().map((row) => ({
       name: row.name,
       heightSlot: row.heightSlot,
+      count: row.count,
+      customWidthMm: row.customWidthMm,
+      customHeightMm: row.customHeightMm,
       front: row.image?.name,
       back: row.backImage?.name,
+      inputs: restored.$inputs.get().rows[row.id],
     })),
   }).toEqual({
     entryNames: [
+      'Dragon-custom-30x45-front-x3.png',
       'Goblin-2-small-back.png',
       'Goblin-2-small-front.png',
-      'Goblin-small-back.png',
-      'Goblin-small-front.png',
+      'Goblin-small-back-x2.png',
+      'Goblin-small-front-x2.png',
       'mini-2-large-front.png',
     ],
     message: 'Архив готов.',
@@ -314,20 +324,58 @@ test('export zip restores names, sizes and sides through batch ingest', async ()
       {
         name: 'Goblin',
         heightSlot: 'small',
-        front: 'Goblin-small-front.png',
-        back: 'Goblin-small-back.png',
+        count: 2,
+        customWidthMm: undefined,
+        customHeightMm: undefined,
+        front: 'Goblin-small-front-x2.png',
+        back: 'Goblin-small-back-x2.png',
+        inputs: {
+          count: { text: '2', valid: true },
+          customWidthMm: { text: '', valid: false },
+          customHeightMm: { text: '', valid: false },
+        },
       },
       {
         name: 'Mini 2',
         heightSlot: 'large',
+        count: 1,
+        customWidthMm: undefined,
+        customHeightMm: undefined,
         front: 'mini-2-large-front.png',
         back: undefined,
+        inputs: {
+          count: { text: '1', valid: true },
+          customWidthMm: { text: '', valid: false },
+          customHeightMm: { text: '', valid: false },
+        },
+      },
+      {
+        name: 'Dragon',
+        heightSlot: 'custom',
+        count: 3,
+        customWidthMm: 30,
+        customHeightMm: 45,
+        front: 'Dragon-custom-30x45-front-x3.png',
+        back: undefined,
+        inputs: {
+          count: { text: '3', valid: true },
+          customWidthMm: { text: '30', valid: true },
+          customHeightMm: { text: '45', valid: true },
+        },
       },
       {
         name: 'Goblin 2',
         heightSlot: 'small',
+        count: 1,
+        customWidthMm: undefined,
+        customHeightMm: undefined,
         front: 'Goblin-2-small-front.png',
         back: 'Goblin-2-small-back.png',
+        inputs: {
+          count: { text: '1', valid: true },
+          customWidthMm: { text: '', valid: false },
+          customHeightMm: { text: '', valid: false },
+        },
       },
     ],
   });
