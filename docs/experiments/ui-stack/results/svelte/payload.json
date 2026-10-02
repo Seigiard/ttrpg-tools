@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-02T14:31:24.167Z",
+  "generatedAt": "2026-10-02T14:54:08.270Z",
   "method": "HTML is read from dist. Linked scripts, modulepreload links, stylesheets, Astro island component-url and renderer-url attributes are resolved. Static JS imports are counted as initial-load JS. Dynamic imports and their transitive JS dependencies are counted as lazy JS. Library labels come from chunk filenames and content heuristics for Preact, React, Astro, Base UI, Nanostores, Lucide and pdf-lib.",
   "routes": [
     {
@@ -693,8 +693,8 @@
       "route": "/paper-minis",
       "html": {
         "raw": 15879,
-        "gzip": 5406,
-        "brotli": 4342
+        "gzip": 5408,
+        "brotli": 4341
       },
       "css": {
         "raw": 44015,
@@ -702,9 +702,9 @@
         "brotli": 7178
       },
       "externalJs": {
-        "raw": 564768,
-        "gzip": 227940,
-        "brotli": 205903
+        "raw": 565200,
+        "gzip": 228077,
+        "brotli": 205971
       },
       "inlineJs": {
         "raw": 4510,
@@ -712,9 +712,9 @@
         "brotli": 1652
       },
       "initialJs": {
-        "raw": 564768,
-        "gzip": 227940,
-        "brotli": 205903
+        "raw": 565200,
+        "gzip": 228077,
+        "brotli": 205971
       },
       "lazyJs": {
         "raw": 12377,
@@ -728,8 +728,8 @@
           "kind": "html",
           "sizes": {
             "raw": 15879,
-            "gzip": 5406,
-            "brotli": 4342
+            "gzip": 5408,
+            "brotli": 4341
           },
           "libraries": []
         },
@@ -766,12 +766,12 @@
           "libraries": []
         },
         {
-          "path": "_astro/PaperMinisGenerator.tOuuAu5l.js",
+          "path": "_astro/PaperMinisGenerator.D2iqjZBL.js",
           "kind": "external-js",
           "sizes": {
-            "raw": 482204,
-            "gzip": 197796,
-            "brotli": 179139
+            "raw": 482636,
+            "gzip": 197933,
+            "brotli": 179207
           },
           "libraries": [
             "pdf-lib"
@@ -830,12 +830,12 @@
       ],
       "topChunks": [
         {
-          "path": "_astro/PaperMinisGenerator.tOuuAu5l.js",
+          "path": "_astro/PaperMinisGenerator.D2iqjZBL.js",
           "kind": "external-js",
           "sizes": {
-            "raw": 482204,
-            "gzip": 197796,
-            "brotli": 179139
+            "raw": 482636,
+            "gzip": 197933,
+            "brotli": 179207
           },
           "libraries": [
             "pdf-lib"

@@ -153,11 +153,11 @@
       "transferredBytes": 1686
     },
     "byType": {
-      "stylesheet": {
+      "document": {
         "requests": 1,
         "transferredBytes": 127
       },
-      "document": {
+      "stylesheet": {
         "requests": 1,
         "transferredBytes": 127
       },
@@ -216,12 +216,12 @@
     "mode": "cold",
     "total": {
       "requests": 7,
-      "transferredBytes": 243460
+      "transferredBytes": 243602
     },
     "byType": {
       "document": {
         "requests": 1,
-        "transferredBytes": 5668
+        "transferredBytes": 5669
       },
       "stylesheet": {
         "requests": 1,
@@ -229,7 +229,7 @@
       },
       "script": {
         "requests": 5,
-        "transferredBytes": 229309
+        "transferredBytes": 229450
       }
     }
   },
