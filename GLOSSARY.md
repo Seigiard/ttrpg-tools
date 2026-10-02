@@ -14,6 +14,9 @@ _Avoid_: lookup table, results list
 The head and feet lines a player sets on a mini's artwork to give the figure its own height, so a raised weapon does not count toward it. One per mini, shared by its front and back.
 _Avoid_: height lines, per-side calibration
 
+**Export**:
+The zip of prepared paper minis that a batch upload restores.
+
 **Layout**:
 The arrangement of minis on sheets for printing and cutting.
 
