@@ -1,18 +1,18 @@
 {
-  "generatedAt": "2026-10-02T14:52:32.979Z",
+  "generatedAt": "2026-10-02T15:12:43.963Z",
   "method": "HTML is read from dist. Linked scripts, modulepreload links, stylesheets, Astro island component-url and renderer-url attributes are resolved. Static JS imports are counted as initial-load JS. Dynamic imports and their transitive JS dependencies are counted as lazy JS. Library labels come from chunk filenames and content heuristics for Preact, React, Astro, Base UI, Nanostores, Lucide and pdf-lib.",
   "routes": [
     {
       "route": "/",
       "html": {
         "raw": 3173,
-        "gzip": 1139,
-        "brotli": 839
+        "gzip": 1140,
+        "brotli": 837
       },
       "css": {
-        "raw": 43575,
-        "gzip": 8124,
-        "brotli": 7124
+        "raw": 43685,
+        "gzip": 8149,
+        "brotli": 7142
       },
       "externalJs": {
         "raw": 0,
@@ -41,18 +41,18 @@
           "kind": "html",
           "sizes": {
             "raw": 3173,
-            "gzip": 1139,
-            "brotli": 839
+            "gzip": 1140,
+            "brotli": 837
           },
           "libraries": []
         },
         {
-          "path": "_astro/Layout.arTfdNW_.css",
+          "path": "_astro/Layout.BzgFfd0T.css",
           "kind": "css",
           "sizes": {
-            "raw": 43575,
-            "gzip": 8124,
-            "brotli": 7124
+            "raw": 43685,
+            "gzip": 8149,
+            "brotli": 7142
           },
           "libraries": []
         }
@@ -63,18 +63,18 @@
       "route": "/mausritter/encounters",
       "html": {
         "raw": 20202,
-        "gzip": 5431,
-        "brotli": 4460
+        "gzip": 5433,
+        "brotli": 4459
       },
       "css": {
-        "raw": 43575,
-        "gzip": 8124,
-        "brotli": 7124
+        "raw": 43685,
+        "gzip": 8149,
+        "brotli": 7142
       },
       "externalJs": {
-        "raw": 57743,
-        "gzip": 21688,
-        "brotli": 19086
+        "raw": 57789,
+        "gzip": 21714,
+        "brotli": 19111
       },
       "inlineJs": {
         "raw": 4510,
@@ -82,9 +82,9 @@
         "brotli": 1652
       },
       "initialJs": {
-        "raw": 57743,
-        "gzip": 21688,
-        "brotli": 19086
+        "raw": 57789,
+        "gzip": 21714,
+        "brotli": 19111
       },
       "lazyJs": {
         "raw": 7808,
@@ -98,8 +98,8 @@
           "kind": "html",
           "sizes": {
             "raw": 20202,
-            "gzip": 5431,
-            "brotli": 4460
+            "gzip": 5433,
+            "brotli": 4459
           },
           "libraries": []
         },
@@ -126,22 +126,22 @@
           ]
         },
         {
-          "path": "_astro/Layout.arTfdNW_.css",
+          "path": "_astro/Layout.BzgFfd0T.css",
           "kind": "css",
           "sizes": {
-            "raw": 43575,
-            "gzip": 8124,
-            "brotli": 7124
+            "raw": 43685,
+            "gzip": 8149,
+            "brotli": 7142
           },
           "libraries": []
         },
         {
-          "path": "_astro/EncounterGenerator.DpndJ5bH.js",
+          "path": "_astro/EncounterGenerator.D4yOTS8i.js",
           "kind": "external-js",
           "sizes": {
-            "raw": 4349,
-            "gzip": 1477,
-            "brotli": 1283
+            "raw": 4395,
+            "gzip": 1503,
+            "brotli": 1308
           },
           "libraries": []
         },
@@ -276,12 +276,12 @@
           ]
         },
         {
-          "path": "_astro/EncounterGenerator.DpndJ5bH.js",
+          "path": "_astro/EncounterGenerator.D4yOTS8i.js",
           "kind": "external-js",
           "sizes": {
-            "raw": 4349,
-            "gzip": 1477,
-            "brotli": 1283
+            "raw": 4395,
+            "gzip": 1503,
+            "brotli": 1308
           },
           "libraries": []
         },
@@ -301,18 +301,18 @@
       "route": "/mausritter/locations",
       "html": {
         "raw": 40788,
-        "gzip": 7937,
-        "brotli": 6477
+        "gzip": 7938,
+        "brotli": 6475
       },
       "css": {
-        "raw": 43575,
-        "gzip": 8124,
-        "brotli": 7124
+        "raw": 43685,
+        "gzip": 8149,
+        "brotli": 7142
       },
       "externalJs": {
-        "raw": 63809,
-        "gzip": 24368,
-        "brotli": 21463
+        "raw": 63948,
+        "gzip": 24440,
+        "brotli": 21537
       },
       "inlineJs": {
         "raw": 4510,
@@ -320,9 +320,9 @@
         "brotli": 1652
       },
       "initialJs": {
-        "raw": 63809,
-        "gzip": 24368,
-        "brotli": 21463
+        "raw": 63948,
+        "gzip": 24440,
+        "brotli": 21537
       },
       "lazyJs": {
         "raw": 7808,
@@ -336,8 +336,8 @@
           "kind": "html",
           "sizes": {
             "raw": 40788,
-            "gzip": 7937,
-            "brotli": 6477
+            "gzip": 7938,
+            "brotli": 6475
           },
           "libraries": []
         },
@@ -364,22 +364,22 @@
           ]
         },
         {
-          "path": "_astro/Layout.arTfdNW_.css",
+          "path": "_astro/Layout.BzgFfd0T.css",
           "kind": "css",
           "sizes": {
-            "raw": 43575,
-            "gzip": 8124,
-            "brotli": 7124
+            "raw": 43685,
+            "gzip": 8149,
+            "brotli": 7142
           },
           "libraries": []
         },
         {
-          "path": "_astro/LocationGenerator.CfMxwhJV.js",
+          "path": "_astro/LocationGenerator.DDAtBzy-.js",
           "kind": "external-js",
           "sizes": {
             "raw": 7328,
-            "gzip": 3156,
-            "brotli": 2781
+            "gzip": 3155,
+            "brotli": 2783
           },
           "libraries": []
         },
@@ -426,12 +426,12 @@
           "libraries": []
         },
         {
-          "path": "_astro/tabs.CVKQK71q.js",
+          "path": "_astro/tabs.C4OSoFEo.js",
           "kind": "external-js",
           "sizes": {
-            "raw": 3922,
-            "gzip": 1518,
-            "brotli": 1328
+            "raw": 4061,
+            "gzip": 1591,
+            "brotli": 1400
           },
           "libraries": []
         },
@@ -502,12 +502,12 @@
           ]
         },
         {
-          "path": "_astro/LocationGenerator.CfMxwhJV.js",
+          "path": "_astro/LocationGenerator.DDAtBzy-.js",
           "kind": "external-js",
           "sizes": {
             "raw": 7328,
-            "gzip": 3156,
-            "brotli": 2781
+            "gzip": 3155,
+            "brotli": 2783
           },
           "libraries": []
         },
@@ -524,12 +524,12 @@
           ]
         },
         {
-          "path": "_astro/tabs.CVKQK71q.js",
+          "path": "_astro/tabs.C4OSoFEo.js",
           "kind": "external-js",
           "sizes": {
-            "raw": 3922,
-            "gzip": 1518,
-            "brotli": 1328
+            "raw": 4061,
+            "gzip": 1591,
+            "brotli": 1400
           },
           "libraries": []
         }
@@ -539,18 +539,18 @@
       "route": "/mausritter/weather",
       "html": {
         "raw": 23901,
-        "gzip": 5641,
+        "gzip": 5642,
         "brotli": 4613
       },
       "css": {
-        "raw": 43575,
-        "gzip": 8124,
-        "brotli": 7124
+        "raw": 43685,
+        "gzip": 8149,
+        "brotli": 7142
       },
       "externalJs": {
-        "raw": 60912,
-        "gzip": 23217,
-        "brotli": 20407
+        "raw": 61051,
+        "gzip": 23289,
+        "brotli": 20475
       },
       "inlineJs": {
         "raw": 4510,
@@ -558,9 +558,9 @@
         "brotli": 1652
       },
       "initialJs": {
-        "raw": 60912,
-        "gzip": 23217,
-        "brotli": 20407
+        "raw": 61051,
+        "gzip": 23289,
+        "brotli": 20475
       },
       "lazyJs": {
         "raw": 7808,
@@ -574,7 +574,7 @@
           "kind": "html",
           "sizes": {
             "raw": 23901,
-            "gzip": 5641,
+            "gzip": 5642,
             "brotli": 4613
           },
           "libraries": []
@@ -602,22 +602,22 @@
           ]
         },
         {
-          "path": "_astro/Layout.arTfdNW_.css",
+          "path": "_astro/Layout.BzgFfd0T.css",
           "kind": "css",
           "sizes": {
-            "raw": 43575,
-            "gzip": 8124,
-            "brotli": 7124
+            "raw": 43685,
+            "gzip": 8149,
+            "brotli": 7142
           },
           "libraries": []
         },
         {
-          "path": "_astro/WeatherGenerator.BIGAwxuE.js",
+          "path": "_astro/WeatherGenerator.CFbE2jEM.js",
           "kind": "external-js",
           "sizes": {
             "raw": 3596,
-            "gzip": 1488,
-            "brotli": 1276
+            "gzip": 1487,
+            "brotli": 1272
           },
           "libraries": []
         },
@@ -664,12 +664,12 @@
           "libraries": []
         },
         {
-          "path": "_astro/tabs.CVKQK71q.js",
+          "path": "_astro/tabs.C4OSoFEo.js",
           "kind": "external-js",
           "sizes": {
-            "raw": 3922,
-            "gzip": 1518,
-            "brotli": 1328
+            "raw": 4061,
+            "gzip": 1591,
+            "brotli": 1400
           },
           "libraries": []
         },
@@ -762,22 +762,22 @@
           ]
         },
         {
-          "path": "_astro/tabs.CVKQK71q.js",
+          "path": "_astro/tabs.C4OSoFEo.js",
           "kind": "external-js",
           "sizes": {
-            "raw": 3922,
-            "gzip": 1518,
-            "brotli": 1328
+            "raw": 4061,
+            "gzip": 1591,
+            "brotli": 1400
           },
           "libraries": []
         },
         {
-          "path": "_astro/WeatherGenerator.BIGAwxuE.js",
+          "path": "_astro/WeatherGenerator.CFbE2jEM.js",
           "kind": "external-js",
           "sizes": {
             "raw": 3596,
-            "gzip": 1488,
-            "brotli": 1276
+            "gzip": 1487,
+            "brotli": 1272
           },
           "libraries": []
         }
@@ -787,18 +787,18 @@
       "route": "/paper-minis",
       "html": {
         "raw": 15555,
-        "gzip": 5319,
-        "brotli": 4278
+        "gzip": 5320,
+        "brotli": 4281
       },
       "css": {
-        "raw": 43575,
-        "gzip": 8124,
-        "brotli": 7124
+        "raw": 43685,
+        "gzip": 8149,
+        "brotli": 7142
       },
       "externalJs": {
-        "raw": 525972,
-        "gzip": 213067,
-        "brotli": 193409
+        "raw": 526013,
+        "gzip": 213098,
+        "brotli": 193436
       },
       "inlineJs": {
         "raw": 4510,
@@ -806,9 +806,9 @@
         "brotli": 1652
       },
       "initialJs": {
-        "raw": 525972,
-        "gzip": 213067,
-        "brotli": 193409
+        "raw": 526013,
+        "gzip": 213098,
+        "brotli": 193436
       },
       "lazyJs": {
         "raw": 20185,
@@ -822,8 +822,8 @@
           "kind": "html",
           "sizes": {
             "raw": 15555,
-            "gzip": 5319,
-            "brotli": 4278
+            "gzip": 5320,
+            "brotli": 4281
           },
           "libraries": []
         },
@@ -850,22 +850,22 @@
           ]
         },
         {
-          "path": "_astro/Layout.arTfdNW_.css",
+          "path": "_astro/Layout.BzgFfd0T.css",
           "kind": "css",
           "sizes": {
-            "raw": 43575,
-            "gzip": 8124,
-            "brotli": 7124
+            "raw": 43685,
+            "gzip": 8149,
+            "brotli": 7142
           },
           "libraries": []
         },
         {
-          "path": "_astro/PaperMinisGenerator.C-Ei3rGI.js",
+          "path": "_astro/PaperMinisGenerator.Be1C16Qd.js",
           "kind": "external-js",
           "sizes": {
-            "raw": 474952,
-            "gzip": 194115,
-            "brotli": 176625
+            "raw": 474993,
+            "gzip": 194146,
+            "brotli": 176652
           },
           "libraries": [
             "pdf-lib"
@@ -958,12 +958,12 @@
       ],
       "topChunks": [
         {
-          "path": "_astro/PaperMinisGenerator.C-Ei3rGI.js",
+          "path": "_astro/PaperMinisGenerator.Be1C16Qd.js",
           "kind": "external-js",
           "sizes": {
-            "raw": 474952,
-            "gzip": 194115,
-            "brotli": 176625
+            "raw": 474993,
+            "gzip": 194146,
+            "brotli": 176652
           },
           "libraries": [
             "pdf-lib"
@@ -1019,18 +1019,18 @@
       "route": "/the-black-hack/prices",
       "html": {
         "raw": 34894,
-        "gzip": 6179,
-        "brotli": 4973
+        "gzip": 6181,
+        "brotli": 4961
       },
       "css": {
-        "raw": 43575,
-        "gzip": 8124,
-        "brotli": 7124
+        "raw": 43685,
+        "gzip": 8149,
+        "brotli": 7142
       },
       "externalJs": {
-        "raw": 62287,
-        "gzip": 23852,
-        "brotli": 20980
+        "raw": 62426,
+        "gzip": 23923,
+        "brotli": 21045
       },
       "inlineJs": {
         "raw": 4510,
@@ -1038,9 +1038,9 @@
         "brotli": 1652
       },
       "initialJs": {
-        "raw": 62287,
-        "gzip": 23852,
-        "brotli": 20980
+        "raw": 62426,
+        "gzip": 23923,
+        "brotli": 21045
       },
       "lazyJs": {
         "raw": 7808,
@@ -1054,8 +1054,8 @@
           "kind": "html",
           "sizes": {
             "raw": 34894,
-            "gzip": 6179,
-            "brotli": 4973
+            "gzip": 6181,
+            "brotli": 4961
           },
           "libraries": []
         },
@@ -1082,22 +1082,22 @@
           ]
         },
         {
-          "path": "_astro/Layout.arTfdNW_.css",
+          "path": "_astro/Layout.BzgFfd0T.css",
           "kind": "css",
           "sizes": {
-            "raw": 43575,
-            "gzip": 8124,
-            "brotli": 7124
+            "raw": 43685,
+            "gzip": 8149,
+            "brotli": 7142
           },
           "libraries": []
         },
         {
-          "path": "_astro/BlackHackPricesGenerator.CL0DkG9s.js",
+          "path": "_astro/BlackHackPricesGenerator.Br5ERUzU.js",
           "kind": "external-js",
           "sizes": {
             "raw": 6954,
-            "gzip": 3095,
-            "brotli": 2637
+            "gzip": 3093,
+            "brotli": 2630
           },
           "libraries": []
         },
@@ -1154,12 +1154,12 @@
           "libraries": []
         },
         {
-          "path": "_astro/tabs.CVKQK71q.js",
+          "path": "_astro/tabs.C4OSoFEo.js",
           "kind": "external-js",
           "sizes": {
-            "raw": 3922,
-            "gzip": 1518,
-            "brotli": 1328
+            "raw": 4061,
+            "gzip": 1591,
+            "brotli": 1400
           },
           "libraries": []
         },
@@ -1220,12 +1220,12 @@
           ]
         },
         {
-          "path": "_astro/BlackHackPricesGenerator.CL0DkG9s.js",
+          "path": "_astro/BlackHackPricesGenerator.Br5ERUzU.js",
           "kind": "external-js",
           "sizes": {
             "raw": 6954,
-            "gzip": 3095,
-            "brotli": 2637
+            "gzip": 3093,
+            "brotli": 2630
           },
           "libraries": []
         },
@@ -1242,12 +1242,12 @@
           ]
         },
         {
-          "path": "_astro/tabs.CVKQK71q.js",
+          "path": "_astro/tabs.C4OSoFEo.js",
           "kind": "external-js",
           "sizes": {
-            "raw": 3922,
-            "gzip": 1518,
-            "brotli": 1328
+            "raw": 4061,
+            "gzip": 1591,
+            "brotli": 1400
           },
           "libraries": []
         }

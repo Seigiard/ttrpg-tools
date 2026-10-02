@@ -4,9 +4,9 @@ HTML is read from dist. Linked scripts, modulepreload links, stylesheets, Astro 
 
 | Route | External JS gzip | Lazy JS gzip | Inline JS gzip | CSS gzip | HTML gzip | Requests |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| / | 0 | 0 | 0 | 8124 | 1139 | 2 |
-| /mausritter/encounters | 21688 | 3012 | 1902 | 8124 | 5431 | 11 |
-| /mausritter/locations | 24368 | 3012 | 1902 | 8124 | 7937 | 11 |
-| /mausritter/weather | 23217 | 3012 | 1902 | 8124 | 5641 | 12 |
-| /paper-minis | 213067 | 9121 | 1902 | 8124 | 5319 | 9 |
-| /the-black-hack/prices | 23852 | 3012 | 1902 | 8124 | 6179 | 11 |
+| / | 0 | 0 | 0 | 8149 | 1140 | 2 |
+| /mausritter/encounters | 21714 | 3012 | 1902 | 8149 | 5433 | 11 |
+| /mausritter/locations | 24440 | 3012 | 1902 | 8149 | 7938 | 11 |
+| /mausritter/weather | 23289 | 3012 | 1902 | 8149 | 5642 | 12 |
+| /paper-minis | 213098 | 9121 | 1902 | 8149 | 5320 | 9 |
+| /the-black-hack/prices | 23923 | 3012 | 1902 | 8149 | 6181 | 11 |

@@ -4,16 +4,16 @@
     "mode": "cold",
     "total": {
       "requests": 2,
-      "transferredBytes": 9831
+      "transferredBytes": 9854
     },
     "byType": {
       "document": {
         "requests": 1,
-        "transferredBytes": 1417
+        "transferredBytes": 1418
       },
       "stylesheet": {
         "requests": 1,
-        "transferredBytes": 8414
+        "transferredBytes": 8436
       }
     }
   },
@@ -40,20 +40,20 @@
     "mode": "cold",
     "total": {
       "requests": 12,
-      "transferredBytes": 41423
+      "transferredBytes": 41515
     },
     "byType": {
       "document": {
         "requests": 1,
-        "transferredBytes": 5907
+        "transferredBytes": 5908
       },
       "stylesheet": {
         "requests": 1,
-        "transferredBytes": 8414
+        "transferredBytes": 8436
       },
       "script": {
         "requests": 10,
-        "transferredBytes": 27102
+        "transferredBytes": 27171
       }
     }
   },
@@ -84,20 +84,20 @@
     "mode": "cold",
     "total": {
       "requests": 11,
-      "transferredBytes": 44217
+      "transferredBytes": 44314
     },
     "byType": {
       "document": {
         "requests": 1,
-        "transferredBytes": 8194
+        "transferredBytes": 8195
       },
       "stylesheet": {
         "requests": 1,
-        "transferredBytes": 8414
+        "transferredBytes": 8436
       },
       "script": {
         "requests": 9,
-        "transferredBytes": 27609
+        "transferredBytes": 27683
       }
     }
   },
@@ -128,20 +128,20 @@
     "mode": "cold",
     "total": {
       "requests": 11,
-      "transferredBytes": 39316
+      "transferredBytes": 39365
     },
     "byType": {
       "document": {
         "requests": 1,
-        "transferredBytes": 5701
+        "transferredBytes": 5702
       },
       "stylesheet": {
         "requests": 1,
-        "transferredBytes": 8414
+        "transferredBytes": 8436
       },
       "script": {
         "requests": 9,
-        "transferredBytes": 25201
+        "transferredBytes": 25227
       }
     }
   },
@@ -172,20 +172,20 @@
     "mode": "cold",
     "total": {
       "requests": 11,
-      "transferredBytes": 41952
+      "transferredBytes": 42045
     },
     "byType": {
       "document": {
         "requests": 1,
-        "transferredBytes": 6445
+        "transferredBytes": 6446
       },
       "stylesheet": {
         "requests": 1,
-        "transferredBytes": 8414
+        "transferredBytes": 8436
       },
       "script": {
         "requests": 9,
-        "transferredBytes": 27093
+        "transferredBytes": 27163
       }
     }
   },
@@ -216,20 +216,20 @@
     "mode": "cold",
     "total": {
       "requests": 9,
-      "transferredBytes": 228977
+      "transferredBytes": 229024
     },
     "byType": {
       "document": {
         "requests": 1,
-        "transferredBytes": 5581
+        "transferredBytes": 5584
       },
       "stylesheet": {
         "requests": 1,
-        "transferredBytes": 8414
+        "transferredBytes": 8436
       },
       "script": {
         "requests": 7,
-        "transferredBytes": 214982
+        "transferredBytes": 215004
       }
     }
   },
