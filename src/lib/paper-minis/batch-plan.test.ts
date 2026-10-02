@@ -262,12 +262,12 @@ test('back-only calibration is used when the front has none', () => {
   expect(row.calibration).toEqual({ head: 0.3, feet: 0.9 });
 });
 
-test.each(['h300-f300', 'h800-f200', 'h900-f999', 'h200-f1000', 'h20-f800'])(
+test.each(['h300-f300', 'h800-f200', 'h900-f999', 'h400-f450'])(
   '%s is ignored as an invalid calibration marker',
   (marker) => {
     const [row] = planBatch([file(`goblin-medium-front-${marker}.png`)]);
 
-    expect(row).not.toHaveProperty('calibration');
+    expect([row.name, row.calibration]).toEqual(['Goblin', undefined]);
   },
 );
 

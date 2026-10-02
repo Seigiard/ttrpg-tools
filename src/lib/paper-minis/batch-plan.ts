@@ -91,8 +91,8 @@ function readMarkers(tokens: readonly string[]) {
     const token = tokens[end - 1].toLowerCase();
     if (calibration === undefined && end > 1) {
       const parsed = parseCalibration(tokens[end - 2], token);
-      if (parsed) {
-        calibration = parsed;
+      if (parsed !== undefined) {
+        if (parsed) calibration = parsed;
         end -= 2;
         continue;
       }
@@ -117,12 +117,12 @@ function readMarkers(tokens: readonly string[]) {
   return { nameTokens: tokens.slice(0, end), side: side ?? 'front', heightSlot, calibration };
 }
 
-function parseCalibration(headToken: string, feetToken: string): HeightCalibration | undefined {
+function parseCalibration(headToken: string, feetToken: string): HeightCalibration | null | undefined {
   const headMatch = /^h(\d{3})$/i.exec(headToken);
   const feetMatch = /^f(\d{3})$/i.exec(feetToken);
   if (!headMatch || !feetMatch) return undefined;
   const calibration = { head: Number(headMatch[1]) / 1000, feet: Number(feetMatch[1]) / 1000 };
-  return calibrationGap(calibration) === undefined ? undefined : calibration;
+  return calibrationGap(calibration) === undefined ? null : calibration;
 }
 
 function stem(fileName: string) {
