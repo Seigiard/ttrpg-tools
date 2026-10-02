@@ -109,8 +109,8 @@ export async function generatePDF(
             -1,
             1,
             0,
-            mm(xMm + CUT_MARK_EXTENT_MM),
-            mm(scaledPageHmm - SCALE_BAR_BAND_MM - yMm - CUT_MARK_EXTENT_MM),
+            mm(CUT_MARK_EXTENT_MM + xMm + CUT_MARK_EXTENT_MM),
+            mm(scaledPageHmm - SCALE_BAR_BAND_MM - CUT_MARK_EXTENT_MM - yMm - CUT_MARK_EXTENT_MM),
           ),
         );
         drawMini(pdfPage, mini, faces.get(mini.entryIndex)!, 0, mini.totalHeightMm, font);

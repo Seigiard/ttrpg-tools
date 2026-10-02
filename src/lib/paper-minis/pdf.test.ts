@@ -334,13 +334,13 @@ for (const separateBack of [false, true]) {
         {
           pages: 1,
           images: [
-            [31.6, 73.4, 52.6, 283.4],
-            [separateBack ? 67.1 : 56.6, 73.4, 77.6, 283.4],
+            [33.2, 71.8, 54.2, 281.8],
+            [separateBack ? 68.7 : 58.2, 71.8, 79.2, 281.8],
           ],
           axes: [[0, -1, 1, 0], separateBack ? [0, 1, -1, 0] : [0, -1, -1, 0]],
-          marks: [0.1, 69.9, 89.1, 286.9],
-          folds: [1.6, 21.6, 31.6, 54.6, 77.6, 87.6],
-          badge: [78.4, 183.2, 82.14, 187.6],
+          marks: [1.7, 68.3, 90.7, 285.3],
+          folds: [3.2, 23.2, 33.2, 56.2, 79.2, 89.2],
+          badge: [80, 181.6, 83.74, 186],
           label: [['1', 0, 1]],
           scale: [0, 100, 1],
         },
@@ -367,7 +367,7 @@ t('a turned mini and an upright neighbour print with separate stroked cut marks'
     false,
   );
   const marks = sheet.shapes.filter((s) => s.role === 'marks').map((s) => s.box);
-  // #then: the 4 mm strip gap remains clear between the cut marks.
+  // #then: the 4 mm strip gap leaves 2.4 mm after the upright mark's 1.6 mm reach.
   assert.deepEqual(
     {
       pages: sheet.pages,
@@ -380,7 +380,7 @@ t('a turned mini and an upright neighbour print with separate stroked cut marks'
     {
       pages: 1,
       marks: 2,
-      clearMm: 4,
+      clearMm: 2.4,
       images: 4,
       badges: 2,
       labels: [
