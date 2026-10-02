@@ -21,6 +21,8 @@ export const MARGIN_MM = 10;
 // out from its own edge, never touch and read as one mark.
 export const GAP_MM = 4;
 export const CUT_MARK_ARM_MM = 1.5;
+export const CUT_MARK_STROKE_MM = 0.2;
+export const CUT_MARK_EXTENT_MM = CUT_MARK_ARM_MM + CUT_MARK_STROKE_MM / 2;
 export const DEFAULT_FIGURE_MARGIN_MM = 2;
 
 // A single placed copy of an entry, with its resolved geometry. entryIndex maps
@@ -49,11 +51,12 @@ export type PackedMini = {
 // The front's three image fields again, for the back artwork.
 export type BackFace = { imageWidthMm: number; imageHeightMm: number; imageOffsetXMm: number };
 
-export type PackedRow = { items: PackedMini[]; widthMm: number; heightMm: number };
+export type PackedRow = { items: PackedMini[]; widthMm: number; heightMm: number; rotated?: true };
 export type RowPage = { rows: PackedRow[]; heightMm: number };
 export type Placement = {
   mini: PackedMini;
   // Millimetres from the top-left of the usable area, excluding sheet margins.
+  // Rotated footprints include the stroked cut marks; the cut-out is inset by their extent.
   xMm: number;
   yMm: number;
   rotated: boolean;
@@ -123,7 +126,7 @@ function rowPlacements(pages: RowPage[]): PackedPage[] {
     for (const row of page.rows) {
       let xMm = 0;
       for (const mini of row.items) {
-        placements.push({ mini, xMm, yMm, rotated: false });
+        placements.push({ mini, xMm, yMm, rotated: row.rotated ?? false });
         xMm += mini.totalWidthMm + GAP_MM;
       }
       yMm += row.heightMm + GAP_MM;
@@ -133,17 +136,43 @@ function rowPlacements(pages: RowPage[]): PackedPage[] {
 }
 
 type Column = { xMm: number; widthMm: number; usedHeightMm: number };
-type Strip = { yMm: number; heightMm: number; usedWidthMm: number; columns: Column[] };
+type Strip = {
+  yMm: number;
+  heightMm: number;
+  usedWidthMm: number;
+  columns: Column[];
+  dedicated: boolean;
+};
 type LayoutSheet = { strips: Strip[]; usedHeightMm: number; placements: Placement[] };
 
+function fitsStanding(mini: PackedMini, widthMm: number, heightMm: number): boolean {
+  return mini.totalWidthMm <= widthMm && mini.totalHeightMm <= heightMm;
+}
+
+function footprint(mini: PackedMini, rotated: boolean) {
+  return rotated
+    ? {
+        widthMm: mini.totalHeightMm + CUT_MARK_EXTENT_MM * 2,
+        heightMm: mini.totalWidthMm + CUT_MARK_EXTENT_MM * 2,
+      }
+    : { widthMm: mini.totalWidthMm, heightMm: mini.totalHeightMm };
+}
+
 function packGuillotine(minis: PackedMini[], widthMm: number, heightMm: number): PackedPage[] {
-  minis.sort((a, b) => b.totalHeightMm - a.totalHeightMm || b.totalWidthMm - a.totalWidthMm);
+  const candidates = minis
+    .map((mini) => {
+      const rotated = !fitsStanding(mini, widthMm, heightMm);
+      return { mini, rotated, ...footprint(mini, rotated) };
+    })
+    .toSorted((a, b) => b.heightMm - a.heightMm || b.widthMm - a.widthMm);
   const sheets: LayoutSheet[] = [];
-  for (const mini of minis) {
+  for (const candidate of candidates) {
+    const { mini, rotated } = candidate;
     let placed = false;
     for (const sheet of sheets) {
       // Finish searching stacks before considering a new column on this sheet.
       for (const strip of sheet.strips) {
+        if (rotated || strip.dedicated) continue;
         for (const column of strip.columns) {
           const y = column.usedHeightMm + GAP_MM;
           if (mini.totalWidthMm <= column.widthMm && y + mini.totalHeightMm <= strip.heightMm) {
@@ -157,6 +186,7 @@ function packGuillotine(minis: PackedMini[], widthMm: number, heightMm: number):
       }
       if (placed) break;
       for (const strip of sheet.strips) {
+        if (rotated || strip.dedicated) continue;
         const x = strip.usedWidthMm + GAP_MM;
         if (mini.totalHeightMm <= strip.heightMm && x + mini.totalWidthMm <= widthMm) {
           strip.columns.push({
@@ -172,30 +202,32 @@ function packGuillotine(minis: PackedMini[], widthMm: number, heightMm: number):
       }
       if (placed) break;
       const y = sheet.usedHeightMm + GAP_MM;
-      if (y + mini.totalHeightMm <= heightMm) {
-        addStrip(sheet, mini, y);
+      if (y + candidate.heightMm <= heightMm) {
+        addStrip(sheet, mini, y, rotated);
         placed = true;
         break;
       }
     }
     if (!placed) {
       const sheet: LayoutSheet = { strips: [], usedHeightMm: 0, placements: [] };
-      addStrip(sheet, mini, 0);
+      addStrip(sheet, mini, 0, rotated);
       sheets.push(sheet);
     }
   }
   return sheets.map(({ placements }) => ({ placements }));
 }
 
-function addStrip(sheet: LayoutSheet, mini: PackedMini, yMm: number) {
+function addStrip(sheet: LayoutSheet, mini: PackedMini, yMm: number, rotated: boolean) {
+  const { widthMm, heightMm } = footprint(mini, rotated);
   sheet.strips.push({
     yMm,
-    heightMm: mini.totalHeightMm,
-    usedWidthMm: mini.totalWidthMm,
-    columns: [{ xMm: 0, widthMm: mini.totalWidthMm, usedHeightMm: mini.totalHeightMm }],
+    heightMm,
+    usedWidthMm: widthMm,
+    columns: [{ xMm: 0, widthMm, usedHeightMm: heightMm }],
+    dedicated: rotated,
   });
-  sheet.usedHeightMm = yMm + mini.totalHeightMm;
-  sheet.placements.push({ mini, xMm: 0, yMm, rotated: false });
+  sheet.usedHeightMm = yMm + heightMm;
+  sheet.placements.push({ mini, xMm: 0, yMm, rotated });
 }
 
 // Expands entries into individual minis with resolved geometry, sorted by
@@ -282,6 +314,7 @@ export function packRows(
   const pages: RowPage[] = [];
   const skipped: SkippedMini[] = [];
   const oversized = new Set<number>();
+  const rescued: PackedMini[] = [];
   let placed = 0;
 
   let page: RowPage = { rows: [], heightMm: 0 };
@@ -301,7 +334,13 @@ export function packRows(
   };
 
   for (const mini of minis) {
-    if (mini.totalWidthMm > usableWmm || mini.totalHeightMm > usableHmm) {
+    if (!fitsStanding(mini, usableWmm, usableHmm)) {
+      const turned = footprint(mini, true);
+      if (turned.widthMm <= usableWmm && turned.heightMm <= usableHmm) {
+        rescued.push(mini);
+        placed++;
+        continue;
+      }
       skipped.push({
         entryIndex: mini.entryIndex,
         copyIndex: mini.copyIndex,
@@ -324,6 +363,20 @@ export function packRows(
   }
   flushRow();
   if (page.rows.length > 0) pages.push(page);
+
+  // Rescues own a full strip in the fallback too. Scan all sheets before
+  // opening another; upright rows must never share a rescued mini's strip.
+  for (const mini of rescued) {
+    const { widthMm, heightMm } = footprint(mini, true);
+    const rescueRow: PackedRow = { items: [mini], widthMm, heightMm, rotated: true };
+    const target = pages.find((sheet) => sheet.heightMm + GAP_MM + heightMm <= usableHmm);
+    if (target) {
+      target.rows.push(rescueRow);
+      target.heightMm += GAP_MM + heightMm;
+    } else {
+      pages.push({ rows: [rescueRow], heightMm });
+    }
+  }
 
   return {
     pages,

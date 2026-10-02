@@ -114,3 +114,47 @@ t('prepared back artwork proportions reach fitting through packEntries', () => {
   // #then
   assert.deepEqual([mini.totalWidthMm, mini.back?.imageWidthMm], [52.5, 52.5]);
 });
+
+t(
+  'a wide custom mini is rescued clockwise while upright and impossible minis keep their status',
+  () => {
+    // #given: 210×21 art on a 20 mm base makes a 214×86 cut-out.
+    // Turned, its stroked marks need 89.2×217.2 mm, inside A4's 190×277 area.
+    const entries: Entry[] = [
+      {
+        ...entry(1),
+        heightSlot: 'custom',
+        customWidthMm: 20,
+        customHeightMm: 140,
+        artwork: { ...square, width: 1000, height: 100 },
+      },
+      entry(1),
+      { ...entry(2), heightSlot: 'custom', customWidthMm: 140, customHeightMm: 140 },
+    ];
+    // #when
+    const result = packEntries(entries, { ...opts, marginMm: 2 });
+    // #then
+    assert.deepEqual(
+      {
+        minis: result.miniCount,
+        orientations: result.pages
+          .flatMap((page) => page.placements.map((p) => [p.mini.entryIndex, p.rotated]))
+          .toSorted(),
+        skipped: result.skipped.map((m) => [m.entryIndex, m.copyIndex]),
+        oversized: result.oversizedEntryIndices,
+      },
+      {
+        minis: 2,
+        orientations: [
+          [0, true],
+          [1, false],
+        ],
+        skipped: [
+          [2, 0],
+          [2, 1],
+        ],
+        oversized: [2],
+      },
+    );
+  },
+);
