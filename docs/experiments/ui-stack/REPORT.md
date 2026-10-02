@@ -155,6 +155,17 @@ To keep React: close both PRs. The harness commits are still useful on their own
 - The attribution footer has two missing spaces on every tool page, in all three builds (`Mausritter` + `Айзека`, `условиях` + `Mausritter`). It predates the experiment.
 - Paper minis ships `pdf-lib` on first load; see Payload.
 
+## Review status
+
+Each candidate went through four rounds of automated multi-agent review (codex reviewers, `revmux`); confirmed findings were fixed between rounds.
+
+- **Svelte:** the last round reported no findings.
+- **Preact:** the last round reported six minor findings and no major ones. Two were fixed: a dialog padding click closed the dialog, and the notes were stale. Four remain open:
+  - the history-clear guard reads the roll from the last render, so a roll and a clear inside one frame can still race;
+  - the race test does not force the deferred effect to run late;
+  - one preview test checks the store instead of the rendered preview;
+  - the PDF timing check in `scripts/ui-stack/timings.test.ts` confirms only that the button is visible.
+
 ## Limitations
 
 - One machine, one browser (Chromium 153), local `vite preview`. There is no CDN, HTTP/2 or real-network measurement, and no Lighthouse run.
