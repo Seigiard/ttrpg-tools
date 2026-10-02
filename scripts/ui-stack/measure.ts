@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { cpus, platform, release } from 'node:os';
 import { join } from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
+import { createConnection } from 'node:net';
 import { chromium } from '@playwright/test';
 import { buildPayloadReport, payloadMarkdown } from './payload';
 import { measureNetwork, networkMarkdown } from './network.e2e';
@@ -27,8 +28,34 @@ async function run(command: string, args: string[]) {
   if (code !== 0) throw new Error(`${command} ${args.join(' ')} failed with ${code}`);
 }
 
-async function waitForPreview(baseUrl: string, proc: ChildProcess) {
+async function assertPortFree(port: number) {
+  await new Promise<void>((resolve, reject) => {
+    const socket = createConnection({ host: '127.0.0.1', port });
+    socket.setTimeout(1_000);
+    socket.once('connect', () => {
+      socket.destroy();
+      reject(new Error(`port ${port} is already accepting connections before preview starts`));
+    });
+    socket.once('error', (error: NodeJS.ErrnoException) => {
+      socket.destroy();
+      if (error.code === 'ECONNREFUSED') resolve();
+      else reject(error);
+    });
+    socket.once('timeout', () => {
+      socket.destroy();
+      reject(new Error(`port ${port} did not refuse connections before preview starts`));
+    });
+  });
+}
+
+async function waitForPreview(baseUrl: string, proc: ChildProcess, ready: Promise<void>) {
   const started = Date.now();
+  await Promise.race([
+    ready,
+    Bun.sleep(60_000).then(() => {
+      throw new Error('vite preview did not report its local URL within 60s');
+    }),
+  ]);
   while (Date.now() - started < 60_000) {
     if (proc.exitCode !== null) throw new Error(`vite preview exited with ${proc.exitCode}`);
     try {
@@ -43,18 +70,38 @@ async function waitForPreview(baseUrl: string, proc: ChildProcess) {
 }
 
 async function withPreview<T>(port: number, work: (baseUrl: string) => Promise<T>) {
+  await assertPortFree(port);
   // vite preview stays in the foreground, unlike astro preview, which detaches and is
   // shared by every checkout; parallel worktrees would stop each other's servers.
+  const baseUrl = `http://127.0.0.1:${port}`;
+  let markReady!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    markReady = resolve;
+  });
   const proc = spawn(
     'bunx',
     ['vite', 'preview', '--host', '127.0.0.1', '--port', String(port), '--strictPort'],
-    { stdio: ['ignore', 'inherit', 'inherit'] },
+    { stdio: ['ignore', 'pipe', 'pipe'] },
   );
-  const baseUrl = `http://127.0.0.1:${port}`;
-  await waitForPreview(baseUrl, proc);
+  let stopping = false;
+  const exit = new Promise<never>((_, reject) => {
+    proc.once('exit', (code, signal) => {
+      if (stopping) return;
+      reject(new Error(`vite preview exited during measurement with ${code ?? signal}`));
+    });
+  });
+  for (const stream of [proc.stdout, proc.stderr]) {
+    stream.on('data', (chunk: Buffer) => {
+      const text = chunk.toString();
+      process.stdout.write(text);
+      if (text.includes(baseUrl)) markReady();
+    });
+  }
+  await waitForPreview(baseUrl, proc, Promise.race([ready, exit]));
   try {
-    return await work(baseUrl);
+    return await Promise.race([work(baseUrl), exit]);
   } finally {
+    stopping = true;
     proc.kill('SIGTERM');
   }
 }

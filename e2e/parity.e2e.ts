@@ -116,15 +116,21 @@ test('prices sync URL state, restore reloads, and prefer URL over localStorage',
   page,
 }) => {
   await openHydrated(page, '/the-black-hack/prices/');
-  await expect(page).toHaveURL(/\?s=[^&]+&r=[^&]+/);
+  await expect(page).toHaveURL(/\?s=[^&]+&r=[^&]+\.[^&]+/);
   const firstUrl = new URL(page.url());
   const firstState = firstUrl.search;
+  const firstParams = firstUrl.searchParams;
+  const firstSettlement = firstParams.get('s');
+  const firstVersion = firstParams.get('r')?.split('.')[1];
+  if (!firstSettlement || !firstVersion) throw new Error('Prices URL state is missing');
+  const storedSettlement = firstSettlement === 'city' ? 'rural' : 'city';
+  const storedState = `s=${storedSettlement}&r=2.${firstVersion}`;
   const firstPrice = await text(page.getByTestId('item-price').first());
 
   await page.reload();
   await waitForHydration(page);
   await expect(page.getByTestId('item-price').first()).toHaveText(firstPrice);
-  await page.evaluate(() => localStorage.setItem('the-black-hack:prices', 's=village&r=1'));
+  await page.evaluate((state) => localStorage.setItem('the-black-hack:prices', state), storedState);
   await openHydrated(page, `/the-black-hack/prices/${firstState}`);
   await expect(page).toHaveURL(firstUrl.toString());
   await expect(page.getByTestId('item-price').first()).toHaveText(firstPrice);

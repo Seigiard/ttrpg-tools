@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-02T13:17:59.644Z",
-  "method": "HTML is read from dist. Linked scripts, modulepreload links, stylesheets, Astro island component-url and renderer-url attributes are resolved. Static JS imports are counted as initial-load JS. Dynamic imports are counted as lazy JS. Library labels come from chunk filenames and content heuristics for React, Astro, Base UI, Nanostores, Lucide and pdf-lib.",
+  "generatedAt": "2026-10-02T14:24:12.921Z",
+  "method": "HTML is read from dist. Linked scripts, modulepreload links, stylesheets, Astro island component-url and renderer-url attributes are resolved. Static JS imports are counted as initial-load JS. Dynamic imports and their transitive JS dependencies are counted as lazy JS. Library labels come from chunk filenames and content heuristics for Preact, React, Astro, Base UI, Nanostores, Lucide and pdf-lib.",
   "routes": [
     {
       "route": "/",
@@ -791,9 +791,9 @@
         "brotli": 264719
       },
       "lazyJs": {
-        "raw": 0,
-        "gzip": 0,
-        "brotli": 0
+        "raw": 12377,
+        "gzip": 6109,
+        "brotli": 5517
       },
       "requestCount": 9,
       "resources": [
@@ -919,6 +919,16 @@
           "libraries": [
             "react"
           ]
+        },
+        {
+          "path": "_astro/browser.B92hvlif.js",
+          "kind": "lazy-js",
+          "sizes": {
+            "raw": 12377,
+            "gzip": 6109,
+            "brotli": 5517
+          },
+          "libraries": []
         }
       ],
       "topChunks": [
@@ -960,6 +970,16 @@
           ]
         },
         {
+          "path": "_astro/browser.B92hvlif.js",
+          "kind": "lazy-js",
+          "sizes": {
+            "raw": 12377,
+            "gzip": 6109,
+            "brotli": 5517
+          },
+          "libraries": []
+        },
+        {
           "path": "_astro/react.yIOJJ3r4.js",
           "kind": "external-js",
           "sizes": {
@@ -970,16 +990,6 @@
           "libraries": [
             "react"
           ]
-        },
-        {
-          "path": "_astro/composite.CKeyMQxk.js",
-          "kind": "external-js",
-          "sizes": {
-            "raw": 4138,
-            "gzip": 1729,
-            "brotli": 1503
-          },
-          "libraries": []
         }
       ]
     },
