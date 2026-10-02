@@ -16,7 +16,7 @@ Both candidates pass the gate.
 | Check | React | Preact | Svelte |
 | --- | --- | --- | --- |
 | Lint, format, typecheck, build | pass | pass | pass |
-| Unit and component tests | 518 | 531 | 530 |
+| Unit and component tests | 520 | 534 | 533 |
 | Browser tests (main's paper-minis suite + parity suite) | 12/12 | 12/12 | 12/12 |
 | React runtime in `dist/` | — | none | none |
 
@@ -84,17 +84,17 @@ Ten repeats per scenario in Playwright Chromium 153 on an Apple M1 Pro. Values a
 
 | Scenario | React | Preact | Svelte |
 | --- | --- | --- | --- |
-| weather click-to-result | 71 (61–85) | 63 (60–76) | 58 (55–88) |
-| prices tab switch | 41 (40–57) | 80 (78–83) | 51 (49–55) |
-| paper-minis upload-to-row | 51 (49–57) | 39 (38–40) | 43 (43–53) |
-| paper-minis preview ready | 73 (68–84) | 80 (67–87) | 75 (64–84) |
-| paper-minis PDF generation | 69 (65–84) | 76 (61–86) | 73 (61–76) |
+| weather click-to-result | 42 (26–86) | 69 (55–87) | 38 (33–65) |
+| prices tab switch | 51 (39–61) | 80 (78–80) | 50 (47–52) |
+| paper-minis upload-to-row | 28 (27–31) | 25 (24–27) | 27 (26–29) |
+| paper-minis preview ready | 80 (72–86) | 74 (68–81) | 70 (64–84) |
+| paper-minis PDF generation | 71 (60–90) | 68 (62–77) | 63 (60–78) |
 
-These timings include Playwright round trips. Most ranges overlap and show no interaction problem.
+Every scenario waits until all islands have hydrated, then stops the clock only once its action is visible: a new result, a new URL, a new row, a ready preview, or a finished PDF. The timings include Playwright round trips.
 
-The one clear gap is the prices tab switch on Preact: 80 ms, with ranges that do not overlap React's 41 ms. The scenario stops when the URL changes, and the URL is written in an effect. Preact runs `useEffect` after the next paint, while React flushes it right after a discrete click. So the likely cause is a later URL write, not a slower tab render; this was not profiled. A `useLayoutEffect` for the URL sync would test the hypothesis.
+Paper minis timings are within noise of each other. The generators are not: Preact is about 25–30 ms slower than React and Svelte on both interaction scenarios, and on the prices tab switch the ranges do not overlap. This was not profiled. Two likely contributors: Preact runs `useEffect` after the next paint, and both the prices URL sync and the first-roll logic live in effects; also, `@nanostores/preact` subscribes through an effect. Nothing here is visible as lag to a person, but it is the one measured runtime cost of Preact in this experiment.
 
-An earlier version of this table measured the prices tab switch on clicks into an already selected tab. Review caught it, and all three builds were remeasured.
+Earlier versions of this table had two harness defects. Some scenarios clicked before hydration, and the prices scenario clicked an already selected tab. Review caught both, and all three builds were remeasured.
 
 ## Expressiveness and reuse
 
@@ -167,7 +167,7 @@ To keep React: close both PRs. The harness commits are still useful on their own
 
 **Preact.** On this project it gives the smallest payload: about 22–24 KB of JS per generator page, against 34–37 KB for Svelte and 87–96 KB for React. It changes the fewest files and keeps the authoring model and the test tooling the codebase already uses. The follow-up change came out identical in shape to React.
 
-What it costs: owning Tabs and Dialog (about 220 extra lines), longer component tests, and a dialog that is not `inert` like a native one. Switching that Dialog to `<dialog>.showModal()`, as Svelte did, is the first follow-up worth doing. The second is to check whether the 40 ms later URL write on the prices tab switch is the `useEffect` timing.
+What it costs: owning Tabs and Dialog (about 220 extra lines), longer component tests, and a dialog that is not `inert` like a native one. Switching that Dialog to `<dialog>.showModal()`, as Svelte did, is the first follow-up worth doing. The second is to profile the 25–30 ms Preact lag on generator interactions (see Runtime).
 
 Svelte is a reasonable choice if shorter templates and the adapter-free store binding matter more than payload. On this app it ships about 12 KB more per page than Preact. Its toolchain also needs three additions that React and Preact do not: `svelte-check`, a Bun compile plugin and serial unit tests.
 
