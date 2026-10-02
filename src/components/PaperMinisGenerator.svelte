@@ -19,11 +19,18 @@
     'min-h-11 w-full rounded-lg border border-border bg-surface-elevated px-3 text-text focus-visible:outline-2 focus-visible:outline-primary';
   const customDimensionKeys = ['customWidthMm', 'customHeightMm'] as const;
 
+  function buildZipFilename(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `paper-minis-${year}-${month}-${day}.zip`;
+  }
+
   const store = createPaperMinisStore();
   const rowsStore = store.$rows;
   const settingsStore = store.$settings;
   const inputsStore = store.$inputs;
-  const inputsValidStore = store.$inputsValid;
+  const draftErrorStore = store.$draftError;
   const packedStore = store.$layout;
   const canGenerateStore = store.$canGenerate;
   const messageStore = store.$message;
@@ -41,7 +48,7 @@
   let rows = $derived($rowsStore);
   let settings = $derived($settingsStore);
   let inputs = $derived($inputsStore);
-  let inputsValid = $derived($inputsValidStore);
+  let draftError = $derived($draftErrorStore);
   let packed = $derived($packedStore);
   let canGenerate = $derived($canGenerateStore);
   let message = $derived($messageStore);
@@ -136,6 +143,28 @@
       store.reportPdfFailure();
     }
   }
+
+  async function exportZip() {
+    const bytes = await store.exportZip();
+    if (!bytes) return;
+    let url: string | undefined;
+    try {
+      const nextUrl = URL.createObjectURL(
+        new Blob([bytes as BlobPart], { type: 'application/zip' }),
+      );
+      url = nextUrl;
+      const anchor = document.createElement('a');
+      anchor.href = nextUrl;
+      anchor.download = buildZipFilename();
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(nextUrl), 5000);
+    } catch {
+      if (url) URL.revokeObjectURL(url);
+      store.reportExportFailure();
+    }
+  }
 </script>
 
 <div class="space-y-8">
@@ -179,8 +208,7 @@
               oninput={(event) => store.setMargin(event.currentTarget.value)}
               onchange={(event) => store.setMargin(event.currentTarget.value)}
               onblur={() => {
-                if (!store.$inputs.get().margin.valid)
-                  store.setMargin(String(store.$settings.get().marginMm));
+                store.commitMargin();
               }}
             />
           </label>
@@ -239,17 +267,20 @@
                   ? 'Обрабатываем изображения. PDF будет доступен после завершения.'
                   : ''}
             </p>
-            {#if !inputs.margin.valid}<p role="status" class="text-sm text-danger">
-                Поля должны быть числом от 0 мм.
-              </p>{/if}
-            {#if !inputsValid && inputs.margin.valid}<p role="status" class="text-sm text-danger">
-                Количество должно быть целым числом от 1, размеры — больше 0 мм.
+            {#if draftError}<p role="status" class="text-sm text-danger">
+                {draftError}
               </p>{/if}
             <div class="space-y-2">
               <Button
                 class="min-h-11 w-full"
                 disabled={!canGenerate}
                 onclick={() => void download()}>{busy ? 'Подготовка PDF…' : 'Скачать PDF'}</Button
+              >
+              <Button
+                variant="outline"
+                class="min-h-11 w-full"
+                disabled={!canGenerate}
+                onclick={() => void exportZip()}>Экспорт в ZIP</Button
               >
               <Button
                 variant="outline"
@@ -297,7 +328,7 @@
           bind:this={files}
           type="file"
           multiple
-          accept={ARTWORK_ACCEPT}
+          accept={`${ARTWORK_ACCEPT},.zip,application/zip`}
           class="hidden"
           aria-label="Добавить изображения"
           onchange={(event) => {
@@ -311,17 +342,7 @@
           {#each rows as row, index (row.id)}
             {@const status = packed.entries[index]}
             {@const statusWarning = status && entryStatusWarning(status)}
-            {@const rowInputs = inputs.rows[row.id] ?? {
-              count: { text: String(row.count), valid: true },
-              customWidthMm: {
-                text: row.customWidthMm === undefined ? '' : String(row.customWidthMm),
-                valid: row.customWidthMm !== undefined,
-              },
-              customHeightMm: {
-                text: row.customHeightMm === undefined ? '' : String(row.customHeightMm),
-                valid: row.customHeightMm !== undefined,
-              },
-            }}
+            {@const rowInputs = inputs.rows[row.id]}
             <article aria-label={`Миниатюра ${index + 1}`} class="border-y border-border py-5">
               <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <h3 class="break-all text-xl text-text">{row.name || `Миниатюра ${index + 1}`}</h3>
@@ -407,10 +428,7 @@
                     aria-invalid={!rowInputs.count.valid}
                     oninput={(event) => store.setCount(row.id, event.currentTarget.value)}
                     onchange={(event) => store.setCount(row.id, event.currentTarget.value)}
-                    onblur={() => {
-                      if (!store.$inputs.get().rows[row.id]?.count.valid)
-                        store.setCount(row.id, String(row.count));
-                    }}
+                    onblur={() => store.commitCount(row.id)}
                   /></label
                 >
                 {#if row.heightSlot === 'custom'}<div class="grid grid-cols-2 gap-2 sm:col-span-2">
@@ -431,10 +449,7 @@
                             store.setCustomDimensions(row.id, {
                               [dimension]: event.currentTarget.value,
                             })}
-                          onblur={() => {
-                            if (!store.$inputs.get().rows[row.id]?.[key].valid)
-                              store.setCustomDimensions(row.id, { [dimension]: String(row[key]) });
-                          }}
+                          onblur={() => store.commitCustomDimension(row.id, dimension)}
                         /></label
                       >{/each}
                   </div>{/if}

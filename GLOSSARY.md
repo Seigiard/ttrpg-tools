@@ -34,6 +34,9 @@ _Avoid_: base, bottom tab
 The line between the front and back faces where the mini is folded in half.
 _Avoid_: middle line, crease
 
+**Export**:
+The zip of prepared paper minis that a batch upload restores.
+
 **Layout**:
 The arrangement of minis on sheets for printing and cutting.
 

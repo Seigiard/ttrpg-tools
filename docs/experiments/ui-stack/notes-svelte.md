@@ -12,6 +12,12 @@
 
 No changes to `src/data`, `src/lib` or `src/stores` were needed.
 
+## S4 · Paper minis and Bun test isolation
+
+- Plain `bun test` still runs test files in parallel against one process-global happy-dom document from `test-setup.ts`. Svelte component files call `cleanup()` in their own `beforeEach`/`afterEach`, so one file can remove another file's rendered DOM while its assertions are still running.
+- Evidence before the serial runner workaround: `bun test` reported `504 pass / 25 fail` on this branch. The failures were Paper Minis DOM lookups such as missing `dialog`, `Задать рост`, custom size inputs, plus a `Svelte Dialog traps Tab, closes on Escape and restores focus` timeout. Full output was saved at `/Users/seigiard/.local/share/opencode/tool-output/tool_0fcb511bf001A1admJ7a3q2Pqs`.
+- Counter-evidence: `bun test --parallel=1` runs the same files in a single worker and passes. The `test` script and CI unit-test step use `bun test --parallel=1` until the shared DOM setup is replaced with per-file isolated DOM registration.
+
 ## S3 · Weather, locations, encounters and prices
 
 - Migrated the weather, locations, encounters and The Black Hack prices islands to Svelte and switched their Astro pages to `.svelte` imports.

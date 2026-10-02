@@ -51,7 +51,7 @@ export async function measureTimings(browser: Browser, baseUrl: string) {
           await page.evaluate(() => new Promise(requestAnimationFrame));
         },
         async (page) => {
-          await page.goto(new URL('/mausritter/weather', baseUrl).toString());
+          await page.goto(new URL('/mausritter/weather/', baseUrl).toString());
           await page.getByTestId('result-weather').waitFor({ state: 'visible' });
         },
       ),
@@ -67,7 +67,7 @@ export async function measureTimings(browser: Browser, baseUrl: string) {
           await page.waitForFunction((url) => location.href !== url, before);
         },
         async (page) => {
-          await page.goto(new URL('/the-black-hack/prices', baseUrl).toString());
+          await page.goto(new URL('/the-black-hack/prices/', baseUrl).toString());
         },
       ),
     );
@@ -83,7 +83,7 @@ export async function measureTimings(browser: Browser, baseUrl: string) {
           await page.getByRole('article').first().waitFor({ state: 'visible' });
         },
         async (page) => {
-          await page.goto(new URL('/paper-minis', baseUrl).toString());
+          await page.goto(new URL('/paper-minis/', baseUrl).toString());
         },
       ),
     );
@@ -120,7 +120,7 @@ export async function measureTimings(browser: Browser, baseUrl: string) {
 
 function setupPaperMinis(baseUrl: string) {
   return async (page: Page) => {
-    await page.goto(new URL('/paper-minis', baseUrl).toString());
+    await page.goto(new URL('/paper-minis/', baseUrl).toString());
     await page
       .locator('input[aria-label="Добавить изображения"]')
       .setInputFiles('e2e/fixtures/mini.png');

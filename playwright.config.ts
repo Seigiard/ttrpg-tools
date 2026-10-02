@@ -1,40 +1,42 @@
+import { createHash } from 'node:crypto';
+
 import { defineConfig, devices } from '@playwright/test';
 
-const port = Number(process.env.PORT ?? 4400);
+// A per-checkout port lets parallel worktrees run the suite at once; PORT overrides it.
+const portOffset = createHash('sha1').update(process.cwd()).digest().readUInt16BE(0) % 18_000;
+const port = Number(process.env.PORT ?? 10_000 + portOffset);
+const baseURL = `http://127.0.0.1:${port}`;
+const previewCommand = `${process.env.CI ? '' : 'bun run build && '}bunx vite preview --host 127.0.0.1 --port ${port} --strictPort`;
 
 export default defineConfig({
-  testDir: './e2e',
-  testMatch: /.*\.e2e\.ts/,
+  testMatch: '**/*.e2e.ts',
+  forbidOnly: !!process.env.CI,
   fullyParallel: true,
   reporter: process.env.CI ? 'github' : 'list',
-  use: {
-    baseURL: `http://127.0.0.1:${port}`,
-    trace: 'on-first-retry',
-  },
-  webServer: {
-    command: `trap 'bunx astro preview stop >/dev/null 2>&1 || true' EXIT INT TERM; PORT=${port} bun run build && PORT=${port} bunx astro preview --port ${port} && bunx astro preview logs --follow`,
-    url: `http://localhost:${port}`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  use: { baseURL, trace: 'on-first-retry' },
   projects: [
     {
+      name: 'paper-minis',
+      testDir: './tests/paper-minis',
+      use: { ...devices['Desktop Chrome'], baseURL },
+    },
+    {
       name: 'desktop',
+      testDir: './e2e',
       grepInvert: /@narrow/,
-      use: {
-        ...devices['Desktop Chrome'],
-        baseURL: `http://localhost:${port}`,
-        viewport: { width: 1280, height: 900 },
-      },
+      use: { ...devices['Desktop Chrome'], baseURL, viewport: { width: 1280, height: 900 } },
     },
     {
       name: 'narrow',
+      testDir: './e2e',
       grep: /@narrow/,
-      use: {
-        ...devices['Desktop Chrome'],
-        baseURL: `http://localhost:${port}`,
-        viewport: { width: 390, height: 900 },
-      },
+      use: { ...devices['Desktop Chrome'], baseURL, viewport: { width: 390, height: 900 } },
     },
   ],
+  webServer: {
+    command: previewCommand,
+    url: `${baseURL}/paper-minis/`,
+    reuseExistingServer: false,
+    timeout: 120_000,
+  },
 });

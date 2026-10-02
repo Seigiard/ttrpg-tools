@@ -4,7 +4,7 @@
   import DialogContent from '@/components/ui/DialogContent.svelte';
   import DialogTitle from '@/components/ui/DialogTitle.svelte';
   import { artworkMimeType } from '@/lib/paper-minis/artwork-formats';
-  import type { CalibrationLine } from '@/lib/paper-minis/calibration';
+  import type { CalibrationLine } from '@/lib/paper-minis/calibration-session';
   import type { PreparedArtwork } from '@/lib/paper-minis/types';
   import type { CalibrationSession } from '@/stores/paper-minis-store';
 
@@ -41,7 +41,7 @@
   function setLineFromClientY(which: CalibrationLine, clientY: number) {
     const box = artworkElement?.getBoundingClientRect();
     if (!box || box.height <= 0) return;
-    onSetLine(which, Math.min(Math.max((clientY - box.top) / box.height, 0), 1));
+    onSetLine(which, (clientY - box.top) / box.height);
   }
 
   $effect(() => {
