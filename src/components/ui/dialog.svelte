@@ -12,7 +12,7 @@
   let { open = false, onOpenChange, children }: Props = $props();
 
   const dialog: DialogContext = $state({
-    open: false,
+    open,
     titleId: `dialog-title-${Math.random().toString(36).slice(2)}`,
     previouslyFocused: null,
     setOpen(next) {

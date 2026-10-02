@@ -12,7 +12,7 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "test": "bun test",
+    "test": "bun test --parallel=1",
     "e2e": "playwright test",
     "measure": "bun scripts/ui-stack/measure.ts",
     "lint": "oxlint src e2e scripts playwright.config.ts",

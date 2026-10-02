@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import ButtonProbe from '../svelte-fixtures/ButtonProbe.svelte';
 import CardProbe from '../svelte-fixtures/CardProbe.svelte';
 import DialogProbe from '../svelte-fixtures/DialogProbe.svelte';
@@ -153,10 +153,12 @@ test('Svelte Dialog traps Tab, closes on Escape and restores focus', async () =>
   expect(document.activeElement).toBe(last);
   await fireEvent.keyDown(dialog!, { key: 'Escape' });
   // #then Escape closes it and focus returns to the opener
-  expect({ present: document.querySelector('dialog'), focused: document.activeElement }).toEqual({
-    present: null,
-    focused: opener,
-  });
+  await waitFor(() =>
+    expect({ present: document.querySelector('dialog'), focused: document.activeElement }).toEqual({
+      present: null,
+      focused: opener,
+    }),
+  );
   expect(first.isConnected).toBe(false);
 });
 

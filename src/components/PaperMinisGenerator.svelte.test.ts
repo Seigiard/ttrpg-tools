@@ -1,12 +1,36 @@
 import { afterEach, beforeEach, expect, setSystemTime, spyOn, test } from 'bun:test';
-import { act, cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react';
+import { fireEvent as baseFireEvent } from '@testing-library/dom';
+import { act, cleanup, render, screen, within, waitFor } from '@testing-library/svelte';
+import { flushSync } from 'svelte';
 import * as pdf from '@/lib/paper-minis/pdf';
-import PaperMinisGenerator from './PaperMinisGenerator';
+import PaperMinisGenerator from './PaperMinisGenerator.svelte';
+
+const fireEvent = new Proxy(baseFireEvent, {
+  get(target, key: keyof typeof baseFireEvent) {
+    const fire = target[key];
+    if (typeof fire !== 'function') return fire;
+    return (...args: unknown[]) => {
+      const result = (fire as (...params: unknown[]) => boolean)(...args);
+      if (key === 'change' && args[0] instanceof HTMLElement) {
+        baseFireEvent.input(args[0]);
+      }
+      flushSync();
+      return result;
+    };
+  },
+}) as typeof baseFireEvent;
+
+async function flushAsyncUpdates() {
+  await Promise.resolve();
+  await Promise.resolve();
+  flushSync();
+}
 
 const png = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==',
   'base64',
 );
+
 beforeEach(() => {
   localStorage.setItem('pmg-settings', JSON.stringify({ normalization: false }));
 });
@@ -34,9 +58,18 @@ async function addBack(bytes = png) {
   });
 }
 
+async function openCalibration(frontHeight = 200) {
+  const bytes = Buffer.from(png);
+  bytes.writeUInt32BE(frontHeight, 20);
+  render(PaperMinisGenerator);
+  await addFront(bytes);
+  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
+  return within(screen.getByRole('dialog'));
+}
+
 test('both PDF actions follow generation availability', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  render(PaperMinisGenerator);
   await addFront();
   const input = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Поля, мм' });
   // #when
@@ -56,7 +89,7 @@ test('both PDF actions follow generation availability', async () => {
 
 test('blur restores every invalid numeric draft without changing another field', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  render(PaperMinisGenerator);
   await addFront();
   const count = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Количество копий' });
   const margin = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Поля, мм' });
@@ -106,7 +139,7 @@ test('blur restores every invalid numeric draft without changing another field',
 
 test('a thumbnail drop uses the first supported image even after an unsupported file', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  render(PaperMinisGenerator);
   await addFront();
   // #when
   await act(async () => {
@@ -128,7 +161,7 @@ test('a thumbnail drop uses the first supported image even after an unsupported 
 
 test('a JPEG labelled image/jpg is accepted', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  render(PaperMinisGenerator);
   const bytes = await Bun.file(
     new URL('../lib/paper-minis/fixtures/artwork-4x3.jpg', import.meta.url),
   ).arrayBuffer();
@@ -152,7 +185,7 @@ test('a JPEG labelled image/jpg is accepted', async () => {
 
 test('every artwork file input offers every supported MIME type', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  render(PaperMinisGenerator);
   await addFront();
   // #when
   const accepts = Array.from(
@@ -169,7 +202,7 @@ test('every artwork file input offers every supported MIME type', async () => {
 
 test('the drop zone explains the naming convention with every size id outside the button', () => {
   // #given
-  render(<PaperMinisGenerator />);
+  render(PaperMinisGenerator);
   // #when
   const hint = screen.getByTestId('naming-hint');
   const sizes = hint.querySelector('details');
@@ -197,7 +230,7 @@ test('the drop zone explains the naming convention with every size id outside th
 
 test('a batch row is titled by its cleaned file name, or numbered when the name is empty', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  render(PaperMinisGenerator);
   // #when
   await act(async () => {
     fireEvent.change(screen.getByLabelText('Добавить изображения', { selector: 'input' }), {
@@ -217,7 +250,7 @@ test('a batch row is titled by its cleaned file name, or numbered when the name 
 
 test('the back slot announces the selected file and returns to reflection after removal', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  render(PaperMinisGenerator);
   await addFront();
   // #when
   await act(async () => {
@@ -242,7 +275,7 @@ test('the back slot announces the selected file and returns to reflection after 
 
 test('rendered dwarf and bugbear choices retain distinct heights on the same base', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  render(PaperMinisGenerator);
   await addFront();
   const select = screen.getByRole<HTMLSelectElement>('combobox', { name: 'Высота существа' });
   // #when
@@ -278,7 +311,7 @@ test('download action clicks an attached PDF download anchor', async () => {
     };
   };
   try {
-    render(<PaperMinisGenerator />);
+    render(PaperMinisGenerator);
     await addFront();
     // #when
     fireEvent.click(screen.getByRole('button', { name: 'Скачать PDF' }));
@@ -298,7 +331,7 @@ test('download action clicks an attached PDF download anchor', async () => {
 
 test('download reports a browser object-URL failure', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  render(PaperMinisGenerator);
   await addFront();
   const objectUrl = spyOn(URL, 'createObjectURL').mockImplementation(() => {
     throw new Error('Object URL unavailable');
@@ -324,7 +357,7 @@ test('preview action shows the generated PDF in an iframe and matching link', as
   const objectUrl = spyOn(URL, 'createObjectURL').mockReturnValue('about:blank#pdf-preview');
   const revokeUrl = spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
   try {
-    render(<PaperMinisGenerator />);
+    render(PaperMinisGenerator);
     await addFront();
     // #when
     fireEvent.click(screen.getByRole('button', { name: 'Предпросмотр PDF' }));
@@ -347,7 +380,7 @@ test('preview action shows the generated PDF in an iframe and matching link', as
 
 test('preview reports a browser object-URL failure instead of showing a ready message', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  render(PaperMinisGenerator);
   await addFront();
   const objectUrl = spyOn(URL, 'createObjectURL').mockImplementation(() => {
     throw new Error('Object URL unavailable');
@@ -370,7 +403,7 @@ test('preview reports a browser object-URL failure instead of showing a ready me
 
 test('PDF actions wait for a pending image while the editor stays available', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  render(PaperMinisGenerator);
   await addFront();
   let release!: (bytes: ArrayBuffer) => void;
   const file = new File([png], 'slow.png', { type: 'image/png' });
@@ -388,6 +421,7 @@ test('PDF actions wait for a pending image while the editor stays available', as
   const during = [download.disabled, preview.disabled, editor.disabled];
   await act(async () => {
     release(Uint8Array.from(png).buffer);
+    await flushAsyncUpdates();
   });
   // #then
   expect({ during, after: [download.disabled, preview.disabled, editor.disabled] }).toEqual({
@@ -398,7 +432,7 @@ test('PDF actions wait for a pending image while the editor stays available', as
 
 test('height calibration stays disabled while the front loads and does not open after a blocked click', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  render(PaperMinisGenerator);
   let release!: (bytes: ArrayBuffer) => void;
   const file = new File([png], 'pending.png', { type: 'image/png' });
   file.arrayBuffer = () =>
@@ -414,6 +448,7 @@ test('height calibration stays disabled while the front loads and does not open 
   fireEvent.click(button);
   await act(async () => {
     release(Uint8Array.from(png).buffer);
+    await flushAsyncUpdates();
   });
   // #then
   expect({
@@ -425,7 +460,7 @@ test('height calibration stays disabled while the front loads and does not open 
 
 test('height calibration stays disabled until the selected back artwork is ready', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  render(PaperMinisGenerator);
   await addFront();
   let release!: (bytes: ArrayBuffer) => void;
   const file = new File([png], 'pending-back.png', { type: 'image/png' });
@@ -443,6 +478,7 @@ test('height calibration stays disabled until the selected back artwork is ready
   fireEvent.click(button);
   await act(async () => {
     release(Uint8Array.from(png).buffer);
+    await flushAsyncUpdates();
   });
   // #then
   expect({
@@ -459,7 +495,7 @@ const overlay = (slot: HTMLElement) =>
 
 test('shared calibration draws the same thumbnail lines on both sides and reset removes them', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  render(PaperMinisGenerator);
   await addFront();
   await addBack();
   const front = screen.getByRole('button', { name: 'Лицевая сторона' });
@@ -490,7 +526,7 @@ test('shared calibration draws the same thumbnail lines on both sides and reset 
 
 test('a front-only calibration dialog exposes sliders without an orphan tab stop', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  render(PaperMinisGenerator);
   await addFront();
   // #when
   fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
@@ -503,9 +539,92 @@ test('a front-only calibration dialog exposes sliders without an orphan tab stop
   }).toEqual({ tabs: 0, panels: 0, sliders: ['Голова', 'Ступни'] });
 });
 
+test('calibration lines expose named vertical sliders in the tab order', async () => {
+  // #given
+  const dialog = await openCalibration();
+  // #when
+  const sliders = ['Голова', 'Ступни'].map((name) => {
+    const slider = dialog.getByRole<HTMLButtonElement>('slider', { name });
+    slider.focus();
+    return {
+      focused: document.activeElement === slider,
+      tabIndex: slider.tabIndex,
+      orientation: slider.getAttribute('aria-orientation'),
+      value: slider.getAttribute('aria-valuenow'),
+    };
+  });
+  // #then
+  expect(sliders).toEqual([
+    { focused: true, tabIndex: 0, orientation: 'vertical', value: '0' },
+    { focused: true, tabIndex: 0, orientation: 'vertical', value: '100' },
+  ]);
+});
+
+test.each([
+  { frontHeight: 200, backHeight: 400 },
+  { frontHeight: 400, backHeight: 200 },
+])(
+  'keyboard steps and announced pixels use the taller artwork height ($frontHeight/$backHeight)',
+  async ({ frontHeight, backHeight }) => {
+    // #given
+    await openCalibration(frontHeight);
+    fireEvent.click(screen.getByRole('button', { name: 'Отмена' }));
+    const bytes = Buffer.from(png);
+    bytes.writeUInt32BE(backHeight, 20);
+    await addBack(bytes);
+    fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
+    const dialog = within(screen.getByRole('dialog'));
+    // #when
+    const head = dialog.getByRole('slider', { name: 'Голова' });
+    fireEvent.keyDown(head, { key: 'ArrowDown' });
+    const onePixel = head.getAttribute('aria-valuenow');
+    fireEvent.keyDown(head, { key: 'ArrowDown', shiftKey: true });
+    const afterShift = [head.getAttribute('aria-valuenow'), head.getAttribute('aria-valuetext')];
+    // #then
+    expect({ tabs: dialog.queryAllByRole('tab').length, onePixel, afterShift }).toEqual({
+      tabs: 0,
+      onePixel: '0.25',
+      afterShift: ['2.75', '11 пикселей от верха'],
+    });
+  },
+);
+
+test('slider ranges announce the movement allowed by the other line', async () => {
+  // #given
+  const dialog = await openCalibration();
+  const head = dialog.getByRole('slider', { name: 'Голова' });
+  const feet = dialog.getByRole('slider', { name: 'Ступни' });
+  // #when
+  fireEvent.keyDown(feet, { key: 'ArrowUp', shiftKey: true });
+  // #then
+  expect(
+    [head, feet].map((el) => [el.getAttribute('aria-valuemin'), el.getAttribute('aria-valuemax')]),
+  ).toEqual([
+    ['0', '85'],
+    ['10', '100'],
+  ]);
+});
+
+test('arrow keys prevent scrolling while other keys pass through unchanged', async () => {
+  // #given
+  const dialog = await openCalibration();
+  const head = dialog.getByRole('slider', { name: 'Голова' });
+  // #when
+  const arrowHandled = fireEvent.keyDown(head, { key: 'ArrowDown' });
+  const afterArrow = head.getAttribute('aria-valuenow');
+  const tabHandled = fireEvent.keyDown(head, { key: 'Tab' });
+  // #then
+  expect({
+    arrowHandled,
+    tabHandled,
+    afterArrow,
+    afterTab: head.getAttribute('aria-valuenow'),
+  }).toEqual({ arrowHandled: false, tabHandled: true, afterArrow: '0.5', afterTab: '0.5' });
+});
+
 test('an oversized mini uses danger styling in both the row and calibration dialog', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  render(PaperMinisGenerator);
   await addFront();
   fireEvent.change(screen.getByRole('combobox', { name: 'Высота существа' }), {
     target: { value: 'custom' },
@@ -528,7 +647,7 @@ test('an oversized mini uses danger styling in both the row and calibration dial
 
 test('front height dialog applies pointer calibration and row reset clears it', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  render(PaperMinisGenerator);
   await addFront();
   // #when
   fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
@@ -569,7 +688,7 @@ test('pointer calibration measures the visible image inside vertical letterboxin
   const bytes = Buffer.from(png);
   bytes.writeUInt32BE(400, 16);
   bytes.writeUInt32BE(100, 20);
-  render(<PaperMinisGenerator />);
+  render(PaperMinisGenerator);
   await addFront(bytes);
   fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
   const dialog = within(screen.getByRole('dialog'));
@@ -598,7 +717,7 @@ test('pointer calibration measures the visible image inside vertical letterboxin
 
 test('height dialog shows both artworks side by side under one pair of shared lines', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  render(PaperMinisGenerator);
   await addFront();
   // #when
   const backBytes = Buffer.from(png);
@@ -624,7 +743,7 @@ test('height dialog shows both artworks side by side under one pair of shared li
 
 test('opening calibration moves focus inside and Escape cancels and restores the opener', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  render(PaperMinisGenerator);
   await addFront();
   const opener = screen.getByRole('button', { name: 'Задать рост' });
   opener.focus();
@@ -648,7 +767,7 @@ test.each(['pointerCancel', 'lostPointerCapture'] as const)(
   '%s ends calibration dragging',
   async (end) => {
     // #given
-    render(<PaperMinisGenerator />);
+    render(PaperMinisGenerator);
     await addFront();
     fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
     const dialog = within(screen.getByRole('dialog'));
@@ -671,7 +790,7 @@ test.each([{ button: 2 }, { button: 0, ctrlKey: true }])(
   'context-menu press %j does not start calibration',
   async (press) => {
     // #given
-    render(<PaperMinisGenerator />);
+    render(PaperMinisGenerator);
     await addFront();
     fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
     const dialog = within(screen.getByRole('dialog'));
@@ -703,7 +822,7 @@ test('Apply after returning lines to their starting values keeps the calibration
   try {
     const bytes = Buffer.from(png);
     bytes.writeUInt32BE(201, 20);
-    render(<PaperMinisGenerator />);
+    render(PaperMinisGenerator);
     await addFront(bytes);
     fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
     const dialog = within(screen.getByRole('dialog'));

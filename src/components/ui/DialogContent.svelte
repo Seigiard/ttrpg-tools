@@ -7,9 +7,10 @@
 
   type Props = HTMLAttributes<HTMLDivElement> & {
     children?: Snippet;
+    finalFocus?: HTMLElement | null;
   };
 
-  let { class: className, children, ...rest }: Props = $props();
+  let { class: className, children, finalFocus = null, ...rest }: Props = $props();
   const dialog = getContext<DialogContext>(dialogContextKey);
   let element = $state<HTMLDialogElement>();
 
@@ -23,8 +24,9 @@
   ].join(',');
 
   function restoreFocus() {
-    dialog.previouslyFocused?.focus();
+    const target = finalFocus ?? dialog.previouslyFocused;
     dialog.previouslyFocused = null;
+    setTimeout(() => target?.focus(), 0);
   }
 
   function close() {
@@ -82,7 +84,7 @@
   <dialog
     bind:this={element}
     aria-labelledby={dialog.titleId}
-    class="m-0 max-h-none max-w-none bg-transparent p-0 text-inherit backdrop:bg-black/60"
+    class="fixed inset-0 m-0 h-screen w-screen max-h-none max-w-none bg-transparent p-0 text-inherit backdrop:bg-black/60"
     oncancel={(event) => {
       event.preventDefault();
       close();
