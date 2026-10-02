@@ -1,0 +1,127 @@
+commit 1f8ebca0ec95be353576957ad32faca2b360f542
+Author: Andrew Borisenko <seigiard@gmail.com>
+Date:   Fri Oct 2 13:50:42 2026 +0200
+
+    feat(encounters): show the last five check outcomes (experiment follow-up, React)
+
+diff --git a/src/components/EncounterGenerator.test.tsx b/src/components/EncounterGenerator.test.tsx
+index cd631d6..ccecdc9 100644
+--- a/src/components/EncounterGenerator.test.tsx
++++ b/src/components/EncounterGenerator.test.tsx
+@@ -74,6 +74,58 @@ describe('EncounterGenerator (presentation)', () => {
+     expect(screen.getByTestId('check-result').getAttribute('data-outcome')).toBe('clear');
+   });
+ 
++  test('история проверок растёт от нового к старому', () => {
++    // #given mount: check d6=1; reaction. Затем клики: d6=2, d6=3
++    restoreCrypto = mockCrypto([0, 0, 0, 1, 2]);
++    render(<EncounterGenerator table={mausritterEncounters} />);
++
++    // #when
++    fireEvent.click(screen.getByTestId('check-roll-button'));
++    fireEvent.click(screen.getByTestId('check-roll-button'));
++
++    // #then
++    const entries = Array.from(screen.getByTestId('check-history').querySelectorAll('li'));
++    expect(entries.map((entry) => entry.textContent)).toEqual([
++      'd6 = 3Ничего',
++      'd6 = 2Предзнаменование',
++      'd6 = 1Столкновение',
++    ]);
++  });
++
++  test('история проверок хранит не больше пяти записей', () => {
++    // #given mount: check d6=1; reaction. Затем клики: d6=2..6
++    restoreCrypto = mockCrypto([0, 0, 0, 1, 2, 3, 4, 5]);
++    render(<EncounterGenerator table={mausritterEncounters} />);
++
++    // #when
++    for (let count = 0; count < 5; count += 1) {
++      fireEvent.click(screen.getByTestId('check-roll-button'));
++    }
++
++    // #then
++    const entries = Array.from(screen.getByTestId('check-history').querySelectorAll('li'));
++    expect(entries.map((entry) => entry.textContent)).toEqual([
++      'd6 = 6Ничего',
++      'd6 = 5Ничего',
++      'd6 = 4Ничего',
++      'd6 = 3Ничего',
++      'd6 = 2Предзнаменование',
++    ]);
++  });
++
++  test('кнопка очистки удаляет историю проверок', () => {
++    // #given mount: check d6=1; reaction. Затем клик: d6=2
++    restoreCrypto = mockCrypto([0, 0, 0, 1]);
++    render(<EncounterGenerator table={mausritterEncounters} />);
++
++    // #when
++    fireEvent.click(screen.getByTestId('check-roll-button'));
++    fireEvent.click(screen.getByTestId('check-history-clear'));
++
++    // #then
++    expect(screen.getByTestId('check-history').querySelectorAll('li')).toHaveLength(0);
++  });
++
+   test('result-карточки обёрнуты Skeleton и присутствуют в DOM (защита от layout-shift)', () => {
+     restoreCrypto = mockCrypto([0, 0, 0]);
+     render(<EncounterGenerator table={mausritterEncounters} />);
+diff --git a/src/components/EncounterGenerator.tsx b/src/components/EncounterGenerator.tsx
+index b83bbc6..21adbee 100644
+--- a/src/components/EncounterGenerator.tsx
++++ b/src/components/EncounterGenerator.tsx
+@@ -1,5 +1,5 @@
+ import { useStore } from '@nanostores/react';
+-import { useEffect, useMemo } from 'react';
++import { useEffect, useMemo, useState } from 'react';
+ import { ReferenceList } from '@/components/ReferenceList';
+ import { Button } from '@/components/ui/button';
+ import { Card, CardContent, CardHeader } from '@/components/ui/card';
+@@ -49,6 +49,14 @@ function CheckSection({ table, roll, onRoll }: SectionProps) {
+   const rows = table.check.rows;
+   const row = roll ? rows[roll.rowIndex] : null;
+   const loading = !row;
++  const [history, setHistory] = useState<Array<{ sum: number; label: string }>>([]);
++
++  useEffect(() => {
++    if (!roll || !row) return;
++
++    setHistory((items) => [{ sum: roll.sum, label: row.ru }, ...items].slice(0, 5));
++  }, [roll, row]);
++
+   return (
+     <section className="space-y-6">
+       <h2 className="font-display text-2xl text-text">Проверка столкновения</h2>
+@@ -83,6 +91,31 @@ function CheckSection({ table, roll, onRoll }: SectionProps) {
+         </CardContent>
+       </Card>
+ 
++      <div className="space-y-3">
++        <div className="flex items-center justify-between gap-3">
++          <h3 className="font-display text-lg text-text">Последние проверки</h3>
++          <Button
++            variant="outline"
++            size="sm"
++            onClick={() => setHistory([])}
++            data-testid="check-history-clear"
++          >
++            Очистить
++          </Button>
++        </div>
++        <ul className="space-y-2" data-testid="check-history">
++          {history.map((item, index) => (
++            <li
++              key={`${item.sum}-${item.label}-${index}`}
++              className="flex items-center justify-between rounded-lg border border-border bg-surface px-3 py-2 text-sm"
++            >
++              <span className="font-mono text-xs text-text-muted">d6 = {item.sum}</span>
++              <span className="font-semibold text-text">{item.label}</span>
++            </li>
++          ))}
++        </ul>
++      </div>
++
+       <ReferenceList
+         title="Исходы · d6"
+         testId="check-reference"
