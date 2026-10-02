@@ -1,7 +1,11 @@
 import { atom, computed } from 'nanostores';
-import { prepareArtwork, isSupportedArtwork } from '@/lib/paper-minis/artwork';
+import {
+  createCanvasArtwork,
+  isSupportedArtwork,
+  type ArtworkPreparation,
+  type PaperMinisArtwork,
+} from '@/lib/paper-minis/artwork';
 import { planBatch } from '@/lib/paper-minis/batch-plan';
-import { normalizeArtwork } from '@/lib/paper-minis/normalization';
 import { generatePDF } from '@/lib/paper-minis/pdf';
 import {
   DEFAULT_FIGURE_MARGIN_MM,
@@ -24,12 +28,20 @@ export type PaperMinisRenderer = (
   layout: PackResult,
   settings: Readonly<PaperMinisSettings>,
 ) => Promise<Uint8Array>;
+export type PaperMinisStoreDependencies = {
+  renderer?: PaperMinisRenderer;
+  artwork?: PaperMinisArtwork;
+};
+export type { ArtworkPreparation, PaperMinisArtwork };
 type Preview = { bytes: Uint8Array; revision: number };
 const storageKey = 'pmg-settings';
 const successMessage = 'PDF готов.';
 const failureMessage = 'Не удалось создать PDF. Попробуйте ещё раз или уменьшите изображения.';
 
-export function createPaperMinisStore(renderer: PaperMinisRenderer = generatePDF) {
+export function createPaperMinisStore({
+  renderer = generatePDF,
+  artwork = createCanvasArtwork(),
+}: PaperMinisStoreDependencies = {}) {
   const $rows = atom<MiniRow[]>([]);
   const $settings = atom<PaperMinisSettings>({
     pageSize: 'a4',
@@ -106,11 +118,7 @@ export function createPaperMinisStore(renderer: PaperMinisRenderer = generatePDF
     );
     const current = () => loads.get(key) === token && $rows.get().some((row) => row.id === id);
     try {
-      const original = await prepareArtwork(file);
-      if (!current()) return;
-      const result = normalization
-        ? await normalizeArtwork(original)
-        : { artwork: original, warning: undefined };
+      const result = await artwork.prepare(file, { normalize: normalization, isCurrent: current });
       if (!current()) return;
       patch(
         id,
