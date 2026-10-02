@@ -83,33 +83,6 @@ test.each([
     });
   },
 );
-test('arrows move each line by artwork pixels and update the live print height', async () => {
-  // #given
-  const dialog = await openCalibration();
-  const head = dialog.getByRole('slider', { name: 'Голова' });
-  const feet = dialog.getByRole('slider', { name: 'Ступни' });
-  // #when
-  const handled = fireEvent.keyDown(head, { key: 'ArrowDown' });
-  const onePixel = head.getAttribute('aria-valuenow');
-  fireEvent.keyDown(head, { key: 'ArrowDown', shiftKey: true });
-  fireEvent.keyDown(head, { key: 'ArrowUp' });
-  fireEvent.keyDown(feet, { key: 'ArrowUp', shiftKey: true });
-  fireEvent.keyDown(feet, { key: 'ArrowUp' });
-  fireEvent.keyDown(feet, { key: 'ArrowDown' });
-  // #then
-  expect({
-    handled,
-    onePixel,
-    positions: [head.getAttribute('aria-valuenow'), feet.getAttribute('aria-valuenow')],
-    readout: dialog.getByText(/Рост 35 мм ·/).textContent,
-  }).toEqual({
-    handled: false,
-    onePixel: '0.5',
-    positions: ['5', '95'],
-    readout: 'Рост 35 мм · напечатается 39 мм',
-  });
-});
-
 test('slider ranges announce the movement allowed by the other line', async () => {
   // #given
   const dialog = await openCalibration();
@@ -125,31 +98,20 @@ test('slider ranges announce the movement allowed by the other line', async () =
     ['10', '100'],
   ]);
 });
-test('keyboard moves keep both lines inside the artwork and at least 10 percent apart', async () => {
+
+test('arrow keys prevent scrolling while other keys pass through unchanged', async () => {
   // #given
   const dialog = await openCalibration();
   const head = dialog.getByRole('slider', { name: 'Голова' });
-  const feet = dialog.getByRole('slider', { name: 'Ступни' });
-  const positions = () => [
-    Number(head.getAttribute('aria-valuenow')),
-    Number(feet.getAttribute('aria-valuenow')),
-  ];
   // #when
-  fireEvent.keyDown(head, { key: 'ArrowUp', shiftKey: true });
-  fireEvent.keyDown(feet, { key: 'ArrowDown', shiftKey: true });
-  const edges = positions();
-  for (let i = 0; i < 25; i++) fireEvent.keyDown(head, { key: 'ArrowDown', shiftKey: true });
-  const headLimit = positions();
-  for (let i = 0; i < 25; i++) fireEvent.keyDown(head, { key: 'ArrowUp', shiftKey: true });
-  for (let i = 0; i < 25; i++) fireEvent.keyDown(feet, { key: 'ArrowUp', shiftKey: true });
-  const feetLimit = positions();
-  const unhandled = fireEvent.keyDown(feet, { key: 'Tab' });
+  const arrowHandled = fireEvent.keyDown(head, { key: 'ArrowDown' });
+  const afterArrow = head.getAttribute('aria-valuenow');
+  const tabHandled = fireEvent.keyDown(head, { key: 'Tab' });
   // #then
-  expect({ edges, headLimit, feetLimit, unhandled, afterTab: positions() }).toEqual({
-    edges: [0, 100],
-    headLimit: [90, 100],
-    feetLimit: [0, 10],
-    unhandled: true,
-    afterTab: [0, 10],
-  });
+  expect({
+    arrowHandled,
+    tabHandled,
+    afterArrow,
+    afterTab: head.getAttribute('aria-valuenow'),
+  }).toEqual({ arrowHandled: false, tabHandled: true, afterArrow: '0.5', afterTab: '0.5' });
 });

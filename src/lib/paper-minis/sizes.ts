@@ -1,4 +1,5 @@
 import type { Entry, HeightCalibration, HeightSlot, MiniSize, SizeCategory } from './types';
+import { calibrationGap } from './calibration';
 
 export type SizeDimensionsMm = { baseWidthMm: number; figureHeightMm: number };
 export type FigureFitLimit = 'height' | 'width' | 'page';
@@ -260,7 +261,6 @@ export function hasPackableDimensions(
 export const MAX_WIDTH_TO_SLOT_HEIGHT = 1.5;
 // Leave room for raised weapons without letting a short marked gap make a giant mini.
 export const MAX_CALIBRATED_HEIGHT_TO_SLOT_HEIGHT = 2;
-export const MIN_CALIBRATION_GAP = 0.1;
 
 // Convert the slot height to artwork millimetres, dividing by a valid marked gap.
 // Then apply the 2× height cap, width cap, and supplied page-height cap, in order.
@@ -277,12 +277,12 @@ export function fitFigure(
 ): FigureFitMm {
   const maxWidthMm = figureHeightMm * MAX_WIDTH_TO_SLOT_HEIGHT;
   const aspect = imgWidthPx / imgHeightPx;
-  const calibrationGap = validCalibrationGap(calibration);
+  const validGap = calibrationGap(calibration);
   const limits: FigureFitLimit[] = [];
-  const calibrationScale = calibrationGap ?? 1;
+  const calibrationScale = validGap ?? 1;
   let imageHeightMm = figureHeightMm / calibrationScale;
   let imageWidthMm = aspect * imageHeightMm;
-  if (calibrationGap && imageHeightMm > figureHeightMm * MAX_CALIBRATED_HEIGHT_TO_SLOT_HEIGHT) {
+  if (validGap && imageHeightMm > figureHeightMm * MAX_CALIBRATED_HEIGHT_TO_SLOT_HEIGHT) {
     imageHeightMm = figureHeightMm * MAX_CALIBRATED_HEIGHT_TO_SLOT_HEIGHT;
     imageWidthMm = aspect * imageHeightMm;
     limits.push('height');
@@ -290,7 +290,7 @@ export function fitFigure(
   if (imageWidthMm > maxWidthMm) {
     imageWidthMm = maxWidthMm;
     imageHeightMm = maxWidthMm / aspect;
-    if (calibrationGap) limits.push('width');
+    if (validGap) limits.push('width');
   }
   if (maxImageHeightMm != null && imageHeightMm > maxImageHeightMm) {
     imageHeightMm = maxImageHeightMm;
@@ -298,23 +298,6 @@ export function fitFigure(
     limits.push('page');
   }
   return { imageWidthMm, imageHeightMm, limits };
-}
-
-export function validCalibrationGap(
-  calibration: HeightCalibration | undefined,
-): number | undefined {
-  if (!calibration) return undefined;
-  const { head, feet } = calibration;
-  if (
-    !Number.isFinite(head) ||
-    !Number.isFinite(feet) ||
-    head < 0 ||
-    feet > 1 ||
-    head >= feet ||
-    feet - head < MIN_CALIBRATION_GAP - Number.EPSILON
-  )
-    return undefined;
-  return feet - head;
 }
 
 function validDimension(value: number | undefined): number {

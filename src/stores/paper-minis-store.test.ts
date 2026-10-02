@@ -1,9 +1,9 @@
 import { afterEach, expect, test } from 'bun:test';
-import type { PreparedArtwork } from '@/lib/paper-minis/types';
 import {
   DEFAULT_CUSTOM_HEIGHT_MM,
   DEFAULT_CUSTOM_WIDTH_MM,
 } from '@/lib/paper-minis/sizes';
+import type { HeightCalibration, PreparedArtwork } from '@/lib/paper-minis/types';
 import {
   createPaperMinisStore,
   type ArtworkPreparation,
@@ -24,6 +24,11 @@ type ControlledFile = File & {
 function preparedArtwork(width = 1, height = 1): PreparedArtwork {
   return { bytes: Uint8Array.from([1]), format: 'png', width, height };
 }
+function artworkFile(width: number, height: number, name = 'front.png') {
+  const file = new File([png], name, { type: 'image/png' }) as ControlledFile;
+  file[preparation] = Promise.resolve({ artwork: preparedArtwork(width, height) });
+  return file;
+}
 function fakeArtwork(): PaperMinisArtwork {
   return {
     prepare(file) {
@@ -33,6 +38,16 @@ function fakeArtwork(): PaperMinisArtwork {
 }
 function setup(renderer?: PaperMinisRenderer, artwork = fakeArtwork()) {
   return createPaperMinisStore({ renderer, artwork });
+}
+function calibrate(
+  store: ReturnType<typeof createPaperMinisStore>,
+  id: number,
+  calibration: HeightCalibration,
+) {
+  if (!store.openCalibration(id)) throw new Error('Expected calibration to open');
+  store.setCalibrationLine('head', calibration.head);
+  store.setCalibrationLine('feet', calibration.feet);
+  if (!store.applyCalibration()) throw new Error('Expected calibration to apply');
 }
 function deferredFile() {
   let release!: (result: ArtworkPreparation) => void;
@@ -250,6 +265,208 @@ test('download renders the layout shown by the counter and returns the renderer 
     },
     busy: false,
     message: 'PDF готов.',
+  });
+});
+
+test('a calibration session previews draft edits and cancel leaves the row unchanged', async () => {
+  // #given
+  const store = setup();
+  const id = store.addBlank()!;
+  await store.setImage(id, artworkFile(1, 100, 'tall.png'));
+  const revision = store.$revision.get();
+  // #when
+  const opened = store.openCalibration(id);
+  store.moveCalibrationLine('head', 25);
+  store.setCalibrationLine('feet', 0.75);
+  const session = store.$calibration.get();
+  store.cancelCalibration();
+  // #then
+  expect({
+    opened,
+    lines: session?.lines,
+    artworkHeight: session?.artworkHeight,
+    ranges: session?.ranges,
+    printedHeightMm: session?.printedHeightMm,
+    warning: session?.warning,
+    stored: store.$rows.get()[0].calibration,
+    session: store.$calibration.get(),
+    revision: store.$revision.get(),
+  }).toEqual({
+    opened: true,
+    lines: { head: 0.25, feet: 0.75 },
+    artworkHeight: 100,
+    ranges: { head: { min: 0, max: 0.65 }, feet: { min: 0.35, max: 1 } },
+    printedHeightMm: 70,
+    warning: undefined,
+    stored: undefined,
+    session: undefined,
+    revision,
+  });
+});
+
+test('applying and resetting calibration each publish one row revision', async () => {
+  // #given
+  const store = setup();
+  const id = store.addBlank()!;
+  await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
+  store.openCalibration(id);
+  store.setCalibrationLine('head', 0.25);
+  const revision = store.$revision.get();
+  // #when
+  const applied = store.applyCalibration();
+  const afterApply = store.$revision.get();
+  store.resetCalibration(id);
+  // #then
+  expect({
+    applied,
+    afterApply: afterApply - revision,
+    afterReset: store.$revision.get() - afterApply,
+    calibration: store.$rows.get()[0].calibration,
+    session: store.$calibration.get(),
+  }).toEqual({
+    applied: true,
+    afterApply: 1,
+    afterReset: 1,
+    calibration: undefined,
+    session: undefined,
+  });
+});
+
+test('applying untouched default lines closes the session without changing the row revision', async () => {
+  // #given
+  const store = setup();
+  const id = store.addBlank()!;
+  await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
+  store.openCalibration(id);
+  const revision = store.$revision.get();
+  // #when
+  const applied = store.applyCalibration();
+  // #then
+  expect({
+    applied,
+    session: store.$calibration.get(),
+    calibration: store.$rows.get()[0].calibration,
+    revision: store.$revision.get(),
+  }).toEqual({ applied: true, session: undefined, calibration: undefined, revision });
+});
+
+test('an untouched session previews the uncalibrated fit and an edit exposes its limit warning', async () => {
+  // #given
+  const store = setup();
+  const id = store.addBlank()!;
+  await store.setImage(id, artworkFile(150, 100));
+  store.setSize(id, 'custom');
+  store.setCustomDimensions(id, { width: '10', height: '140' });
+  store.openCalibration(id);
+  const untouched = store.$calibration.get();
+  // #when
+  store.setCalibrationLine('head', 0.5);
+  const edited = store.$calibration.get();
+  // #then
+  expect({
+    untouched: {
+      printedHeightMm: untouched?.printedHeightMm,
+      warning: untouched?.warning,
+    },
+    edited: {
+      printedHeightMm: edited?.printedHeightMm,
+      warning: edited?.warning,
+    },
+  }).toEqual({
+    untouched: { printedHeightMm: 140, warning: undefined },
+    edited: {
+      printedHeightMm: 124,
+      warning: 'Миниатюра уменьшена: лимит ширины, размер листа.',
+    },
+  });
+});
+
+test('applying rejects an invalid calibration draft', async () => {
+  // #given
+  const store = setup();
+  const id = store.addBlank()!;
+  await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
+  store.openCalibration(id);
+  const revision = store.$revision.get();
+  store.setCalibrationLine('head', Number.NaN);
+  // #when
+  const applied = store.applyCalibration();
+  // #then
+  expect({
+    applied,
+    open: store.$calibration.get() !== undefined,
+    calibration: store.$rows.get()[0].calibration,
+    revision: store.$revision.get(),
+  }).toEqual({ applied: false, open: true, calibration: undefined, revision });
+});
+
+test('an open calibration session blocks batch and single-slot file intake', async () => {
+  // #given
+  const store = setup();
+  const id = store.addBlank()!;
+  const original = new File([png], 'original.png', { type: 'image/png' });
+  await store.setImage(id, original);
+  store.openCalibration(id);
+  const revision = store.$revision.get();
+  // #when
+  store.ingest([new File([png], 'batch.png', { type: 'image/png' })]);
+  await store.setImage(id, new File([png], 'replacement.png', { type: 'image/png' }));
+  // #then
+  expect({
+    acceptsFiles: store.$acceptsFiles.get(),
+    rows: store.$rows.get().map((row) => row.image?.name),
+    revision: store.$revision.get(),
+  }).toEqual({ acceptsFiles: false, rows: ['original.png'], revision });
+});
+
+test('calibration cannot open without prepared front artwork or during PDF generation', async () => {
+  // #given
+  let finish!: (bytes: Uint8Array) => void;
+  const rendering = new Promise<Uint8Array>((resolve) => {
+    finish = resolve;
+  });
+  const store = setup(() => rendering);
+  const id = store.addBlank()!;
+  const withoutArtwork = store.openCalibration(id);
+  await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
+  const download = store.download();
+  // #when
+  const whileBusy = store.openCalibration(id);
+  const acceptsWhileBusy = store.$acceptsFiles.get();
+  finish(Uint8Array.from([1]));
+  await download;
+  // #then
+  expect({
+    withoutArtwork,
+    whileBusy,
+    session: store.$calibration.get(),
+    acceptsWhileBusy,
+    acceptsAfter: store.$acceptsFiles.get(),
+  }).toEqual({
+    withoutArtwork: false,
+    whileBusy: false,
+    session: undefined,
+    acceptsWhileBusy: false,
+    acceptsAfter: true,
+  });
+});
+
+test('a calibration session closes when its row artwork changes or its row is removed', async () => {
+  // #given
+  const store = setup();
+  const id = store.addBlank()!;
+  await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
+  await store.setImage(id, new File([png], 'back.png', { type: 'image/png' }), true);
+  store.openCalibration(id);
+  // #when
+  store.clearBack(id);
+  const afterArtworkChange = store.$calibration.get();
+  store.openCalibration(id);
+  store.remove(id);
+  // #then
+  expect({ afterArtworkChange, afterRemove: store.$calibration.get() }).toEqual({
+    afterArtworkChange: undefined,
+    afterRemove: undefined,
   });
 });
 
@@ -689,7 +906,7 @@ test('duplicating while a missing back loads keeps calibration on the copy', asy
   const store = setup();
   const id = store.addBlank()!;
   await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
-  store.setCalibration(id, { head: 0.2, feet: 0.8 });
+  calibrate(store, id, { head: 0.2, feet: 0.8 });
   const slow = deferredFile();
   const pending = store.setImage(id, slow.file, true);
   const settled = new Promise<void>((resolve) => {
@@ -739,10 +956,10 @@ test('calibration can be set, cleared, copied and kept across size changes', asy
   const id = store.addBlank()!;
   await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
   // #when
-  store.setCalibration(id, { head: 0.25, feet: 0.75 });
+  calibrate(store, id, { head: 0.25, feet: 0.75 });
   store.setSize(id, 'large');
   store.duplicate(id);
-  store.clearCalibration(id);
+  store.resetCalibration(id);
   // #then
   expect(store.$rows.get().map((row) => row.calibration)).toEqual([
     undefined,
@@ -755,7 +972,7 @@ test('adding a missing back keeps calibration', async () => {
   const store = setup();
   const id = store.addBlank()!;
   await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
-  store.setCalibration(id, { head: 0.2, feet: 0.8 });
+  calibrate(store, id, { head: 0.2, feet: 0.8 });
   // #when
   await store.setImage(id, new File([png], 'back.png', { type: 'image/png' }), true);
   // #then
@@ -770,7 +987,7 @@ test.each([false, true])(
     const id = store.addBlank()!;
     await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
     if (back) await store.setImage(id, new File([png], 'back.png', { type: 'image/png' }), true);
-    store.setCalibration(id, { head: 0.2, feet: 0.8 });
+    calibrate(store, id, { head: 0.2, feet: 0.8 });
     // #when
     await store.setImage(id, new File([png], 'replacement.png', { type: 'image/png' }), back);
     // #then
@@ -784,7 +1001,7 @@ test('normalization clears calibration on a row with loaded front and back image
   const id = store.addBlank()!;
   await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
   await store.setImage(id, new File([png], 'back.png', { type: 'image/png' }), true);
-  store.setCalibration(id, { head: 0.2, feet: 0.8 });
+  calibrate(store, id, { head: 0.2, feet: 0.8 });
   const settled = new Promise<void>((resolve) => {
     const unsubscribe = store.$preparing.listen((preparing) => {
       if (!preparing) {
@@ -813,7 +1030,7 @@ test('removing one of two sides keeps calibration', async () => {
   const id = store.addBlank()!;
   await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
   await store.setImage(id, new File([png], 'back.png', { type: 'image/png' }), true);
-  store.setCalibration(id, { head: 0.2, feet: 0.8 });
+  calibrate(store, id, { head: 0.2, feet: 0.8 });
   // #when
   store.clearBack(id);
   const row = store.$rows.get()[0];
@@ -830,7 +1047,11 @@ test('removing the only image resets calibration', async () => {
   const store = setup();
   const id = store.addBlank()!;
   await store.setImage(id, new File([png], 'back.png', { type: 'image/png' }), true);
-  store.setCalibration(id, { head: 0.2, feet: 0.8 });
+  store.$rows.set(
+    store.$rows
+      .get()
+      .map((row) => Object.assign({}, row, { calibration: { head: 0.2, feet: 0.8 } })),
+  );
   // #when
   store.clearBack(id);
   // #then
