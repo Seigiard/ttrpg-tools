@@ -30,7 +30,7 @@ Each React component test was ported with the same test count, or more, and the 
 - a dialog focus trap;
 - no horizontal scroll at 390 px.
 
-Main's own paper-minis browser suite (WebP decoding, trimming, decode failure, front-and-back PDF) also passes on both candidates. Zip export and import are covered by component tests only, as on main.
+Main's own paper-minis browser suite (WebP decoding, trimming, decode failure, front-and-back PDF) also passes on both candidates. Zip export is covered by component tests and zip import by store tests (`paper-minis-store.test.ts`); neither has a browser test, as on main.
 
 Behaviour that had to be rebuilt by hand, because Base UI has no Preact or Svelte version:
 
@@ -59,7 +59,7 @@ Initial-load JS:
 
 Lazy JS, loaded only on demand: the zip export chunk on paper minis (6.1 KB in every build). Preact adds 3.0 KB on every island page for `@preact/signals`, which `@astrojs/preact` imports dynamically. The candidates' encounters page includes the follow-up change (about 300 B); React's does not.
 
-Cold load, all bytes transferred (HTML + CSS + JS, uncompressed transfer from `vite preview`):
+Cold load, all bytes on the wire (HTML + CSS + JS as served gzip-encoded by `vite preview`; Chrome's `encodedDataLength`):
 
 | Route | React | Preact | Svelte |
 | --- | ---: | ---: | ---: |
