@@ -163,6 +163,15 @@ test('the drop zone explains the naming convention with every size id outside th
   });
 });
 
+test('the batch file picker accepts exported zip archives', () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  // #when
+  const input = screen.getByLabelText('Добавить изображения', { selector: 'input' });
+  // #then
+  expect(input.getAttribute('accept')).toBe('image/png,image/jpeg,image/webp,.zip,application/zip');
+});
+
 test('a batch row is titled by its cleaned file name, or numbered when the name is empty', async () => {
   // #given
   render(<PaperMinisGenerator />);
