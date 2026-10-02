@@ -161,7 +161,7 @@ test('every artwork file input offers every supported MIME type', async () => {
   );
   // #then
   expect(accepts).toEqual([
-    'image/png,image/jpeg,image/jpg,image/webp',
+    'image/png,image/jpeg,image/jpg,image/webp,.zip,application/zip',
     'image/png,image/jpeg,image/jpg,image/webp',
     'image/png,image/jpeg,image/jpg,image/webp',
   ]);
@@ -193,6 +193,15 @@ test('the drop zone explains the naming convention with every size id outside th
       'gargantuan — Громадный',
     ],
   });
+});
+
+test('the batch file picker accepts exported zip archives', () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  // #when
+  const input = screen.getByLabelText('Добавить изображения', { selector: 'input' });
+  // #then
+  expect(input.getAttribute('accept')).toBe('image/png,image/jpeg,image/jpg,image/webp,.zip,application/zip');
 });
 
 test('a batch row is titled by its cleaned file name, or numbered when the name is empty', async () => {
@@ -293,6 +302,86 @@ test('download action clicks an attached PDF download anchor', async () => {
   } finally {
     HTMLAnchorElement.prototype.click = originalClick;
     setSystemTime();
+  }
+});
+
+test('export action waits for ready minis and clicks an attached zip download anchor', async () => {
+  // #given
+  setSystemTime(new Date(2026, 9, 2, 10, 30));
+  const originalClick = HTMLAnchorElement.prototype.click;
+  let clicked: { attached: boolean; download: string; protocol: string } | undefined;
+  HTMLAnchorElement.prototype.click = function () {
+    clicked = {
+      attached: this.isConnected,
+      download: this.download,
+      protocol: new URL(this.href).protocol,
+    };
+  };
+  try {
+    render(<PaperMinisGenerator />);
+    const emptyDisabled = screen.getByRole<HTMLButtonElement>('button', {
+      name: 'Экспорт в ZIP',
+    }).disabled;
+    await addFront();
+    const readyDisabled = screen.getByRole<HTMLButtonElement>('button', {
+      name: 'Экспорт в ZIP',
+    }).disabled;
+    let release!: (bytes: ArrayBuffer) => void;
+    const slow = new File([png], 'slow-back.png', { type: 'image/png' });
+    slow.arrayBuffer = () =>
+      new Promise<ArrayBuffer>((resolve) => {
+        release = resolve;
+      });
+    fireEvent.change(
+      screen.getByLabelText('Оборот: отражение лицевой стороны', { selector: 'input' }),
+      { target: { files: [slow] } },
+    );
+    const loadingDisabled = screen.getByRole<HTMLButtonElement>('button', {
+      name: 'Экспорт в ZIP',
+    }).disabled;
+    await act(async () => {
+      release(Uint8Array.from(png).buffer);
+    });
+
+    // #when
+    fireEvent.click(screen.getByRole('button', { name: 'Экспорт в ZIP' }));
+
+    // #then
+    await waitFor(() =>
+      expect({
+        disabled: [emptyDisabled, readyDisabled, loadingDisabled],
+        clicked,
+      }).toEqual({
+        disabled: [true, false, true],
+        clicked: {
+          attached: true,
+          download: 'paper-minis-2026-10-02.zip',
+          protocol: 'blob:',
+        },
+      }),
+    );
+  } finally {
+    HTMLAnchorElement.prototype.click = originalClick;
+    setSystemTime();
+  }
+});
+
+test('export reports a browser object-URL failure', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  const objectUrl = spyOn(URL, 'createObjectURL').mockImplementation(() => {
+    throw new Error('Object URL unavailable');
+  });
+  try {
+    // #when
+    fireEvent.click(screen.getByRole('button', { name: 'Экспорт в ZIP' }));
+    // #then
+    expect((await screen.findByText('Не удалось создать архив. Попробуйте ещё раз.')).textContent).toBe(
+      'Не удалось создать архив. Попробуйте ещё раз.',
+    );
+  } finally {
+    objectUrl.mockRestore();
   }
 });
 

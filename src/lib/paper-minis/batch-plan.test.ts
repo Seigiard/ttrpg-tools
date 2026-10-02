@@ -169,6 +169,216 @@ const sizedRows = (...fileNames: string[]) =>
     row.heightSlot,
   ]);
 
+const detailedRows = (...fileNames: string[]) =>
+  planBatch(fileNames.map(file)).map((row) => ({
+    name: row.name,
+    front: row.front.name,
+    back: row.back?.name,
+    heightSlot: row.heightSlot,
+    customWidthMm: row.customWidthMm,
+    customHeightMm: row.customHeightMm,
+    count: row.count,
+  }));
+
+test('x1 is ignored and leaves the default count implicit', () => {
+  // #given
+  const fileName = 'goblin-small-front-x1.png';
+  // #when
+  const plannedRows = detailedRows(fileName);
+  // #then
+  expect(plannedRows).toEqual([
+    {
+      name: 'Goblin',
+      front: fileName,
+      back: undefined,
+      heightSlot: 'small',
+      customWidthMm: undefined,
+      customHeightMm: undefined,
+      count: undefined,
+    },
+  ]);
+});
+
+test('x0 is consumed as a broken count marker', () => {
+  // #given
+  const fileName = 'goblin-small-front-x0.png';
+  // #when
+  const plannedRows = detailedRows(fileName);
+  // #then
+  expect(plannedRows).toEqual([
+    {
+      name: 'Goblin',
+      front: fileName,
+      back: undefined,
+      heightSlot: 'small',
+      customWidthMm: undefined,
+      customHeightMm: undefined,
+      count: undefined,
+    },
+  ]);
+});
+
+test('junk after x stays in the name', () => {
+  // #given
+  const fileName = 'goblin-small-front-xmany.png';
+  // #when
+  const plannedRows = detailedRows(fileName);
+  // #then
+  expect(plannedRows).toEqual([
+    {
+      name: 'Goblin small front xmany',
+      front: fileName,
+      back: undefined,
+      heightSlot: undefined,
+      customWidthMm: undefined,
+      customHeightMm: undefined,
+      count: undefined,
+    },
+  ]);
+});
+
+test('a valid count marker plans the row count', () => {
+  // #given
+  const fileName = 'goblin-small-front-x4.png';
+  // #when
+  const plannedRows = detailedRows(fileName);
+  // #then
+  expect(plannedRows).toEqual([
+    {
+      name: 'Goblin',
+      front: fileName,
+      back: undefined,
+      heightSlot: 'small',
+      customWidthMm: undefined,
+      customHeightMm: undefined,
+      count: 4,
+    },
+  ]);
+});
+
+const xPrefixedNameCases = [
+  ['xorn-small-front.png', 'Xorn', 'small'],
+  ['goblin-xbow-front.png', 'Goblin xbow', undefined],
+] as const;
+
+test.each(xPrefixedNameCases)('%s keeps an x-prefixed name token', (fileName, name, heightSlot) => {
+  // #given
+  const files = [fileName];
+  // #when
+  const plannedRows = detailedRows(...files);
+  // #then
+  expect(plannedRows).toEqual([
+    {
+      name,
+      front: fileName,
+      back: undefined,
+      heightSlot,
+      customWidthMm: undefined,
+      customHeightMm: undefined,
+      count: undefined,
+    },
+  ]);
+});
+
+test('custom-WxH plans a custom size with dimensions', () => {
+  // #given
+  const fileName = 'goblin-custom-30x45-front.png';
+  // #when
+  const plannedRows = detailedRows(fileName);
+  // #then
+  expect(plannedRows).toEqual([
+    {
+      name: 'Goblin',
+      front: fileName,
+      back: undefined,
+      heightSlot: 'custom',
+      customWidthMm: 30,
+      customHeightMm: 45,
+      count: undefined,
+    },
+  ]);
+});
+
+test('a custom marker with a non-positive dimension falls back to the default size', () => {
+  // #given
+  const fileName = 'goblin-custom-0x45-front.png';
+  // #when
+  const plannedRows = detailedRows(fileName);
+  // #then
+  expect(plannedRows).toEqual([
+    {
+      name: 'Goblin',
+      front: fileName,
+      back: undefined,
+      heightSlot: undefined,
+      customWidthMm: undefined,
+      customHeightMm: undefined,
+      count: undefined,
+    },
+  ]);
+});
+
+test('a name ending in custom without dimensions keeps custom in the name', () => {
+  // #given
+  const fileName = 'goblin-custom-front.png';
+  // #when
+  const plannedRows = detailedRows(fileName);
+  // #then
+  expect(plannedRows).toEqual([
+    {
+      name: 'Goblin custom',
+      front: fileName,
+      back: undefined,
+      heightSlot: undefined,
+      customWidthMm: undefined,
+      customHeightMm: undefined,
+      count: undefined,
+    },
+  ]);
+});
+
+test.each([
+  ['goblin-custom-axe.png', 'Goblin custom axe'],
+  ['custom-box-front.png', 'Custom box'],
+  ['knight-custom-max-front.png', 'Knight custom max'],
+])('%s keeps custom name tokens when dimensions are not numeric WxH', (fileName, name) => {
+  // #given
+  const files = [fileName];
+  // #when
+  const plannedRows = detailedRows(...files);
+  // #then
+  expect(plannedRows).toEqual([
+    {
+      name,
+      front: fileName,
+      back: undefined,
+      heightSlot: undefined,
+      customWidthMm: undefined,
+      customHeightMm: undefined,
+      count: undefined,
+    },
+  ]);
+});
+
+test('front and back with different counts still pair', () => {
+  // #given
+  const fileNames = ['goblin-small-front-x2.png', 'goblin-small-back-x5.png'];
+  // #when
+  const plannedRows = detailedRows(...fileNames);
+  // #then
+  expect(plannedRows).toEqual([
+    {
+      name: 'Goblin',
+      front: 'goblin-small-front-x2.png',
+      back: 'goblin-small-back-x5.png',
+      heightSlot: 'small',
+      customWidthMm: undefined,
+      customHeightMm: undefined,
+      count: 2,
+    },
+  ]);
+});
+
 test('a side and a size pair the same way in both files', () => {
   expect(sizedRows('ogre-large-tall-front.png', 'ogre-large-tall-back.png')).toEqual([
     ['Ogre', 'ogre-large-tall-front.png', 'ogre-large-tall-back.png', 'large-tall'],
@@ -239,4 +449,46 @@ test('a back is never attached to a front of another size', () => {
     return frontSize !== undefined && backSize !== undefined && frontSize !== backSize;
   });
   expect(clashes).toEqual([]);
+});
+
+test('calibration markers are read from the front side', () => {
+  const [row] = planBatch([file('goblin-medium-front-h200-f800.png')]);
+
+  expect(row.calibration).toEqual({ head: 0.2, feet: 0.8 });
+});
+
+test('calibration markers accept the bottom edge as f1000', () => {
+  const [row] = planBatch([file('goblin-medium-front-h200-f1000.png')]);
+
+  expect(row.calibration).toEqual({ head: 0.2, feet: 1 });
+});
+
+test('front calibration wins over back calibration', () => {
+  const [row] = planBatch([
+    file('goblin-medium-front-h200-f800.png'),
+    file('goblin-medium-back-h300-f900.png'),
+  ]);
+
+  expect(row.calibration).toEqual({ head: 0.2, feet: 0.8 });
+});
+
+test('back-only calibration is used when the front has none', () => {
+  const [row] = planBatch([file('goblin-medium-front.png'), file('goblin-medium-back-h300-f900.png')]);
+
+  expect(row.calibration).toEqual({ head: 0.3, feet: 0.9 });
+});
+
+test.each(['h300-f300', 'h800-f200', 'h900-f999', 'h400-f450'])(
+  '%s is ignored as an invalid calibration marker',
+  (marker) => {
+    const [row] = planBatch([file(`goblin-medium-front-${marker}.png`)]);
+
+    expect([row.name, row.calibration]).toEqual(['Goblin', undefined]);
+  },
+);
+
+test('different calibration markers do not stop front and back pairing', () => {
+  expect(rows('goblin-medium-front-h200-f800.png', 'goblin-medium-back-h300-f900.png')).toEqual([
+    ['Goblin', 'goblin-medium-front-h200-f800.png', 'goblin-medium-back-h300-f900.png'],
+  ]);
 });
