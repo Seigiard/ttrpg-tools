@@ -322,6 +322,126 @@ test('direct and loaded settings reject the same invalid fields', () => {
   });
 });
 
+test('a printer measurement resolves to the scale used for layout and PDF generation', async () => {
+  // #given
+  let rendered: Parameters<PaperMinisRenderer> | undefined;
+  const store = setup(async (...input) => {
+    rendered = input;
+    return Uint8Array.from([1]);
+  });
+  const id = store.addBlank()!;
+  await store.setImage(id, artworkFile(10, 20));
+  const defaultScale = store.$layout.get();
+
+  // #when
+  store.setPrinterMeasurement('91');
+  const measuredScale = store.$layout.get();
+  await store.download();
+
+  // #then
+  expect({
+    canGenerate: store.$canGenerate.get(),
+    measurement: store.$settings.get().printerMeasurementMm,
+    input: store.$inputs.get().printerMeasurement,
+    layoutChanged: measuredScale !== defaultScale,
+    renderedScale: rendered?.[2].printerScale,
+  }).toEqual({
+    canGenerate: true,
+    measurement: 91,
+    input: { text: '91', valid: true },
+    layoutChanged: true,
+    renderedScale: 0.91,
+  });
+});
+
+test.each(['79.9', '100.1', 'not a number'])(
+  'an invalid printer measurement %j keeps the previous scale',
+  (measurement) => {
+    // #given
+    const store = setup();
+    store.setPrinterMeasurement('95');
+
+    // #when
+    store.setPrinterMeasurement(measurement);
+
+    // #then
+    expect({
+      measurement: store.$settings.get().printerMeasurementMm,
+      input: store.$inputs.get().printerMeasurement,
+      valid: store.$inputsValid.get(),
+    }).toEqual({
+      measurement: 95,
+      input: { text: measurement, valid: false },
+      valid: false,
+    });
+  },
+);
+
+test('clearing a printer measurement restores the default scale', async () => {
+  // #given
+  let rendered: Parameters<PaperMinisRenderer> | undefined;
+  const store = setup(async (...input) => {
+    rendered = input;
+    return Uint8Array.from([1]);
+  });
+  const id = store.addBlank()!;
+  await store.setImage(id, artworkFile(10, 20));
+  store.setPrinterMeasurement('95');
+
+  // #when
+  store.setPrinterMeasurement('');
+  await store.download();
+
+  // #then
+  expect({
+    measurement: store.$settings.get().printerMeasurementMm,
+    input: store.$inputs.get().printerMeasurement,
+    renderedScale: rendered?.[2].printerScale,
+  }).toEqual({
+    measurement: undefined,
+    input: { text: '', valid: true },
+    renderedScale: 0.91,
+  });
+});
+
+test('a stored valid printer measurement is restored and an invalid one falls back to default', () => {
+  // #given
+  const saved = setup();
+  saved.setPrinterMeasurement('91');
+  const valid = setup();
+  valid.loadSettings();
+  localStorage.setItem('pmg-settings', JSON.stringify({ printerMeasurementMm: 101 }));
+  const invalid = setup();
+
+  // #when
+  invalid.loadSettings();
+
+  // #then
+  expect({
+    valid: valid.$settings.get().printerMeasurementMm,
+    invalid: invalid.$settings.get().printerMeasurementMm,
+  }).toEqual({ valid: 91, invalid: undefined });
+});
+
+test('a printer measurement remains available when persistent storage is unavailable', () => {
+  // #given
+  const setItem = localStorage.setItem;
+  localStorage.setItem = () => {
+    throw new Error('Storage unavailable');
+  };
+  const store = setup();
+
+  try {
+    // #when
+    store.setPrinterMeasurement('92');
+
+    // #then
+    expect(store.$settings.get().printerMeasurementMm).toBe(92);
+  } finally {
+    localStorage.setItem = setItem;
+  }
+});
+
 test('download renders the layout shown by the counter and returns the renderer bytes', async () => {
   // #given
   const bytes = Uint8Array.from([11, 22, 33]);
@@ -352,7 +472,7 @@ test('download renders the layout shown by the counter and returns the renderer 
       pageSize: 'a4',
       marginMm: 2,
       numberDuplicates: false,
-      normalization: true,
+      printerScale: 0.91,
     },
     busy: false,
     message: 'PDF готов.',
@@ -1295,6 +1415,7 @@ test('generation keeps every draft commit locked until rendering settles', async
   await download;
   // #then
   expect(during).toEqual({
+    printerMeasurement: { text: '', valid: true },
     rows: {
       [id]: {
         count: { text: '', valid: false },

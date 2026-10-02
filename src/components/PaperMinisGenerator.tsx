@@ -532,6 +532,42 @@ export default function PaperMinisGenerator() {
                   onBlur={store.commitMargin}
                 />
               </label>
+              <div className="space-y-2 border-y border-border py-3">
+                <div>
+                  <h3 className="text-base font-medium text-text">Масштаб принтера</h3>
+                  <p className="mt-1 text-sm leading-relaxed text-text-muted">
+                    {settings.printerMeasurementMm === undefined
+                      ? 'Принтер не измерен: размеры приблизительные.'
+                      : `Линейка измерена: ${settings.printerMeasurementMm} мм.`}
+                  </p>
+                </div>
+                <label className="block text-sm">
+                  Длина линейки, мм
+                  <input
+                    className={field}
+                    type="number"
+                    min="80"
+                    max="100"
+                    step="any"
+                    value={inputs.printerMeasurement.text}
+                    aria-invalid={!inputs.printerMeasurement.valid}
+                    onChange={(event) => store.setPrinterMeasurement(event.target.value)}
+                    onBlur={store.commitPrinterMeasurement}
+                  />
+                </label>
+                {settings.printerMeasurementMm !== undefined && (
+                  <Button
+                    variant="ghost"
+                    className="min-h-11 w-full"
+                    onClick={() => store.setPrinterMeasurement('')}
+                  >
+                    Сбросить измерение
+                  </Button>
+                )}
+                <p className="text-sm leading-relaxed text-text-muted">
+                  Измерение привязано к принтеру, настройкам печати и размеру бумаги.
+                </p>
+              </div>
               {rows.length > 0 && (
                 <label className="block text-sm">
                   Высота всех фигурок
@@ -841,8 +877,8 @@ export default function PaperMinisGenerator() {
             только настройки печати.
           </p>
           <p>
-            <b>Печатайте в масштабе 100%</b>, без подгонки под страницу. Контрольная линейка на
-            листе должна быть ровно 100 мм.
+            <b>Печатайте с подгонкой под страницу.</b> Контрольная линейка на листе должна быть
+            ровно 100 мм.
           </p>
           <p>
             <b>Вырежьте развёртку</b> по внешним меткам, согните пополам между изображениями,

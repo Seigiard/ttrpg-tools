@@ -22,7 +22,9 @@ import {
 import { canvasToPngBytes } from '@/lib/paper-minis/canvas';
 import {
   DEFAULT_FIGURE_MARGIN_MM,
+  DEFAULT_PRINTER_SCALE,
   entryStatusWarning,
+  type PackOptions,
   type PageSizeKey,
 } from '@/lib/paper-minis/geometry';
 import { generatePDF } from '@/lib/paper-minis/pdf';
@@ -44,12 +46,14 @@ export type MiniRow = Entry & { id: number };
 export type PaperMinisSettings = {
   pageSize: PageSizeKey;
   marginMm: number;
+  printerMeasurementMm?: number;
   numberDuplicates: boolean;
   normalization: boolean;
 };
 export type NumericInput = { text: string; valid: boolean };
 export type PaperMinisInputs = {
   margin: NumericInput;
+  printerMeasurement: NumericInput;
   rows: Record<
     number,
     {
@@ -62,7 +66,7 @@ export type PaperMinisInputs = {
 export type PaperMinisRenderer = (
   rows: readonly MiniRow[],
   layout: PackResult,
-  settings: Readonly<PaperMinisSettings>,
+  settings: Readonly<PackOptions>,
 ) => Promise<Uint8Array>;
 export type PaperMinisStoreDependencies = {
   renderer?: PaperMinisRenderer;
@@ -84,6 +88,7 @@ const storageKey = 'pmg-settings';
 const successMessage = 'PDF готов.';
 const failureMessage = 'Не удалось создать PDF. Попробуйте ещё раз или уменьшите изображения.';
 const marginDraftError = 'Поля должны быть числом от 0 мм.';
+const printerMeasurementDraftError = 'Длина линейки должна быть числом от 80 до 100 мм.';
 const rowDraftError = 'Количество должно быть целым числом от 1, размеры — больше 0 мм.';
 
 function inputsForRow(row: Pick<Entry, 'count' | 'customWidthMm' | 'customHeightMm'>) {
@@ -102,6 +107,25 @@ function inputsForRow(row: Pick<Entry, 'count' | 'customWidthMm' | 'customHeight
 
 function marginInput(settings: Readonly<PaperMinisSettings>) {
   return { text: String(settings.marginMm), valid: true };
+}
+function printerMeasurementInput(settings: Readonly<PaperMinisSettings>) {
+  return {
+    text:
+      settings.printerMeasurementMm === undefined ? '' : String(settings.printerMeasurementMm),
+    valid: true,
+  };
+}
+
+function packOptions(settings: Readonly<PaperMinisSettings>): PackOptions {
+  return {
+    pageSize: settings.pageSize,
+    marginMm: settings.marginMm,
+    numberDuplicates: settings.numberDuplicates,
+    printerScale:
+      settings.printerMeasurementMm === undefined
+        ? DEFAULT_PRINTER_SCALE
+        : settings.printerMeasurementMm / 100,
+  };
 }
 const exportSuccessMessage = 'Архив готов.';
 const exportFailureMessage = 'Не удалось создать архив. Попробуйте ещё раз.';
@@ -216,10 +240,12 @@ export function createPaperMinisStore({
   const $settings = atom(initialSettings);
   const $inputs = atom<PaperMinisInputs>({
     margin: marginInput(initialSettings),
+    printerMeasurement: printerMeasurementInput(initialSettings),
     rows: {},
   });
   const $draftError = computed([$inputs, $rows], (inputs, rows) => {
     if (!inputs.margin.valid) return marginDraftError;
+    if (!inputs.printerMeasurement.valid) return printerMeasurementDraftError;
     const valid = rows.every((row) => {
       const rowInputs = inputs.rows[row.id];
       return (
@@ -238,7 +264,7 @@ export function createPaperMinisStore({
   const $preview = atom<Preview | undefined>(undefined);
   const $calibration = atom<CalibrationSession | undefined>(undefined);
   const $layout = computed([$rows, $settings], (rows, currentSettings) =>
-    packEntries(rows, currentSettings),
+    packEntries(rows, packOptions(currentSettings)),
   );
   const $canGenerate = computed(
     [$busy, $preparing, $layout, $inputsValid],
@@ -670,6 +696,13 @@ export function createPaperMinisStore({
       fields.marginMm >= 0
     )
       next.marginMm = fields.marginMm;
+    if (
+      typeof fields.printerMeasurementMm === 'number' &&
+      Number.isFinite(fields.printerMeasurementMm) &&
+      fields.printerMeasurementMm >= 80 &&
+      fields.printerMeasurementMm <= 100
+    )
+      next.printerMeasurementMm = fields.printerMeasurementMm;
     if (typeof fields.numberDuplicates === 'boolean')
       next.numberDuplicates = fields.numberDuplicates;
     if (typeof fields.normalization === 'boolean') next.normalization = fields.normalization;
@@ -695,11 +728,17 @@ export function createPaperMinisStore({
     if ($busy.get()) return;
     const previous = $settings.get();
     const next = validatedSettings(fields, previous);
+    if ('printerMeasurementMm' in fields && fields.printerMeasurementMm === undefined)
+      delete next.printerMeasurementMm;
     $settings.set(next);
-    if (next.marginMm !== previous.marginMm)
+    if (
+      next.marginMm !== previous.marginMm ||
+      next.printerMeasurementMm !== previous.printerMeasurementMm
+    )
       $inputs.set({
         ...$inputs.get(),
         margin: marginInput(next),
+        printerMeasurement: printerMeasurementInput(next),
       });
     changed();
     try {
@@ -724,6 +763,33 @@ export function createPaperMinisStore({
       margin: marginInput($settings.get()),
     });
   }
+  function setPrinterMeasurement(text: string) {
+    if ($busy.get()) return;
+    if (text.trim() === '') {
+      $inputs.set({
+        ...$inputs.get(),
+        printerMeasurement: { text, valid: true },
+      });
+      if ($settings.get().printerMeasurementMm !== undefined)
+        settings({ printerMeasurementMm: undefined });
+      return;
+    }
+    const { input, value } = parseNumericInput(
+      text,
+      (candidate) => candidate >= 80 && candidate <= 100,
+    );
+    $inputs.set({ ...$inputs.get(), printerMeasurement: input });
+    if (value === undefined || value === $settings.get().printerMeasurementMm) return;
+    settings({ printerMeasurementMm: value });
+    $inputs.set({ ...$inputs.get(), printerMeasurement: input });
+  }
+  function commitPrinterMeasurement() {
+    if ($busy.get() || $inputs.get().printerMeasurement.valid) return;
+    $inputs.set({
+      ...$inputs.get(),
+      printerMeasurement: printerMeasurementInput($settings.get()),
+    });
+  }
   function loadSettings() {
     if ($busy.get()) return;
     try {
@@ -734,6 +800,7 @@ export function createPaperMinisStore({
       $inputs.set({
         ...$inputs.get(),
         margin: marginInput(next),
+        printerMeasurement: printerMeasurementInput(next),
       });
       if (previous.normalization !== next.normalization) applyNormalizationChange();
     } catch {
@@ -746,7 +813,7 @@ export function createPaperMinisStore({
     $busy.set(true);
     $message.set('');
     const rows = $rows.get().map((row) => Object.assign({}, row));
-    const snapshotSettings = { ...$settings.get() };
+    const snapshotSettings = packOptions($settings.get());
     const revision = $revision.get();
     try {
       const bytes = await renderer(rows, layout, snapshotSettings);
@@ -826,6 +893,8 @@ export function createPaperMinisStore({
     settings,
     setMargin,
     commitMargin,
+    setPrinterMeasurement,
+    commitPrinterMeasurement,
     loadSettings,
     openCalibration,
     setCalibrationLine: updateCalibration,
