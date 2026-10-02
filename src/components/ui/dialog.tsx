@@ -80,8 +80,13 @@ function DialogContent({ className, finalFocus, children, ...props }: DialogCont
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-black/60" aria-hidden="true" onClick={() => setOpen(false)} />
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-50 bg-black/60" aria-hidden="true" />
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        onClick={(event) => {
+          if (event.target === event.currentTarget) setOpen(false);
+        }}
+      >
         <div
           ref={popupRef}
           role="dialog"

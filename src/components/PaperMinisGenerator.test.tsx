@@ -106,6 +106,14 @@ function changeValue(element: HTMLElement, value: string) {
   fireEvent.change(element);
 }
 
+async function chooseBatchFiles(files: File[]) {
+  const input = screen.getByLabelText('Добавить изображения', { selector: 'input' });
+  await act(async () => {
+    fireEvent.input(input, { target: { files } });
+    fireEvent.change(input, { target: { files: [] } });
+  });
+}
+
 test('blur restores an invalid draft and both PDF actions become available again', async () => {
   // #given
   renderGenerator();
@@ -267,6 +275,26 @@ test('the batch file picker accepts exported zip archives', () => {
   const input = screen.getByLabelText('Добавить изображения', { selector: 'input' });
   // #then
   expect(input.getAttribute('accept')).toBe('image/png,image/jpeg,image/jpg,image/webp,.zip,application/zip');
+});
+
+test('the batch file picker keeps the skipped-file warning after native input and change events', async () => {
+  // #given
+  renderGenerator();
+  // #when
+  await chooseBatchFiles([
+    new File([png], 'figure.png', { type: 'image/png' }),
+    new File(['text'], 'notes.txt', { type: 'text/plain' }),
+  ]);
+  await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(1));
+  await waitForPreparation();
+  // #then
+  expect({
+    rows: screen.getAllByRole('article').length,
+    warning: screen.queryByText('Некоторые файлы пропущены: поддерживаются PNG, JPG и WebP.')?.textContent ?? null,
+  }).toEqual({
+    rows: 1,
+    warning: 'Некоторые файлы пропущены: поддерживаются PNG, JPG и WebP.',
+  });
 });
 
 test('a batch row is titled by its cleaned file name, or numbered when the name is empty', async () => {
@@ -729,7 +757,11 @@ test('calibration applies a visible-image fraction inside vertical letterboxing'
     value: () => ({ left: 0, top: 150, width: 400, height: 100, right: 400, bottom: 250 }),
   });
   // #when
-  currentStore.setCalibrationLine('head', 0.25);
+  fireEvent.pointerDown(dialog.getByRole('slider', { name: 'Голова' }), {
+    button: 0,
+    pointerId: 1,
+    clientY: 175,
+  });
   await waitFor(() => expect(dialog.getByRole('slider', { name: 'Голова' }).getAttribute('aria-valuenow')).toBe('25'));
   fireEvent.click(dialog.getByRole('button', { name: 'Применить' }));
   await openCalibrationDialog();
@@ -796,10 +828,10 @@ test.each(['pointerCancel', 'lostPointerCapture'] as const)(
       value: () => ({ top: 0, height: 100 }),
       configurable: true,
     });
-    currentStore.setCalibrationLine('head', 0.25);
+    fireEvent.pointerDown(head, { button: 0, pointerId: 1, clientY: 25 });
     await waitFor(() => expect(head.getAttribute('aria-valuenow')).toBe('25'));
     // #when
-    fireEvent[end](head, { pointerId: 1 });
+    fireEvent[end](area, { pointerId: 1 });
     fireEvent.pointerMove(area, { pointerId: 1, clientY: 50 });
     // #then
     expect(head.getAttribute('aria-valuenow')).toBe('25');

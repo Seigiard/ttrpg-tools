@@ -52,4 +52,26 @@ describe('Preact Dialog', () => {
     });
     expect(document.activeElement).toBe(launcher.current);
   });
+
+  test('clicking outside the popup closes the dialog', async () => {
+    // #given a dialog with a visible outside-click target
+    render(
+      <Dialog defaultOpen>
+        <DialogContent>
+          <DialogTitle>Задать рост</DialogTitle>
+          <button type="button">Применить</button>
+        </DialogContent>
+      </Dialog>,
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Задать рост' });
+    const outside = dialog.parentElement;
+
+    // #when the user clicks outside the popup
+    fireEvent.click(outside!);
+
+    // #then the dialog is removed
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Задать рост' })).toBeNull();
+    });
+  });
 });

@@ -405,7 +405,9 @@ export default function PaperMinisGenerator({ store: providedStore }: { store?: 
     store.settings({ normalization: (event.target as HTMLInputElement).checked });
   const handleBatchInput = (event: JSX.TargetedEvent<HTMLInputElement, Event>) => {
     const target = event.target as HTMLInputElement;
-    store.ingest(Array.from(target.files ?? []));
+    const selected = Array.from(target.files ?? []);
+    if (selected.length === 0) return;
+    store.ingest(selected);
     target.value = '';
   };
 
