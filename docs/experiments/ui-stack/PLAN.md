@@ -72,9 +72,9 @@ Raw results go to `docs/experiments/ui-stack/results/<react|preact|svelte>/`. Re
 Review base: 48c587c626dba17990da59ea1ccb475054d36c35
 
 - [x] H1 · Plan, inventory, parity checklist and follow-up spec. Done: this file committed.
-- [ ] H2 · Playwright parity suite in `e2e/` against the production preview. Done: green on React.
-- [ ] H3 · Measurement scripts and React baseline results. Done: `results/react/` holds raw payload, network, timing data and screenshots.
-- [ ] H4 · React follow-up change on `experiment/ui-stack-react-followup`. Done: diff saved to `results/react/followup.diff`.
+- [x] H2 · Playwright parity suite in `e2e/` against the production preview. Done: green on React.
+- [x] H3 · Measurement scripts and React baseline results. Done: `results/react/` holds raw payload, network, timing data and screenshots.
+- [x] H4 · React follow-up change on `experiment/ui-stack-react-followup`. Done: diff saved to `results/react/followup.diff`.
 - [ ] P1 · Preact toolchain beside React and the Base UI decision. Done: all CI checks green.
 - [ ] P2 · Preact primitives, icons and `ReferenceList` with their tests. Done: CI checks green.
 - [ ] P3 · Preact weather, locations, encounters and prices with their tests. Done: CI checks green.
