@@ -278,9 +278,13 @@ test('export action waits for ready minis and clicks an attached zip download an
   };
   try {
     render(<PaperMinisGenerator />);
-    const emptyDisabled = screen.getByRole<HTMLButtonElement>('button', { name: 'Export' }).disabled;
+    const emptyDisabled = screen.getByRole<HTMLButtonElement>('button', {
+      name: 'Экспорт в ZIP',
+    }).disabled;
     await addFront();
-    const readyDisabled = screen.getByRole<HTMLButtonElement>('button', { name: 'Export' }).disabled;
+    const readyDisabled = screen.getByRole<HTMLButtonElement>('button', {
+      name: 'Экспорт в ZIP',
+    }).disabled;
     let release!: (bytes: ArrayBuffer) => void;
     const slow = new File([png], 'slow-back.png', { type: 'image/png' });
     slow.arrayBuffer = () =>
@@ -291,13 +295,15 @@ test('export action waits for ready minis and clicks an attached zip download an
       screen.getByLabelText('Оборот: отражение лицевой стороны', { selector: 'input' }),
       { target: { files: [slow] } },
     );
-    const loadingDisabled = screen.getByRole<HTMLButtonElement>('button', { name: 'Export' }).disabled;
+    const loadingDisabled = screen.getByRole<HTMLButtonElement>('button', {
+      name: 'Экспорт в ZIP',
+    }).disabled;
     await act(async () => {
       release(Uint8Array.from(png).buffer);
     });
 
     // #when
-    fireEvent.click(screen.getByRole('button', { name: 'Export' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Экспорт в ZIP' }));
 
     // #then
     await waitFor(() =>
@@ -316,6 +322,25 @@ test('export action waits for ready minis and clicks an attached zip download an
   } finally {
     HTMLAnchorElement.prototype.click = originalClick;
     setSystemTime();
+  }
+});
+
+test('export reports a browser object-URL failure', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  const objectUrl = spyOn(URL, 'createObjectURL').mockImplementation(() => {
+    throw new Error('Object URL unavailable');
+  });
+  try {
+    // #when
+    fireEvent.click(screen.getByRole('button', { name: 'Экспорт в ZIP' }));
+    // #then
+    expect((await screen.findByText('Не удалось создать архив. Попробуйте ещё раз.')).textContent).toBe(
+      'Не удалось создать архив. Попробуйте ещё раз.',
+    );
+  } finally {
+    objectUrl.mockRestore();
   }
 });
 

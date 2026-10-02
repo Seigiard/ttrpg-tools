@@ -277,7 +277,6 @@ test('export zip restores names, sizes and sides through batch ingest', async ()
   await store.setImage(goblin, artworkFile(11, 20, 'goblin-back.png'), true);
   const empty = store.addBlank({ name: '', heightSlot: 'large' })!;
   await store.setImage(empty, artworkFile(12, 20, 'empty.png'));
-  await store.setImage(empty, artworkFile(12, 20, 'empty-back.png'), true);
   const duplicate = store.addBlank({ name: 'Goblin', heightSlot: 'small' })!;
   await store.setImage(duplicate, artworkFile(13, 20, 'duplicate.png'));
   await store.setImage(duplicate, artworkFile(13, 20, 'duplicate-back.png'), true);
@@ -295,6 +294,7 @@ test('export zip restores names, sizes and sides through batch ingest', async ()
   // #then
   expect({
     entryNames: Object.keys(entries).toSorted(),
+    message: store.$message.get(),
     rows: restored.$rows.get().map((row) => ({
       name: row.name,
       heightSlot: row.heightSlot,
@@ -307,9 +307,9 @@ test('export zip restores names, sizes and sides through batch ingest', async ()
       'Goblin-2-small-front.png',
       'Goblin-small-back.png',
       'Goblin-small-front.png',
-      'mini-2-large-back.png',
       'mini-2-large-front.png',
     ],
+    message: 'Архив готов.',
     rows: [
       {
         name: 'Goblin',
@@ -321,7 +321,7 @@ test('export zip restores names, sizes and sides through batch ingest', async ()
         name: 'Mini 2',
         heightSlot: 'large',
         front: 'mini-2-large-front.png',
-        back: 'mini-2-large-back.png',
+        back: undefined,
       },
       {
         name: 'Goblin 2',
@@ -331,6 +331,22 @@ test('export zip restores names, sizes and sides through batch ingest', async ()
       },
     ],
   });
+});
+
+test('export zip includes oversized artwork and skips rows without artwork', async () => {
+  // #given
+  const store = setup();
+  const oversized = store.addBlank({ name: 'Castle', heightSlot: 'custom' })!;
+  store.setCustomDimensions(oversized, { width: '10000', height: '10000' });
+  await store.setImage(oversized, artworkFile(14, 20, 'castle.png'));
+  store.addBlank({ name: 'Missing', heightSlot: 'huge' });
+
+  // #when
+  const bytes = await store.exportZip();
+  const entries = bytes ? Object.keys(unzipSync(bytes)).toSorted() : [];
+
+  // #then
+  expect(entries).toEqual(['Castle-custom-10000x10000-front.png']);
 });
 
 test('export zip does nothing while locked, preparing, or without a ready mini', async () => {

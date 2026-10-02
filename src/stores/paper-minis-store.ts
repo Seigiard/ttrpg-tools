@@ -82,8 +82,8 @@ export type CalibrationSession = {
 const storageKey = 'pmg-settings';
 const successMessage = 'PDF готов.';
 const failureMessage = 'Не удалось создать PDF. Попробуйте ещё раз или уменьшите изображения.';
-const exportSuccessMessage = 'Export готов.';
-const exportFailureMessage = 'Не удалось создать Export. Попробуйте ещё раз.';
+const exportSuccessMessage = 'Архив готов.';
+export const exportFailureMessage = 'Не удалось создать архив. Попробуйте ещё раз.';
 
 function parseNumericInput(text: string, accepts: (value: number) => boolean) {
   if (text.trim() === '') return { input: { text, valid: false } };
@@ -122,25 +122,6 @@ async function artworkAsPng(artwork: PreparedArtwork): Promise<Uint8Array> {
     canvas.height = bitmap.height;
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Could not get 2D canvas context');
-    ctx.drawImage(bitmap, 0, 0);
-    return canvasToPngBytes(canvas);
-  } finally {
-    bitmap.close();
-  }
-}
-
-async function reflectedArtworkAsPng(artwork: PreparedArtwork): Promise<Uint8Array> {
-  const bitmap = await createImageBitmap(
-    new Blob([(await artworkAsPng(artwork)) as BlobPart], { type: 'image/png' }),
-  );
-  try {
-    const canvas = document.createElement('canvas');
-    canvas.width = bitmap.width;
-    canvas.height = bitmap.height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('Could not get 2D canvas context');
-    ctx.translate(canvas.width, 0);
-    ctx.scale(-1, 1);
     ctx.drawImage(bitmap, 0, 0);
     return canvasToPngBytes(canvas);
   } finally {
@@ -617,11 +598,10 @@ export function createPaperMinisStore({
   }
   async function exportZip() {
     if ($busy.get() || $preparing.get()) return;
-    const layout = pack();
     const rows = $rows.get();
     const ready = rows
-      .map((row, index) => ({ row, index, status: layout.entries[index] }))
-      .filter(({ row, status }) => row.artwork && ['upright', 'rotated'].includes(status?.state));
+      .map((row, index) => ({ row, index }))
+      .filter(({ row }) => row.artwork);
     if (!ready.length) return;
     $busy.set(true);
     $message.set('');
@@ -630,7 +610,7 @@ export function createPaperMinisStore({
       const entries: Record<string, Uint8Array> = {};
       const used = new Set<string>();
       for (const { row, index } of ready) {
-        const sides = ['front', 'back'] as const;
+        const sides = row.backArtwork ? (['front', 'back'] as const) : (['front'] as const);
         const base = exportName(row, index);
         const size = exportSize(row);
         let suffix = 1;
@@ -641,9 +621,7 @@ export function createPaperMinisStore({
         }
         for (const name of names) used.add(name);
         entries[names[0]] = await artworkAsPng(row.artwork!);
-        entries[names[1]] = row.backArtwork
-          ? await artworkAsPng(row.backArtwork)
-          : await reflectedArtworkAsPng(row.artwork!);
+        if (row.backArtwork) entries[names[1]] = await artworkAsPng(row.backArtwork);
       }
       const bytes = zipSync(entries, { level: 0 });
       $message.set(exportSuccessMessage);
