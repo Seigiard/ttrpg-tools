@@ -20,7 +20,6 @@ import type { HeightCalibration, MiniSize, PreparedArtwork } from '@/lib/paper-m
 
 const field =
   'min-h-11 w-full rounded-lg border border-border bg-surface-elevated px-3 text-text focus-visible:outline-2 focus-visible:outline-primary';
-const pdfFailureMessage = 'Не удалось создать PDF. Попробуйте ещё раз или уменьшите изображения.';
 
 function useArtworkUrl(artwork?: PreparedArtwork | null) {
   const [url, setUrl] = useState<string>();
@@ -368,6 +367,8 @@ export default function PaperMinisGenerator() {
   const settings = useStore(store.$settings);
   const inputs = useStore(store.$inputs);
   const inputsValid = useStore(store.$inputsValid);
+  const packed = useStore(store.$layout);
+  const canGenerate = useStore(store.$canGenerate);
   const message = useStore(store.$message);
   const busy = useStore(store.$busy);
   const preparing = useStore(store.$preparing);
@@ -378,7 +379,6 @@ export default function PaperMinisGenerator() {
   const calibrationOpener = useRef<HTMLButtonElement>(null);
   const [dragging, setDragging] = useState(false);
   const files = useRef<HTMLInputElement>(null);
-  const packed = useMemo(() => store.pack(), [store, rows, settings]);
 
   useEffect(() => {
     store.loadSettings();
@@ -396,7 +396,7 @@ export default function PaperMinisGenerator() {
       return () => URL.revokeObjectURL(url);
     } catch {
       setPreviewUrl(undefined);
-      store.$message.set(pdfFailureMessage);
+      store.reportPdfFailure();
     }
   }, [preview, store]);
   useEffect(() => {
@@ -460,7 +460,7 @@ export default function PaperMinisGenerator() {
       setTimeout(() => URL.revokeObjectURL(nextUrl), 5000);
     } catch {
       if (url) URL.revokeObjectURL(url);
-      store.$message.set(pdfFailureMessage);
+      store.reportPdfFailure();
     }
   }
 
@@ -576,7 +576,7 @@ export default function PaperMinisGenerator() {
                 <div className="space-y-2">
                   <Button
                     className="min-h-11 w-full"
-                    disabled={busy || preparing || !packed.miniCount || !inputsValid}
+                    disabled={!canGenerate}
                     onClick={() => void download()}
                   >
                     {busy ? 'Подготовка PDF…' : 'Скачать PDF'}
@@ -584,7 +584,7 @@ export default function PaperMinisGenerator() {
                   <Button
                     variant="outline"
                     className="min-h-11 w-full"
-                    disabled={busy || preparing || !packed.miniCount || !inputsValid}
+                    disabled={!canGenerate}
                     onClick={() => void store.refreshPreview()}
                   >
                     {preview ? 'Обновить предпросмотр' : 'Предпросмотр PDF'}
