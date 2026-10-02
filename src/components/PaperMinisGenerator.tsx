@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { createPaperMinisStore, type CalibrationSession } from '@/stores/paper-minis-store';
 import { ARTWORK_ACCEPT, artworkMimeType } from '@/lib/paper-minis/artwork-formats';
 import { isSupportedArtwork } from '@/lib/paper-minis/artwork';
-import type { CalibrationLine } from '@/lib/paper-minis/calibration';
+import type { CalibrationLine } from '@/lib/paper-minis/calibration-session';
 import { entryStatusWarning } from '@/lib/paper-minis/geometry';
 import { buildFilename } from '@/lib/paper-minis/pdf';
 import { HEIGHT_SLOT_ORDER, slotLabel, slotGeometryLabel, slotName } from '@/lib/paper-minis/sizes';
@@ -30,10 +30,6 @@ function useArtworkUrl(artwork?: PreparedArtwork | null) {
     return () => URL.revokeObjectURL(next);
   }, [artwork]);
   return url;
-}
-
-function clamp(v: number, lo: number, hi: number) {
-  return Math.min(Math.max(v, lo), hi);
 }
 
 function lineStyle(value: number) {
@@ -246,7 +242,7 @@ function HeightCalibrationDialog({
   function setLineFromClientY(which: 'head' | 'feet', clientY: number) {
     const box = artworkRef.current?.getBoundingClientRect();
     if (!box || box.height <= 0) return;
-    const fraction = clamp((clientY - box.top) / box.height, 0, 1);
+    const fraction = (clientY - box.top) / box.height;
     onSetLine(which, fraction);
   }
 

@@ -1,5 +1,5 @@
 import type { HeightCalibration, MiniSize, PackingEntry } from './types';
-import { calibrationGap } from './calibration';
+import { calibrationGap } from './calibration-session';
 import {
   type SizeDimensionsMm,
   hasPackableDimensions,
