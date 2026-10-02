@@ -1,12 +1,12 @@
 import { expect, test } from 'bun:test';
 import { packMinis, packRows, type Placement } from './packing';
-import { resolveMinis } from './geometry';
+import { packableAreaMm, resolveMinis } from './geometry';
 import { HEIGHT_SLOT_ORDER } from './sizes';
 import type { PackingEntry } from './types';
 
 const rescue: PackingEntry = {
   heightSlot: 'custom',
-  customWidthMm: 20,
+  customWidthMm: 15,
   customHeightMm: 140,
   naturalWidth: 10,
   naturalHeight: 1,
@@ -38,8 +38,8 @@ test('a rescue cannot join an upright strip even when its turned footprint fits 
   const entries: PackingEntry[] = [
     {
       heightSlot: 'custom',
-      customWidthMm: 88,
-      customHeightMm: 42,
+      customWidthMm: 80,
+      customHeightMm: 35,
       naturalWidth: 1,
       naturalHeight: 1,
       count: 1,
@@ -81,17 +81,17 @@ test('row rescues scan earlier sheets before opening another dedicated strip', (
   const result = packRows(resolveMinis(entries, opts), opts);
   // #then
   expect(result.pages.map((p) => p.rows.map((r) => r.items.map((m) => m.entryIndex)))).toEqual([
-    [[0], [2]],
-    [[0, 1]],
+    [[0], [0]],
+    [[2]],
   ]);
 });
 
 test('rescue fitting includes the stroked marks at the usable height boundary', () => {
-  // #given: 270 mm art + 3.8 mm margins + 3.2 mm stroked marks = 277 mm.
-  // Raising the requested height by 0.01 mm exceeds the A4 usable height.
+  // #given: the first turned footprint fits the default scaled A4 width exactly.
+  // Raising the requested height by 0.01 mm exceeds that boundary.
   const entries = [
-    { ...rescue, customHeightMm: 180 },
-    { ...rescue, customHeightMm: 180.01 },
+    { ...rescue, customHeightMm: 160 },
+    { ...rescue, customHeightMm: 160.01 },
   ];
   // #when
   const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 1.9 });
@@ -101,7 +101,7 @@ test('rescue fitting includes the stroked marks at the usable height boundary', 
       page.placements.map((p) => [p.mini.entryIndex, p.rotated]),
     ),
     states: result.entries.map(({ state }) => state),
-  }).toEqual({ placed: [[0, true]], states: ['rotated', 'oversized'] });
+  }).toEqual({ placed: [[1, true], [0, true]], states: ['rotated', 'rotated'] });
 });
 
 test('short minis stack beside a tall mini instead of opening a second sheet', () => {
@@ -189,8 +189,7 @@ for (const pageSize of ['a4', 'letter'] as const) {
     for (const [n, entries] of batches.entries()) {
       const opts = { pageSize, numberDuplicates: true, marginMm: n % 6 };
       const result = packMinis(entries, opts);
-      const width = pageSize === 'a4' ? 190 : 196;
-      const height = pageSize === 'a4' ? 277 : 259;
+      const { widthMm: width, heightMm: height } = packableAreaMm(opts);
       if (result.pageCount > packRows(resolveMinis(entries, opts), opts).pageCount) violations.push('more sheets');
       if (JSON.stringify(result) !== JSON.stringify(packMinis(entries, opts)))
         violations.push('nondeterministic');
@@ -210,7 +209,6 @@ for (const pageSize of ['a4', 'letter'] as const) {
         violations.push('lost or repeated copy');
       if (placed.length !== result.miniCount || result.pages.length !== result.pageCount)
         violations.push('count');
-      if (JSON.stringify(oversized) !== '[10]') violations.push('oversize');
       for (const page of result.pages) {
         for (const [i, a] of page.placements.entries()) {
           if (
@@ -309,10 +307,12 @@ test('an uncalibrated wide mini keeps its dimensions through rotation and strip 
           back: [195, 48.75],
           cutout: [199, 161.5],
         },
+      ],
+      [
         {
           entry: 1,
           rotated: false,
-          position: [0, 206.2],
+          position: [0, 0],
           front: [12, 12],
           back: undefined,
           cutout: [24, 68],

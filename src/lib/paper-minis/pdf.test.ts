@@ -1,13 +1,5 @@
 import assert from 'node:assert/strict';
-import {
-  PDFDocument,
-  PDFArray,
-  PDFDict,
-  PDFName,
-  PDFRawStream,
-  PrintScaling,
-  decodePDFRawStream,
-} from 'pdf-lib';
+import { PDFDocument, PDFArray, PDFDict, PDFName, PDFRawStream, decodePDFRawStream } from 'pdf-lib';
 import { generatePDF as renderPDF } from './pdf.ts';
 import { packEntries } from './packing.ts';
 import type { MiniLevels, PackOptions } from './geometry.ts';
@@ -15,8 +7,10 @@ import type { Entry } from './types.ts';
 
 import { test as t } from 'bun:test';
 
-const generatePDF = (entries: Entry[], options: PackOptions) =>
-  renderPDF(entries, packEntries(entries, options), options);
+const generatePDF = (entries: Entry[], options: PackOptions) => {
+  const resolved = { ...options, printerScale: options.printerScale ?? 1 };
+  return renderPDF(entries, packEntries(entries, resolved), resolved);
+};
 
 type Point = { x: number; y: number };
 type Box = { left: number; bottom: number; right: number; top: number };
@@ -335,15 +329,15 @@ for (const separateBack of [false, true]) {
         {
           pages: 1,
           images: [
-            [41.6, 73.4, 62.6, 283.4],
-            [separateBack ? 77.1 : 66.6, 73.4, 87.6, 283.4],
+            [33.2, 71.8, 54.2, 281.8],
+            [separateBack ? 68.7 : 58.2, 71.8, 79.2, 281.8],
           ],
           axes: [[0, -1, 1, 0], separateBack ? [0, 1, -1, 0] : [0, -1, -1, 0]],
-          marks: [10.1, 69.9, 99.1, 286.9],
-          folds: [11.6, 31.6, 41.6, 64.6, 87.6, 97.6],
-          badge: [88.4, 183.2, 92.14, 187.6],
+          marks: [1.7, 68.3, 90.7, 285.3],
+          folds: [3.2, 23.2, 33.2, 56.2, 79.2, 89.2],
+          badge: [80, 181.6, 83.74, 186],
           label: [['1', 0, 1]],
-          scale: [10, 100, 1],
+          scale: [0, 100, 1],
         },
       );
     },
@@ -609,7 +603,7 @@ t('a height slot prints one figure height for artworks of different proportions'
 
 t('the drawer places images and cut marks at the resolved levels', async () => {
   // #given  a synthetic resolved layout whose levels differ from the Medium formula
-  const options = { pageSize: 'a4', numberDuplicates: false, marginMm: 2 } as const;
+  const options = { pageSize: 'a4', numberDuplicates: false, marginMm: 2, printerScale: 1 } as const;
   const entries = [{ ...entry, heightSlot: 'medium' as const }];
   const layout = packEntries(entries, options);
   const placement = layout.pages[0].placements[0];
@@ -728,7 +722,7 @@ t('the badge marks the base, a fixed step inside it', async () => {
 
 // A print dialog on "Fit to page" shrinks the sheet by a few per cent. The bar
 // is how the user finds out before cutting, so it has to be a true 100 mm.
-t('every sheet carries a 100 mm scale bar starting at the left margin', async () => {
+t('every sheet carries a 100 mm scale bar starting at the page edge', async () => {
   // #given  nine Medium squares, which spill onto a second A4 sheet
   const copies: Entry = { ...entry, heightSlot: 'medium', count: 9 };
   // #when
@@ -747,19 +741,67 @@ t('every sheet carries a 100 mm scale bar starting at the left margin', async ()
       return { page, left: asMm(span.left), length: widthMm(span) };
     }),
     [
-      { page: 0, left: 10, length: 100 },
-      { page: 1, left: 10, length: 100 },
+      { page: 0, left: 0, length: 100 },
+      { page: 1, left: 0, length: 100 },
     ],
   );
 });
 
-t('the scale bar says what length it must measure and what to do if it does not', async () => {
+t('the scale bar expands by the inverse printer scale before printing', async () => {
+  // #given  a printer that reduces a fitted page to 91% of its PDF size
+  const printerScale = 0.91;
+  // #when
+  const sheet = await read(
+    await generatePDF([entry], { pageSize: 'a4', numberDuplicates: false, printerScale }),
+  );
+  // #then  the print dialog reduces this PDF length to 100 mm on paper
+  assert.equal(widthMm(sheet.scaleBars[0].marks[0]), Number((100 / printerScale).toFixed(6)));
+});
+
+t('every cut mark stays inside the PDF page at the default printer scale', async () => {
+  // #given  a mix that places minis at every edge of the packable area
+  const entries = [{ ...entry, count: 12 }, { ...wide, count: 3 }];
+  // #when
+  const sheet = await read(await generatePDF(entries, { pageSize: 'a4', numberDuplicates: false }));
+  // #then  the rendered cut-mark paths never reach beyond A4's physical edges
+  assert.equal(
+    sheet.shapes
+      .filter((shape) => shape.role === 'marks')
+      .every(
+        ({ box }) =>
+          box.left >= 0 && box.right <= 210 * PT_PER_MM && box.bottom >= 0 && box.top <= 297 * PT_PER_MM,
+      ),
+    true,
+  );
+});
+
+t('smaller printer scales enlarge PDF mini boxes instead of shrinking them', async () => {
+  // #given  the same Tiny mini, drawn for two fitted-page printer scales
+  const scales = [0.91, 0.8];
+  // #when
+  const sheets = await Promise.all(
+    scales.map(async (printerScale) =>
+      read(await generatePDF([entry], { pageSize: 'a4', numberDuplicates: false, printerScale })),
+    ),
+  );
+  // #then  each PDF box grows by the inverse scale, before Scale to Fit restores its paper size
+  assert.equal(
+    Number(
+      (
+        widthMm(sheets[1].minis[0].front.image) / widthMm(sheets[0].minis[0].front.image)
+      ).toFixed(6),
+    ),
+    1.1375,
+  );
+});
+
+t('the scale bar tells the player to print with Scale to Fit', async () => {
   // #when
   const sheet = await read(await generatePDF([entry], { pageSize: 'a4', numberDuplicates: false }));
   // #then
   assert.deepEqual(
     sheet.scaleBars.map((bar) => bar.notes.map((note) => note.label)),
-    [['Must measure 100 mm. If shorter, print at Actual size (100%).']],
+    [['Print with Scale to Fit. Measure again if this is not 100 mm.']],
   );
 });
 
@@ -788,15 +830,6 @@ t('the scale bar sits in the top margin, clear of the first row, on both pages',
       { marksAboveRow: true, noteAboveRow: true, noteAfterBar: true },
     ],
   );
-});
-
-t('the PDF asks viewers to print at actual size', async () => {
-  // #when
-  const { printScaling } = await read(
-    await generatePDF([entry], { pageSize: 'a4', numberDuplicates: false }),
-  );
-  // #then  /PrintScaling /None in the catalog's viewer preferences
-  assert.equal(printScaling, PrintScaling.None);
 });
 
 // Folding along the fold line reflects the back half onto the front, so the

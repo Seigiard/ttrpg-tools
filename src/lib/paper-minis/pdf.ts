@@ -3,7 +3,6 @@ import {
   type PDFFont,
   type PDFImage,
   type PDFPage,
-  PrintScaling,
   StandardFonts,
   rgb,
   pushGraphicsState,
@@ -22,7 +21,8 @@ import {
   CUT_MARK_EXTENT_MM,
   CUT_MARK_STROKE_MM,
   PAGE_SIZES_MM,
-  SHEET_MARGIN_MM,
+  SCALE_BAR_BAND_MM,
+  printerScale,
   type BackFace,
   type PackOptions,
   type PackedMini,
@@ -49,7 +49,7 @@ const SCALE_TICK_MM = 1.5;
 const SCALE_MAJOR_TICK_MM = 2.5;
 const SCALE_TICK_WIDTH_MM = 0.3;
 const SCALE_TEXT_PT = 7;
-export const SCALE_BAR_NOTE = 'Must measure 100 mm. If shorter, print at Actual size (100%).';
+export const SCALE_BAR_NOTE = 'Print with Scale to Fit. Measure again if this is not 100 mm.';
 
 export type GenerateOptions = PackOptions;
 
@@ -62,10 +62,6 @@ export async function generatePDF(
   const pdf = await PDFDocument.create();
   pdf.setTitle('Paper Minis');
   pdf.setCreator('Paper Mini Generator');
-  // A hint, not a guarantee: Acrobat opens its print dialog at actual size,
-  // while Chrome, Firefox and Preview ignore it — hence the scale bar as well.
-  pdf.catalog.getOrCreateViewerPreferences().setPrintScaling(PrintScaling.None);
-
   const font = await pdf.embedFont(StandardFonts.HelveticaBold);
   const noteFont = await pdf.embedFont(StandardFonts.Helvetica);
 
@@ -96,8 +92,11 @@ export async function generatePDF(
   }
 
   const { w: pageWmm, h: pageHmm } = PAGE_SIZES_MM[opts.pageSize];
+  const scale = printerScale(opts);
+  const scaledPageHmm = pageHmm * scale;
   for (const page of layout.pages) {
     const pdfPage = pdf.addPage([mm(pageWmm), mm(pageHmm)]);
+    pdfPage.pushOperators(pushGraphicsState(), concatTransformationMatrix(1 / scale, 0, 0, 1 / scale, 0, 0));
     for (const { mini, xMm, yMm, rotated } of page.placements) {
       if (rotated) {
         // Turn the whole local drawing clockwise. The reserved footprint
@@ -109,8 +108,8 @@ export async function generatePDF(
             -1,
             1,
             0,
-            mm(SHEET_MARGIN_MM + xMm + CUT_MARK_EXTENT_MM),
-            mm(pageHmm - SHEET_MARGIN_MM - yMm - CUT_MARK_EXTENT_MM),
+            mm(CUT_MARK_EXTENT_MM + xMm + CUT_MARK_EXTENT_MM),
+            mm(scaledPageHmm - SCALE_BAR_BAND_MM - CUT_MARK_EXTENT_MM - yMm - CUT_MARK_EXTENT_MM),
           ),
         );
         drawMini(pdfPage, mini, faces.get(mini.entryIndex)!, 0, mini.totalHeightMm, font);
@@ -121,12 +120,13 @@ export async function generatePDF(
         pdfPage,
         mini,
         faces.get(mini.entryIndex)!,
-        SHEET_MARGIN_MM + xMm,
-        pageHmm - SHEET_MARGIN_MM - yMm,
+        CUT_MARK_EXTENT_MM + xMm,
+        scaledPageHmm - SCALE_BAR_BAND_MM - CUT_MARK_EXTENT_MM - yMm,
         font,
       );
     }
-    drawScaleBar(pdfPage, pageHmm, noteFont);
+    drawScaleBar(pdfPage, scaledPageHmm, noteFont);
+    pdfPage.pushOperators(popGraphicsState());
   }
 
   return pdf.save();
@@ -255,7 +255,7 @@ function drawScaleBar(pdfPage: PDFPage, pageHmm: number, font: PDFFont) {
   const barY = pageHmm - SCALE_BAR_Y_FROM_TOP_MM;
   const color = rgb(0, 0, 0);
   pdfPage.drawRectangle({
-    x: mm(SHEET_MARGIN_MM),
+    x: 0,
     y: mm(barY - SCALE_BAR_THICKNESS_MM / 2),
     width: mm(SCALE_BAR_MM),
     height: mm(SCALE_BAR_THICKNESS_MM),
@@ -265,9 +265,10 @@ function drawScaleBar(pdfPage: PDFPage, pageHmm: number, font: PDFFont) {
     const length = tickMm % 50 === 0 ? SCALE_MAJOR_TICK_MM : SCALE_TICK_MM;
     // The end ticks sit inside the bar's ends, so the bar's own length is the
     // measurement and the ticks never add to it.
-    const x =
-      SHEET_MARGIN_MM +
-      Math.min(Math.max(tickMm - SCALE_TICK_WIDTH_MM / 2, 0), SCALE_BAR_MM - SCALE_TICK_WIDTH_MM);
+  const x = Math.min(
+    Math.max(tickMm - SCALE_TICK_WIDTH_MM / 2, 0),
+    SCALE_BAR_MM - SCALE_TICK_WIDTH_MM,
+  );
     pdfPage.drawRectangle({
       x: mm(x),
       y: mm(barY - length),
@@ -277,7 +278,7 @@ function drawScaleBar(pdfPage: PDFPage, pageHmm: number, font: PDFFont) {
     });
   }
   pdfPage.drawText(SCALE_BAR_NOTE, {
-    x: mm(SHEET_MARGIN_MM + SCALE_BAR_MM + 3),
+    x: mm(SCALE_BAR_MM + 3),
     y: mm(barY - SCALE_MAJOR_TICK_MM),
     size: SCALE_TEXT_PT,
     font,

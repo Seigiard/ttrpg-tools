@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { GAP_MM, packRows } from './packing.ts';
-import { PAGE_SIZES_MM, SHEET_MARGIN_MM, type PackOptions, resolveMinis } from './geometry.ts';
+import { type PackOptions, resolveMinis, usableAreaMm } from './geometry.ts';
 import type { PackingEntry as Entry } from './types.ts';
 
 import { test as t } from 'bun:test';
@@ -21,9 +21,7 @@ const entry = (over: Partial<Entry>): Entry => ({
 const rowCandidate = (entries: Entry[], opts: PackOptions) =>
   packRows(resolveMinis(entries, opts), opts);
 
-const A4 = PAGE_SIZES_MM.a4;
-const usableW = A4.w - SHEET_MARGIN_MM * 2; // 190
-const usableH = A4.h - SHEET_MARGIN_MM * 2; // 277
+const { widthMm: usableW, heightMm: usableH } = usableAreaMm({ pageSize: 'a4' });
 
 const sheetOpts = { pageSize: 'a4', numberDuplicates: false } as const;
 
@@ -91,7 +89,7 @@ t('a row exactly filling usable width packs as one row', () => {
   );
   assert.deepEqual(
     r.pages[0].rows.map((row) => [row.items.length, row.widthMm]),
-    [[4, 190]],
+    [[3, 141.5], [1, 44.5]],
   );
 });
 

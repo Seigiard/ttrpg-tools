@@ -25,23 +25,44 @@ export const PAGE_SIZES_MM = {
 
 export type PageSizeKey = keyof typeof PAGE_SIZES_MM;
 
-export const SHEET_MARGIN_MM = 10;
 export const DEFAULT_FIGURE_MARGIN_MM = 2;
+export const DEFAULT_PRINTER_SCALE = 0.91;
+export const SCALE_BAR_BAND_MM = 10;
 
 export type PackOptions = {
   pageSize: PageSizeKey;
   numberDuplicates: boolean;
   marginMm?: number;
+  printerScale?: number;
 };
 
-export function usableAreaMm(pageSize: PageSizeKey): { widthMm: number; heightMm: number } {
-  const { w, h } = PAGE_SIZES_MM[pageSize];
-  return { widthMm: w - SHEET_MARGIN_MM * 2, heightMm: h - SHEET_MARGIN_MM * 2 };
+export function printerScale(opts: Pick<PackOptions, 'printerScale'>): number {
+  return opts.printerScale ?? DEFAULT_PRINTER_SCALE;
+}
+
+export function usableAreaMm(opts: Pick<PackOptions, 'pageSize' | 'printerScale'>): {
+  widthMm: number;
+  heightMm: number;
+} {
+  const scale = printerScale(opts);
+  const { w, h } = PAGE_SIZES_MM[opts.pageSize];
+  return { widthMm: w * scale, heightMm: h * scale - SCALE_BAR_BAND_MM };
 }
 
 export const CUT_MARK_ARM_MM = 1.5;
 export const CUT_MARK_STROKE_MM = 0.2;
 export const CUT_MARK_EXTENT_MM = CUT_MARK_ARM_MM + CUT_MARK_STROKE_MM / 2;
+
+export function packableAreaMm(opts: Pick<PackOptions, 'pageSize' | 'printerScale'>): {
+  widthMm: number;
+  heightMm: number;
+} {
+  const usable = usableAreaMm(opts);
+  return {
+    widthMm: usable.widthMm - CUT_MARK_EXTENT_MM * 2,
+    heightMm: usable.heightMm - CUT_MARK_EXTENT_MM * 2,
+  };
+}
 
 export type MiniLevels = {
   floorStripTopMm: number;
@@ -115,8 +136,8 @@ export function footprintMm(
     : { widthMm: mini.totalWidthMm, heightMm: mini.totalHeightMm };
 }
 
-function miniOrientation(mini: PackedMini, pageSize: PageSizeKey): MiniOrientation {
-  const usable = usableAreaMm(pageSize);
+function miniOrientation(mini: PackedMini, opts: PackOptions): MiniOrientation {
+  const usable = packableAreaMm(opts);
   const fits = ({ widthMm, heightMm }: { widthMm: number; heightMm: number }) =>
     widthMm <= usable.widthMm && heightMm <= usable.heightMm;
   if (fits(footprintMm(mini, false))) return 'upright';
@@ -198,7 +219,7 @@ function fitMiniFaces(
   opts: PackOptions,
 ): { front: FigureFitMm; back?: FigureFitMm } {
   const dimensions = resolveSizeDimensionsMm(e);
-  const { widthMm: usableWidthMm, heightMm: usableHeightMm } = usableAreaMm(opts.pageSize);
+  const { widthMm: usableWidthMm, heightMm: usableHeightMm } = packableAreaMm(opts);
   const marginMm = opts.marginMm ?? DEFAULT_FIGURE_MARGIN_MM;
   const imageSpaceMm = (usableHeightMm - marginMm * 2 - resolveTabHeightMm(e) * 4) / 2;
   const calibrated = calibrationGap(e.calibration);
@@ -357,7 +378,7 @@ export function resolveMini(
   }
   // A count that is not a number passes the check above but yields no copy.
   if (copies.length === 0) return undefined;
-  return { entryIndex, orientation: miniOrientation(copies[0], opts.pageSize), limits, copies };
+  return { entryIndex, orientation: miniOrientation(copies[0], opts), limits, copies };
 }
 
 // Keeps entry indices: an entry that is not packable yet leaves a gap.

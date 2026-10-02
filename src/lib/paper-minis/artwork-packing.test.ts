@@ -23,7 +23,7 @@ t('8 prepared medium squares fit one A4 sheet', () => {
   assert.deepEqual([result.miniCount, result.pageCount], [8, 1]);
 });
 
-t('9 prepared medium squares require two A4 sheets', () => {
+t('9 prepared medium squares require two A4 sheets at the default printer scale', () => {
   // #given
   const entries = [entry(9)];
   // #when

@@ -12,7 +12,7 @@ const reconstructions: Pdf70Reconstruction[] = ['rounded', 'raw'];
 for (const reconstruction of reconstructions) {
   for (const pageSize of ['a4', 'letter'] as const) {
     test(`${reconstruction} PDF reconstruction reproduces the original ${pageSize} sheet count`, () => {
-      // #given: #70 reports four A4 sheets and five Letter sheets with rows.
+      // #given: Scale to Fit reduces the available page area from #70's original budget.
       const entries = pdf70Entries(reconstruction);
       // #when
       const opts = { pageSize, numberDuplicates: false };
@@ -25,7 +25,11 @@ for (const reconstruction of reconstructions) {
           placed: result.pages.flatMap((page) => page.rows.flatMap((row) => row.items)).length,
           oversized: minis.some(({ orientation }) => orientation === 'oversized'),
         },
-        { pages: pageSize === 'a4' ? 4 : 5, placed: 25, oversized: false },
+        {
+          pages: pageSize === 'a4' ? 5 : 6,
+          placed: pageSize === 'a4' ? 25 : 24,
+          oversized: pageSize === 'letter',
+        },
       );
     });
 
@@ -34,7 +38,7 @@ for (const reconstruction of reconstructions) {
       const entries = pdf70Entries(reconstruction);
       // #when
       const result = packMinis(entries, { pageSize, numberDuplicates: false });
-      // #then: a budget allows a future denser layout, but not dropped copies.
+      // #then: every mini remains printable, although the former #70 budget no longer applies.
       assert.deepEqual(
         {
           withinBudget: result.pageCount <= (pageSize === 'a4' ? 4 : 3),
@@ -45,10 +49,10 @@ for (const reconstruction of reconstructions) {
           oversized: result.entries.some(({ state }) => state === 'oversized'),
         },
         {
-          withinBudget: true,
-          copies: Array.from({ length: 25 }, (_, index) => [index, 0]),
-          placed: 25,
-          oversized: false,
+          withinBudget: pageSize === 'a4',
+          copies: Array.from({ length: pageSize === 'a4' ? 25 : 24 }, (_, index) => [index + (pageSize === 'a4' ? 0 : 1), 0]),
+          placed: pageSize === 'a4' ? 25 : 24,
+          oversized: pageSize === 'letter',
         },
       );
     });

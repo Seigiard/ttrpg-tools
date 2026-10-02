@@ -5,8 +5,8 @@ import {
   type PackedMini,
   type ResolvedMini,
   footprintMm,
+  packableAreaMm,
   resolveMini,
-  usableAreaMm,
 } from './geometry.ts';
 
 // Wide enough that two neighbours' cut marks, each reaching CUT_MARK_ARM_MM
@@ -17,7 +17,7 @@ export type PackedRow = { items: PackedMini[]; widthMm: number; heightMm: number
 export type RowPage = { rows: PackedRow[]; heightMm: number };
 export type Placement = {
   mini: PackedMini;
-  // Millimetres from the top-left of the usable area, excluding sheet margins.
+  // Millimetres from the top-left of the packable area, below the scale bar.
   // Rotated footprints include the stroked cut marks; the cut-out is inset by their extent.
   xMm: number;
   yMm: number;
@@ -105,7 +105,7 @@ export function packMinis(entries: PackingEntry[], opts: PackOptions): PackResul
 function packResolvedEntries(entries: ResolvedEntry[], opts: PackOptions): PackResult {
   const resolved = entries.flatMap(({ mini }) => (mini ? [mini] : []));
   const rows = packRows(resolved, opts);
-  const { widthMm, heightMm } = usableAreaMm(opts.pageSize);
+  const { widthMm, heightMm } = packableAreaMm(opts);
   const guillotine = packGuillotine(resolved, widthMm, heightMm);
   const pages = guillotine.length <= rows.pageCount ? guillotine : rowPlacements(rows.pages);
   return {
@@ -229,9 +229,9 @@ function placeableCopies(minis: ResolvedMini[]): { mini: PackedMini; rotated: bo
 // oversized minis are left out, as the resolve step already reported them.
 export function packRows(
   minis: ResolvedMini[],
-  opts: Pick<PackOptions, 'pageSize'>,
+  opts: Pick<PackOptions, 'pageSize' | 'printerScale'>,
 ): { pages: RowPage[]; pageCount: number } {
-  const { widthMm: usableWmm, heightMm: usableHmm } = usableAreaMm(opts.pageSize);
+  const { widthMm: usableWmm, heightMm: usableHmm } = packableAreaMm(opts);
 
   // Sort by reserved width descending so wide minis lead each row — reordering
   // rows in the UI has no effect on output, which is why drag-to-reorder is out

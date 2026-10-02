@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { PAGE_SIZES_MM, SHEET_MARGIN_MM, fitFigure, resolveMini } from './geometry.ts';
+import { fitFigure, packableAreaMm, resolveMini } from './geometry.ts';
 import { type PackResult, packMinis } from './packing.ts';
 import {
   HEIGHT_SLOTS,
@@ -128,7 +128,7 @@ const placedMinis = (result: PackResult) =>
     .flatMap((page) => page.placements.map(({ mini }) => mini))
     .toSorted((a, b) => a.entryIndex - b.entryIndex || a.copyIndex - b.copyIndex);
 
-const usableH = PAGE_SIZES_MM.a4.h - SHEET_MARGIN_MM * 2; // 277
+const usableH = packableAreaMm({ pageSize: 'a4' }).heightMm;
 const sheetOpts = { pageSize: 'a4', numberDuplicates: false } as const;
 
 t('default margin reserves paper around both faces without shrinking the figure', () => {
@@ -246,7 +246,7 @@ t('calibration too tall for the page scales to fit and is reported instead of le
       mini.fitLimits,
       result.entries,
     ],
-    [1, 128.5, usableH, ['page'], [{ state: 'upright', limits: ['page'] }]],
+    [1, 118.535, usableH, ['page'], [{ state: 'upright', limits: ['page'] }]],
   );
 });
 
@@ -270,7 +270,7 @@ t('a fractional page-capped mini stays exactly within the usable page height', (
   // #then
   assert.deepEqual(
     [resolved.orientation, mini.totalHeightMm, mini.levels.topMm],
-    ['upright', 277, 277],
+    ['upright', usableH, usableH],
   );
 });
 
@@ -306,7 +306,7 @@ t('a calibrated custom figure fits both page dimensions without changing its asp
     {
       count: 1,
       entries: [{ state: 'upright', limits: ['width', 'page'] }],
-      geometry: [[186, 124, 190, 272, false]],
+      geometry: [[174.8025, 116.535, 178.8025, 257.07, false]],
     },
   );
 });
@@ -346,7 +346,7 @@ t('a page-width cap shrinks both calibrated faces to the same height', () => {
     {
       count: 1,
       entries: [{ state: 'upright', limits: ['width', 'page'] }],
-      geometry: [[62, 124, 186, 124, 190, 272]],
+      geometry: [[58.2675, 116.535, 174.8025, 116.535, 178.8025, 257.07]],
     },
   );
 });
@@ -380,7 +380,7 @@ t('page fit prints the former too-wide page-cap case at zero margin', () => {
     },
     {
       entries: [{ state: 'upright', limits: ['width', 'page'] }],
-      geometry: [[190, 126.667, 190, 273.333]],
+      geometry: [[177.8025, 118.535, 177.8025, 257.07]],
     },
   );
 });
@@ -418,7 +418,7 @@ t('page fit gives both calibrated faces the same height under the wider face cap
     },
     {
       entries: [{ state: 'upright', limits: ['width', 'page'] }],
-      geometry: [[31, 124, 186, 124, 190, 272]],
+      geometry: [[29.13375, 116.535, 174.8025, 116.535, 178.8025, 257.07]],
     },
   );
 });
@@ -558,8 +558,8 @@ t('shared calibration is capped to the page and reports every active limit', () 
     },
     {
       count: 1,
-      front: 125.5,
-      back: { imageWidthMm: 125.5, imageHeightMm: 125.5, imageOffsetXMm: 0 },
+      front: 115.535,
+      back: { imageWidthMm: 115.535, imageHeightMm: 115.535, imageOffsetXMm: 0 },
       entries: [{ state: 'upright', limits: ['height', 'width', 'page'] }],
     },
   );
@@ -593,9 +593,9 @@ t('shared calibration fits an oversized custom front and back onto the page', ()
     },
     {
       count: 1,
-      front: [64.25, 128.5],
-      back: [32.125, 128.5],
-      total: 277,
+      front: [59.2675, 118.535],
+      back: [29.63375, 118.535],
+      total: 257.07,
       entries: [{ state: 'upright', limits: ['page'] }],
     },
   );
@@ -1057,7 +1057,7 @@ t('a tab is half its base, until the page cuts Huge and Gargantuan short', () =>
   );
 });
 
-t('every slot’s unfolded mini fits both supported pages at the default margin', () => {
+t('the default printer scale leaves the Letter page cap to report oversized slots', () => {
   // #given  artwork taller than it is wide at every slot, on each page in turn,
   //         so the width cap cannot shorten a figure before the page sees it
   const entries = HEIGHT_SLOT_ORDER.map((heightSlot) =>
@@ -1067,7 +1067,7 @@ t('every slot’s unfolded mini fits both supported pages at the default margin'
   const results = (['a4', 'letter'] as const).map((pageSize) =>
     packMinis(entries, { pageSize, numberDuplicates: false }),
   );
-  // #then  the tallest slot is cut to the paper, so none of them is oversized
+  // #then  Letter has less usable height after Scale to Fit, so its tallest slots report the limit
   assert.deepEqual(
     results.map((result) => [
       result.miniCount,
@@ -1075,7 +1075,7 @@ t('every slot’s unfolded mini fits both supported pages at the default margin'
     ]),
     [
       [HEIGHT_SLOT_ORDER.length, 0],
-      [HEIGHT_SLOT_ORDER.length, 0],
+      [6, 3],
     ],
   );
 });
@@ -1084,7 +1084,7 @@ t('every slot’s unfolded mini fits both supported pages at the default margin'
 // cut more comfortably, and every extra millimetre of it costs two of height.
 // Huge and Gargantuan are cut below true scale, and stand on shallow tabs, so
 // that raising it does not silently drop the biggest minis off the sheet.
-t('no slot is lost when the figure margin is raised to 5 mm', () => {
+t('the default printer scale reports Letter slots lost at a 5 mm figure margin', () => {
   // #given  artwork taller than it is wide at every slot, so nothing is capped
   const entries = HEIGHT_SLOT_ORDER.map((heightSlot) =>
     entry({ heightSlot, naturalWidth: 100, naturalHeight: 200 }),
@@ -1100,8 +1100,8 @@ t('no slot is lost when the figure margin is raised to 5 mm', () => {
       result.entries.filter(({ state }) => state === 'oversized').length,
     ]),
     [
-      [HEIGHT_SLOT_ORDER.length, 0],
-      [HEIGHT_SLOT_ORDER.length, 0],
+      [7, 2],
+      [6, 3],
     ],
   );
 });
