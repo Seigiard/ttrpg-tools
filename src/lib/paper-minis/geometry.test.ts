@@ -110,8 +110,7 @@ t('a custom size honours both of its numbers', () => {
 });
 
 // Mini geometry asserted through the packer's interface: what each placement
-// carries and each row's status. row-packing.test.ts pins the row candidate's
-// layout; layout.test.ts covers where minis land.
+// carries and each row's status. layout.test.ts covers where minis land.
 
 // Helper: build an entry with square art at a given size/count.
 const entry = (over: Partial<Entry>): Entry => ({
@@ -814,8 +813,8 @@ t('a Medium resolves every internal level and the back badge offset in millimetr
         backFaceTopMm: 111.5,
         topMm: 124,
         cutMarks: {
-          crossesMm: [0, 74.5, 124],
-          halvesMm: [25, 37.5, 111.5],
+          cornersMm: [0, 124],
+          edgeTicksMm: [25, 37.5, 74.5, 111.5],
         },
       },
       backBadgeOffsetXMm: 5,
@@ -838,8 +837,8 @@ t('resolved levels cover a taller back, a custom margin and a rotated rescue', (
       expected: {
         orientation: false,
         levels: [25, 37.5, 72.5, 74.5, 76.5, 111.5, 124],
-        crosses: [0, 74.5, 124],
-        halves: [25, 37.5, 111.5],
+        corners: [0, 124],
+        ticks: [25, 37.5, 74.5, 111.5],
         badge: 5,
         totalMatchesTop: true,
       },
@@ -850,8 +849,8 @@ t('resolved levels cover a taller back, a custom margin and a rotated rescue', (
       expected: {
         orientation: false,
         levels: [25, 37.5, 72.5, 77.5, 82.5, 117.5, 130],
-        crosses: [0, 77.5, 130],
-        halves: [25, 37.5, 117.5],
+        corners: [0, 130],
+        ticks: [25, 37.5, 77.5, 117.5],
         badge: 5,
         totalMatchesTop: true,
       },
@@ -868,8 +867,8 @@ t('resolved levels cover a taller back, a custom margin and a rotated rescue', (
       expected: {
         orientation: true,
         levels: [20, 30, 51, 53, 55, 76, 86],
-        crosses: [0, 53, 86],
-        halves: [20, 30, 76],
+        corners: [0, 86],
+        ticks: [20, 30, 53, 76],
         badge: 95,
         totalMatchesTop: true,
       },
@@ -890,8 +889,8 @@ t('resolved levels cover a taller back, a custom margin and a rotated rescue', (
         levels.backFaceTopMm,
         levels.topMm,
       ],
-      crosses: levels.cutMarks.crossesMm,
-      halves: levels.cutMarks.halvesMm,
+      corners: levels.cutMarks.cornersMm,
+      ticks: levels.cutMarks.edgeTicksMm,
       badge: backBadgeOffsetXMm,
       totalMatchesTop: totalHeightMm === levels.topMm,
     };

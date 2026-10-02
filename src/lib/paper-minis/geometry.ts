@@ -41,7 +41,6 @@ export function usableAreaMm(pageSize: PageSizeKey): { widthMm: number; heightMm
 
 export const CUT_MARK_ARM_MM = 1.5;
 export const CUT_MARK_STROKE_MM = 0.2;
-export const CUT_MARK_EXTENT_MM = CUT_MARK_ARM_MM + CUT_MARK_STROKE_MM / 2;
 
 export type MiniLevels = {
   floorStripTopMm: number;
@@ -52,8 +51,8 @@ export type MiniLevels = {
   backFaceTopMm: number;
   topMm: number;
   cutMarks: {
-    crossesMm: [number, number, number];
-    halvesMm: [number, number, number];
+    cornersMm: [number, number];
+    edgeTicksMm: [number, number, number, number];
   };
 };
 
@@ -108,10 +107,7 @@ export function footprintMm(
   rotated: boolean,
 ): { widthMm: number; heightMm: number } {
   return rotated
-    ? {
-        widthMm: mini.totalHeightMm + CUT_MARK_EXTENT_MM * 2,
-        heightMm: mini.totalWidthMm + CUT_MARK_EXTENT_MM * 2,
-      }
+    ? { widthMm: mini.totalHeightMm, heightMm: mini.totalWidthMm }
     : { widthMm: mini.totalWidthMm, heightMm: mini.totalHeightMm };
 }
 
@@ -326,8 +322,8 @@ export function resolveMini(
     backFaceTopMm,
     topMm,
     cutMarks: {
-      crossesMm: [0, foldMm, topMm],
-      halvesMm: [floorStripTopMm, frontTabTopMm, backFaceTopMm],
+      cornersMm: [0, topMm],
+      edgeTicksMm: [floorStripTopMm, frontTabTopMm, foldMm, backFaceTopMm],
     },
   };
   const backBadgeOffsetXMm = ((back?.imageWidthMm ?? imageWidthMm) - baseWidthMm) / 2;
