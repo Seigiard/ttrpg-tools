@@ -10,7 +10,7 @@ HTML is read from dist. Linked scripts, modulepreload links, stylesheets, Astro 
 | /mausritter/encounters | 66881 | 0 | 1902 | 8627 | 5241 | 4 |
 | /mausritter/locations | 68914 | 0 | 1902 | 8627 | 7967 | 4 |
 | /mausritter/weather | 67181 | 0 | 1902 | 8627 | 5660 | 4 |
-| /paper-minis | 273181 | 0 | 1902 | 8627 | 5305 | 4 |
+| /paper-minis | 275592 | 0 | 1902 | 8627 | 5357 | 4 |
 | /the-black-hack/prices | 68785 | 0 | 1902 | 8627 | 6209 | 4 |
 
 

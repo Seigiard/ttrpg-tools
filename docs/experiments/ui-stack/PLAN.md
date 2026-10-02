@@ -1,6 +1,6 @@
 # UI stack experiment: Preact and Svelte against React (#86)
 
-Pinned base: `48c587c6` on `main` (Astro 7, React 19, `@base-ui/react`, `lucide-react`, Nanostores 1.5).
+Pinned base: `0c530f37` on `main` (re-pinned from `48c587c6` to pick up the paper-minis logic changes) (Astro 7, React 19, `@base-ui/react`, `lucide-react`, Nanostores 1.5).
 Package manager: Bun 1.4.2. Node 24.21. Browser for e2e and measurements: Playwright Chromium (Playwright 1.63).
 
 Branches:
