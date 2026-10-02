@@ -169,7 +169,7 @@ function parseCount(token: string): number | undefined {
 
 function parseCustomSize(label: string, dimensions: string) {
   if (label.toLowerCase() !== 'custom') return undefined;
-  if (!dimensions.includes('x')) return undefined;
+  if (!/^\d+(\.\d+)?x\d+(\.\d+)?$/i.test(dimensions)) return undefined;
   const [rawWidth, rawHeight, extra] = dimensions.split('x');
   if (extra !== undefined || rawWidth === undefined || rawHeight === undefined)
     return { valid: false } as const;
@@ -181,8 +181,8 @@ function parseCustomSize(label: string, dimensions: string) {
 }
 
 function parseCalibration(headToken: string, feetToken: string): HeightCalibration | null | undefined {
-  const headMatch = /^h(\d{3})$/i.exec(headToken);
-  const feetMatch = /^f(\d{3})$/i.exec(feetToken);
+  const headMatch = /^h(\d{3}|1000)$/i.exec(headToken);
+  const feetMatch = /^f(\d{3}|1000)$/i.exec(feetToken);
   if (!headMatch || !feetMatch) return undefined;
   const calibration = { head: Number(headMatch[1]) / 1000, feet: Number(feetMatch[1]) / 1000 };
   return calibrationGap(calibration) === undefined ? null : calibration;

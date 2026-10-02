@@ -337,6 +337,29 @@ test('a name ending in custom without dimensions keeps custom in the name', () =
   ]);
 });
 
+test.each([
+  ['goblin-custom-axe.png', 'Goblin custom axe'],
+  ['custom-box-front.png', 'Custom box'],
+  ['knight-custom-max-front.png', 'Knight custom max'],
+])('%s keeps custom name tokens when dimensions are not numeric WxH', (fileName, name) => {
+  // #given
+  const files = [fileName];
+  // #when
+  const plannedRows = detailedRows(...files);
+  // #then
+  expect(plannedRows).toEqual([
+    {
+      name,
+      front: fileName,
+      back: undefined,
+      heightSlot: undefined,
+      customWidthMm: undefined,
+      customHeightMm: undefined,
+      count: undefined,
+    },
+  ]);
+});
+
 test('front and back with different counts still pair', () => {
   // #given
   const fileNames = ['goblin-small-front-x2.png', 'goblin-small-back-x5.png'];
@@ -432,6 +455,12 @@ test('calibration markers are read from the front side', () => {
   const [row] = planBatch([file('goblin-medium-front-h200-f800.png')]);
 
   expect(row.calibration).toEqual({ head: 0.2, feet: 0.8 });
+});
+
+test('calibration markers accept the bottom edge as f1000', () => {
+  const [row] = planBatch([file('goblin-medium-front-h200-f1000.png')]);
+
+  expect(row.calibration).toEqual({ head: 0.2, feet: 1 });
 });
 
 test('front calibration wins over back calibration', () => {
