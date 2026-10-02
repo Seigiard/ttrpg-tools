@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
-import { packMinis, packRows, type Placement } from './packing';
+import { packMinis, type Placement } from './packing';
+import { packRowCandidate } from '@/test-utils/pack-row-candidate';
 import { HEIGHT_SLOT_ORDER } from './sizes';
 import type { PackingEntry } from './types';
 
@@ -23,7 +24,7 @@ for (const pageSize of ['a4', 'letter'] as const) {
     const opts = { pageSize, numberDuplicates: false };
     // #when
     const result = packMinis(entries, opts);
-    const rows = packRows(entries, opts);
+    const rows = packRowCandidate(entries, opts);
     // #then
     expect({
       pages: result.pages.map((page) => page.placements.map((p) => [p.mini.entryIndex, p.rotated])),
@@ -76,7 +77,7 @@ test('row rescues scan earlier sheets before opening another dedicated strip', (
     rescue,
   ];
   // #when
-  const result = packRows(entries, { pageSize: 'a4', numberDuplicates: false });
+  const result = packRowCandidate(entries, { pageSize: 'a4', numberDuplicates: false });
   // #then
   expect(result.pages.map((p) => p.rows.map((r) => r.items.map((m) => m.entryIndex)))).toEqual([
     [[0], [2]],
@@ -189,7 +190,7 @@ for (const pageSize of ['a4', 'letter'] as const) {
       const result = packMinis(entries, opts);
       const width = pageSize === 'a4' ? 190 : 196;
       const height = pageSize === 'a4' ? 277 : 259;
-      if (result.pageCount > packRows(entries, opts).pageCount) violations.push('more sheets');
+      if (result.pageCount > packRowCandidate(entries, opts).pageCount) violations.push('more sheets');
       if (JSON.stringify(result) !== JSON.stringify(packMinis(entries, opts)))
         violations.push('nondeterministic');
       const placed = result.pages.flatMap((page) => page.placements);

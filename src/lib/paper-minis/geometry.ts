@@ -1,6 +1,11 @@
-import type { HeightCalibration, PackingEntry } from './types';
+import type { HeightCalibration, MiniSize, PackingEntry } from './types';
 import { calibrationGap } from './calibration';
-import { type SizeDimensionsMm, resolveSizeDimensionsMm, resolveTabHeightMm } from './sizes.ts';
+import {
+  type SizeDimensionsMm,
+  hasPackableDimensions,
+  resolveSizeDimensionsMm,
+  resolveTabHeightMm,
+} from './sizes.ts';
 
 export type FigureFitLimit = 'height' | 'width' | 'page';
 export type FigureFitMm = {
@@ -28,6 +33,75 @@ export type PackOptions = {
   numberDuplicates: boolean;
   marginMm?: number;
 };
+
+export function usableAreaMm(pageSize: PageSizeKey): { widthMm: number; heightMm: number } {
+  const { w, h } = PAGE_SIZES_MM[pageSize];
+  return { widthMm: w - MARGIN_MM * 2, heightMm: h - MARGIN_MM * 2 };
+}
+
+export const CUT_MARK_ARM_MM = 1.5;
+export const CUT_MARK_STROKE_MM = 0.2;
+export const CUT_MARK_EXTENT_MM = CUT_MARK_ARM_MM + CUT_MARK_STROKE_MM / 2;
+
+// A single copy of an entry, with its resolved geometry. entryIndex maps back
+// to the source entry so callers (the PDF drawer, the warning UI) can attribute
+// each mini to its row.
+export type PackedMini = {
+  entryIndex: number;
+  copyIndex: number; // 0-based copy within the entry
+  heightSlot: MiniSize;
+  baseWidthMm: number; // the category's base, which sizes the stand and the badge
+  totalWidthMm: number; // the widest of base and both figures, plus margins — the cut-out's width, and every strip's
+  baseOffsetXMm: number; // offset of the base from the reserved column's left edge
+  tabHeightMm: number; // each end strip; the floor strip under the front tab is twice this
+  marginMm: number;
+  imageWidthMm: number; // the front image's drawn width; may exceed baseWidthMm. `back` holds the back's
+  imageHeightMm: number;
+  imageOffsetXMm: number; // offset from the outline's left edge, including margin and centering
+  // Each face's paper between its tab and the fold: the taller of the two
+  // images, so both halves fold to the same length and both tabs meet the floor.
+  faceHeightMm: number;
+  back?: BackFace; // present only for an entry with back artwork
+  fitLimits: FigureFitLimit[];
+  totalHeightMm: number;
+  label?: string;
+};
+
+// The front's three image fields again, for the back artwork.
+export type BackFace = { imageWidthMm: number; imageHeightMm: number; imageOffsetXMm: number };
+
+// How a mini can sit on the usable area: as drawn, only turned a quarter, or
+// not at all. Both layout candidates take this as given.
+export type MiniOrientation = 'upright' | 'rotated' | 'oversized';
+
+// One entry resolved against the page options. Every copy shares the geometry,
+// so orientation and limits hold for the whole entry.
+export type ResolvedMini = {
+  entryIndex: number;
+  orientation: MiniOrientation;
+  limits: FigureFitLimit[];
+  copies: PackedMini[];
+};
+
+export function footprintMm(
+  mini: PackedMini,
+  rotated: boolean,
+): { widthMm: number; heightMm: number } {
+  return rotated
+    ? {
+        widthMm: mini.totalHeightMm + CUT_MARK_EXTENT_MM * 2,
+        heightMm: mini.totalWidthMm + CUT_MARK_EXTENT_MM * 2,
+      }
+    : { widthMm: mini.totalWidthMm, heightMm: mini.totalHeightMm };
+}
+
+function miniOrientation(mini: PackedMini, pageSize: PageSizeKey): MiniOrientation {
+  const usable = usableAreaMm(pageSize);
+  const fits = ({ widthMm, heightMm }: { widthMm: number; heightMm: number }) =>
+    widthMm <= usable.widthMm && heightMm <= usable.heightMm;
+  if (fits(footprintMm(mini, false))) return 'upright';
+  return fits(footprintMm(mini, true)) ? 'rotated' : 'oversized';
+}
 
 // A figure is never wider than this multiple of the height its slot prints at.
 // Height comes from the height slot, so width is the axis that can run away:
@@ -164,4 +238,86 @@ const fitLimitLabels: Record<FigureFitLimit, string> = {
 export function fitLimitWarning(limits: readonly FigureFitLimit[]): string | undefined {
   if (!limits.length) return undefined;
   return `Миниатюра уменьшена: ${limits.map((limit) => fitLimitLabels[limit]).join(', ')}.`;
+}
+
+// Resolves one entry into the geometry every copy prints with and how it sits
+// on the page. Entries lacking an image's natural dimensions or the dimensions
+// sizing needs are not packable yet and resolve to undefined — that includes a
+// custom entry with no figure height, which is why a row can vanish from the
+// count with a perfectly good base width.
+export function resolveMini(
+  e: PackingEntry,
+  entryIndex: number,
+  opts: PackOptions,
+): ResolvedMini | undefined {
+  if (
+    !hasPackableDimensions(e) ||
+    e.count <= 0 ||
+    e.naturalWidth == null ||
+    e.naturalHeight == null ||
+    e.naturalWidth <= 0 ||
+    e.naturalHeight <= 0
+  ) {
+    return undefined;
+  }
+  const { baseWidthMm } = resolveSizeDimensionsMm(e);
+  const marginMm = opts.marginMm ?? DEFAULT_FIGURE_MARGIN_MM;
+  const tabHMm = resolveTabHeightMm(e);
+  const { front, back: rawBackFit } = fitMiniFaces(
+    { ...e, naturalWidth: e.naturalWidth, naturalHeight: e.naturalHeight },
+    opts,
+  );
+  const { imageWidthMm, imageHeightMm } = front;
+  const backFit = rawBackFit && {
+    imageWidthMm: rawBackFit.imageWidthMm,
+    imageHeightMm: rawBackFit.imageHeightMm,
+  };
+  // A figure may overhang its base, so the reserved column is the widest of
+  // base and faces.
+  const contentWidthMm = Math.max(baseWidthMm, imageWidthMm, backFit?.imageWidthMm ?? 0);
+  const totalWidthMm = contentWidthMm + marginMm * 2;
+  const imageOffsetXMm = marginMm + (contentWidthMm - imageWidthMm) / 2;
+  const back = backFit && {
+    ...backFit,
+    imageOffsetXMm: marginMm + (contentWidthMm - backFit.imageWidthMm) / 2,
+  };
+  const faceHeightMm = Math.max(imageHeightMm, backFit?.imageHeightMm ?? 0);
+  // Derived here in millimetres rather than in the drawer, because the same
+  // arithmetic in points does not land on the same numbers. `drawMini` still
+  // derives the back badge's own offset, inside the rotated frame, from this
+  // rule — change it here and change it there.
+  const baseOffsetXMm = marginMm + (contentWidthMm - baseWidthMm) / 2;
+  // Face on face, a margin either side of the fold, a tab at each end and
+  // the floor strip, twice a tab, under the front one.
+  const totalHeightMm = faceHeightMm * 2 + marginMm * 2 + tabHMm * 4;
+  const limits = [...new Set([...front.limits, ...(rawBackFit?.limits ?? [])])];
+  const copies: PackedMini[] = [];
+  for (let i = 0; i < e.count; i++) {
+    copies.push({
+      entryIndex,
+      copyIndex: i,
+      heightSlot: e.heightSlot,
+      baseWidthMm,
+      totalWidthMm,
+      baseOffsetXMm,
+      tabHeightMm: tabHMm,
+      marginMm,
+      imageWidthMm,
+      imageHeightMm,
+      imageOffsetXMm,
+      faceHeightMm,
+      ...(back && { back }),
+      fitLimits: [...limits],
+      totalHeightMm,
+      label: opts.numberDuplicates ? String(i + 1) : undefined,
+    });
+  }
+  // A count that is not a number passes the check above but yields no copy.
+  if (copies.length === 0) return undefined;
+  return { entryIndex, orientation: miniOrientation(copies[0], opts.pageSize), limits, copies };
+}
+
+// Keeps entry indices: an entry that is not packable yet leaves a gap.
+export function resolveMinis(entries: PackingEntry[], opts: PackOptions): ResolvedMini[] {
+  return entries.flatMap((entry, entryIndex) => resolveMini(entry, entryIndex, opts) ?? []);
 }

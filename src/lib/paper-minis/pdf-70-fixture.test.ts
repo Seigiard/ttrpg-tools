@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'bun:test';
 import { pdf70Entries, type Pdf70Reconstruction } from './fixtures/pdf-70.ts';
-import { packMinis, packRows } from './packing.ts';
+import { packMinis } from './packing.ts';
+import { packRowCandidate } from '@/test-utils/pack-row-candidate';
 
 // #70's budget describes the observed set, not every possible perturbation.
 // The lower/upper sensitivity results and the failing upper Letter budget
@@ -14,7 +15,7 @@ for (const reconstruction of reconstructions) {
       // #given: #70 reports four A4 sheets and five Letter sheets with rows.
       const entries = pdf70Entries(reconstruction);
       // #when
-      const result = packRows(entries, { pageSize, numberDuplicates: false });
+      const result = packRowCandidate(entries, { pageSize, numberDuplicates: false });
       // #then
       assert.deepEqual(
         { pages: result.pageCount, placed: result.miniCount, skipped: result.skipped },

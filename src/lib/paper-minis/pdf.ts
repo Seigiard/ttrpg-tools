@@ -16,15 +16,18 @@ import {
   setStrokingGrayscaleColor,
 } from 'pdf-lib';
 import type { PreparedArtwork, Entry } from './types';
+import type { PackResult } from './packing.ts';
 import {
   CUT_MARK_ARM_MM,
   CUT_MARK_EXTENT_MM,
   CUT_MARK_STROKE_MM,
+  MARGIN_MM,
+  PAGE_SIZES_MM,
   type BackFace,
-  type PackResult,
+  type PackOptions,
   type PackedMini,
-} from './packing.ts';
-import { MARGIN_MM, PAGE_SIZES_MM, type PackOptions, type PageSizeKey } from './geometry.ts';
+  type PageSizeKey,
+} from './geometry.ts';
 
 export type { PageSizeKey };
 
