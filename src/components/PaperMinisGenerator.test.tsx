@@ -288,6 +288,40 @@ test('download action clicks an attached PDF download anchor', async () => {
   }
 });
 
+test('printer scale test sheet can download before any minis are added', async () => {
+  // #given
+  const originalClick = HTMLAnchorElement.prototype.click;
+  let clicked: { attached: boolean; download: string; protocol: string } | undefined;
+  HTMLAnchorElement.prototype.click = function () {
+    clicked = {
+      attached: this.isConnected,
+      download: this.download,
+      protocol: new URL(this.href).protocol,
+    };
+  };
+  try {
+    render(<PaperMinisGenerator />);
+    const download = screen.getByRole<HTMLButtonElement>('button', {
+      name: 'Скачать тестовый лист масштаба',
+    });
+    // #when
+    fireEvent.click(download);
+    // #then
+    await waitFor(() =>
+      expect({ disabled: download.disabled, clicked }).toEqual({
+        disabled: false,
+        clicked: {
+          attached: true,
+          download: 'paper-minis-printer-scale-test-a4.pdf',
+          protocol: 'blob:',
+        },
+      }),
+    );
+  } finally {
+    HTMLAnchorElement.prototype.click = originalClick;
+  }
+});
+
 test('export action waits for ready minis and clicks an attached zip download anchor', async () => {
   // #given
   setSystemTime(new Date(2026, 9, 2, 10, 30));

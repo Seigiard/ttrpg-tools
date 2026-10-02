@@ -10,7 +10,11 @@ import { ARTWORK_ACCEPT, artworkMimeType } from '@/lib/paper-minis/artwork-forma
 import { isSupportedArtwork } from '@/lib/paper-minis/artwork';
 import type { CalibrationLine } from '@/lib/paper-minis/calibration-session';
 import { entryStatusWarning } from '@/lib/paper-minis/geometry';
-import { buildFilename } from '@/lib/paper-minis/pdf';
+import {
+  buildFilename,
+  buildPrinterScaleTestSheetFilename,
+  generatePrinterScaleTestSheet,
+} from '@/lib/paper-minis/pdf';
 import { HEIGHT_SLOT_ORDER, slotLabel, slotGeometryLabel, slotName } from '@/lib/paper-minis/sizes';
 import type { HeightCalibration, MiniSize, PreparedArtwork } from '@/lib/paper-minis/types';
 
@@ -466,6 +470,27 @@ export default function PaperMinisGenerator() {
     }
   }
 
+  async function downloadPrinterScaleTestSheet() {
+    let url: string | undefined;
+    try {
+      const bytes = await generatePrinterScaleTestSheet(settings.pageSize);
+      const nextUrl = URL.createObjectURL(
+        new Blob([bytes as BlobPart], { type: 'application/pdf' }),
+      );
+      url = nextUrl;
+      const anchor = document.createElement('a');
+      anchor.href = nextUrl;
+      anchor.download = buildPrinterScaleTestSheetFilename(settings.pageSize);
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(nextUrl), 5000);
+    } catch {
+      if (url) URL.revokeObjectURL(url);
+      store.reportPdfFailure();
+    }
+  }
+
   async function exportZip() {
     const bytes = await store.exportZip();
     if (!bytes) return;
@@ -532,6 +557,18 @@ export default function PaperMinisGenerator() {
                   onBlur={store.commitMargin}
                 />
               </label>
+              <div className="space-y-2 border-t border-border pt-3">
+                <Button
+                  variant="outline"
+                  className="min-h-11 w-full whitespace-normal"
+                  onClick={() => void downloadPrinterScaleTestSheet()}
+                >
+                  Скачать тестовый лист масштаба
+                </Button>
+                <p className="text-sm leading-relaxed text-text-muted">
+                  Измерение зависит от принтера, диалога печати и размера бумаги.
+                </p>
+              </div>
               {rows.length > 0 && (
                 <label className="block text-sm">
                   Высота всех фигурок

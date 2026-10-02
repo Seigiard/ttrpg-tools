@@ -50,6 +50,9 @@ const SCALE_MAJOR_TICK_MM = 2.5;
 const SCALE_TICK_WIDTH_MM = 0.3;
 const SCALE_TEXT_PT = 7;
 export const SCALE_BAR_NOTE = 'Print with Scale to Fit. Measure again if this is not 100 mm.';
+const TEST_SHEET_INSTRUCTION =
+  'Print with Scale to Fit, measure the ruler, then enter the measured length.';
+const TEST_SHEET_TICK_WIDTH_MM = 0.2;
 
 export type GenerateOptions = PackOptions;
 
@@ -129,6 +132,44 @@ export async function generatePDF(
     pdfPage.pushOperators(popGraphicsState());
   }
 
+  return pdf.save();
+}
+
+export async function generatePrinterScaleTestSheet(pageSize: PageSizeKey): Promise<Uint8Array> {
+  const pdf = await PDFDocument.create();
+  pdf.setTitle('Paper Minis printer scale test sheet');
+  pdf.setCreator('Paper Mini Generator');
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const { w: pageWmm, h: pageHmm } = PAGE_SIZES_MM[pageSize];
+  const page = pdf.addPage([mm(pageWmm), mm(pageHmm)]);
+  const xMm = (pageWmm - SCALE_BAR_MM) / 2;
+  const yMm = pageHmm / 2;
+
+  page.drawRectangle({
+    x: mm(xMm),
+    y: mm(yMm),
+    width: mm(SCALE_BAR_MM),
+    height: mm(SCALE_BAR_THICKNESS_MM),
+    color: rgb(0, 0, 0),
+  });
+  for (let tickMm = 0; tickMm <= SCALE_BAR_MM; tickMm++) {
+    const length = tickMm % 10 === 0 ? SCALE_MAJOR_TICK_MM * 2 : SCALE_TICK_MM;
+    page.drawRectangle({
+      x: mm(xMm + Math.min(Math.max(tickMm - TEST_SHEET_TICK_WIDTH_MM / 2, 0), SCALE_BAR_MM - TEST_SHEET_TICK_WIDTH_MM)),
+      y: mm(yMm - length),
+      width: mm(TEST_SHEET_TICK_WIDTH_MM),
+      height: mm(length),
+      color: rgb(0, 0, 0),
+    });
+  }
+  const textWidth = font.widthOfTextAtSize(TEST_SHEET_INSTRUCTION, SCALE_TEXT_PT);
+  page.drawText(TEST_SHEET_INSTRUCTION, {
+    x: (mm(pageWmm) - textWidth) / 2,
+    y: mm(yMm - SCALE_MAJOR_TICK_MM * 2 - 5),
+    size: SCALE_TEXT_PT,
+    font,
+    color: rgb(0, 0, 0),
+  });
   return pdf.save();
 }
 
@@ -342,4 +383,8 @@ export function buildFilename(): string {
   const d = new Date();
   const pad = (n: number) => n.toString().padStart(2, '0');
   return `paper-minis-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.pdf`;
+}
+
+export function buildPrinterScaleTestSheetFilename(pageSize: PageSizeKey): string {
+  return `paper-minis-printer-scale-test-${pageSize}.pdf`;
 }
