@@ -25,11 +25,11 @@
       "transferredBytes": 254
     },
     "byType": {
-      "document": {
+      "stylesheet": {
         "requests": 1,
         "transferredBytes": 127
       },
-      "stylesheet": {
+      "document": {
         "requests": 1,
         "transferredBytes": 127
       }
@@ -109,11 +109,11 @@
       "transferredBytes": 1865
     },
     "byType": {
-      "stylesheet": {
+      "document": {
         "requests": 1,
         "transferredBytes": 127
       },
-      "document": {
+      "stylesheet": {
         "requests": 1,
         "transferredBytes": 127
       },
@@ -128,12 +128,12 @@
     "mode": "cold",
     "total": {
       "requests": 11,
-      "transferredBytes": 38833
+      "transferredBytes": 39316
     },
     "byType": {
       "document": {
         "requests": 1,
-        "transferredBytes": 5492
+        "transferredBytes": 5701
       },
       "stylesheet": {
         "requests": 1,
@@ -141,7 +141,7 @@
       },
       "script": {
         "requests": 9,
-        "transferredBytes": 24927
+        "transferredBytes": 25201
       }
     }
   },
@@ -153,11 +153,11 @@
       "transferredBytes": 1865
     },
     "byType": {
-      "stylesheet": {
+      "document": {
         "requests": 1,
         "transferredBytes": 127
       },
-      "document": {
+      "stylesheet": {
         "requests": 1,
         "transferredBytes": 127
       },
@@ -197,11 +197,11 @@
       "transferredBytes": 1865
     },
     "byType": {
-      "document": {
+      "stylesheet": {
         "requests": 1,
         "transferredBytes": 127
       },
-      "stylesheet": {
+      "document": {
         "requests": 1,
         "transferredBytes": 127
       },
@@ -216,12 +216,12 @@
     "mode": "cold",
     "total": {
       "requests": 9,
-      "transferredBytes": 228914
+      "transferredBytes": 228935
     },
     "byType": {
       "document": {
         "requests": 1,
-        "transferredBytes": 5581
+        "transferredBytes": 5584
       },
       "stylesheet": {
         "requests": 1,
@@ -229,7 +229,7 @@
       },
       "script": {
         "requests": 7,
-        "transferredBytes": 214919
+        "transferredBytes": 214937
       }
     }
   },

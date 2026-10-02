@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-02T13:55:10.195Z",
-  "method": "HTML is read from dist. Linked scripts, modulepreload links, stylesheets, Astro island component-url and renderer-url attributes are resolved. Static JS imports are counted as initial-load JS. Dynamic imports are counted as lazy JS. Library labels come from chunk filenames and content heuristics for React, Astro, Base UI, Nanostores, Lucide and pdf-lib.",
+  "generatedAt": "2026-10-02T14:26:36.423Z",
+  "method": "HTML is read from dist. Linked scripts, modulepreload links, stylesheets, Astro island component-url and renderer-url attributes are resolved. Static JS imports are counted as initial-load JS. Dynamic imports and their transitive JS dependencies are counted as lazy JS. Library labels come from chunk filenames and content heuristics for Preact, React, Astro, Base UI, Nanostores, Lucide and pdf-lib.",
   "routes": [
     {
       "route": "/",
@@ -62,9 +62,9 @@
     {
       "route": "/mausritter/encounters",
       "html": {
-        "raw": 18937,
-        "gzip": 5224,
-        "brotli": 4260
+        "raw": 20202,
+        "gzip": 5431,
+        "brotli": 4460
       },
       "css": {
         "raw": 43575,
@@ -72,9 +72,9 @@
         "brotli": 7124
       },
       "externalJs": {
-        "raw": 56933,
-        "gzip": 21413,
-        "brotli": 18839
+        "raw": 57743,
+        "gzip": 21688,
+        "brotli": 19086
       },
       "inlineJs": {
         "raw": 4510,
@@ -82,14 +82,14 @@
         "brotli": 1652
       },
       "initialJs": {
-        "raw": 56933,
-        "gzip": 21413,
-        "brotli": 18839
+        "raw": 57743,
+        "gzip": 21688,
+        "brotli": 19086
       },
       "lazyJs": {
-        "raw": 0,
-        "gzip": 0,
-        "brotli": 0
+        "raw": 7808,
+        "gzip": 3012,
+        "brotli": 2748
       },
       "requestCount": 11,
       "resources": [
@@ -97,9 +97,9 @@
           "path": "mausritter/encounters/index.html",
           "kind": "html",
           "sizes": {
-            "raw": 18937,
-            "gzip": 5224,
-            "brotli": 4260
+            "raw": 20202,
+            "gzip": 5431,
+            "brotli": 4460
           },
           "libraries": []
         },
@@ -136,12 +136,12 @@
           "libraries": []
         },
         {
-          "path": "_astro/EncounterGenerator.BXUZGLKr.js",
+          "path": "_astro/EncounterGenerator.DpndJ5bH.js",
           "kind": "external-js",
           "sizes": {
-            "raw": 3539,
-            "gzip": 1202,
-            "brotli": 1036
+            "raw": 4349,
+            "gzip": 1477,
+            "brotli": 1283
           },
           "libraries": []
         },
@@ -154,7 +154,7 @@
             "brotli": 4228
           },
           "libraries": [
-            "react"
+            "preact"
           ]
         },
         {
@@ -226,6 +226,18 @@
             "brotli": 673
           },
           "libraries": []
+        },
+        {
+          "path": "_astro/signals.module.d_lnFeMu.js",
+          "kind": "lazy-js",
+          "sizes": {
+            "raw": 7808,
+            "gzip": 3012,
+            "brotli": 2748
+          },
+          "libraries": [
+            "preact"
+          ]
         }
       ],
       "topChunks": [
@@ -248,8 +260,30 @@
             "brotli": 4228
           },
           "libraries": [
-            "react"
+            "preact"
           ]
+        },
+        {
+          "path": "_astro/signals.module.d_lnFeMu.js",
+          "kind": "lazy-js",
+          "sizes": {
+            "raw": 7808,
+            "gzip": 3012,
+            "brotli": 2748
+          },
+          "libraries": [
+            "preact"
+          ]
+        },
+        {
+          "path": "_astro/EncounterGenerator.DpndJ5bH.js",
+          "kind": "external-js",
+          "sizes": {
+            "raw": 4349,
+            "gzip": 1477,
+            "brotli": 1283
+          },
+          "libraries": []
         },
         {
           "path": "_astro/hooks.module.D-Jy7yT3.js",
@@ -258,26 +292,6 @@
             "raw": 2877,
             "gzip": 1282,
             "brotli": 1165
-          },
-          "libraries": []
-        },
-        {
-          "path": "_astro/EncounterGenerator.BXUZGLKr.js",
-          "kind": "external-js",
-          "sizes": {
-            "raw": 3539,
-            "gzip": 1202,
-            "brotli": 1036
-          },
-          "libraries": []
-        },
-        {
-          "path": "_astro/dice.DLwh0EPY.js",
-          "kind": "external-js",
-          "sizes": {
-            "raw": 2251,
-            "gzip": 1039,
-            "brotli": 886
           },
           "libraries": []
         }
@@ -311,9 +325,9 @@
         "brotli": 21463
       },
       "lazyJs": {
-        "raw": 0,
-        "gzip": 0,
-        "brotli": 0
+        "raw": 7808,
+        "gzip": 3012,
+        "brotli": 2748
       },
       "requestCount": 11,
       "resources": [
@@ -378,7 +392,7 @@
             "brotli": 4228
           },
           "libraries": [
-            "react"
+            "preact"
           ]
         },
         {
@@ -450,6 +464,18 @@
             "brotli": 673
           },
           "libraries": []
+        },
+        {
+          "path": "_astro/signals.module.d_lnFeMu.js",
+          "kind": "lazy-js",
+          "sizes": {
+            "raw": 7808,
+            "gzip": 3012,
+            "brotli": 2748
+          },
+          "libraries": [
+            "preact"
+          ]
         }
       ],
       "topChunks": [
@@ -472,7 +498,7 @@
             "brotli": 4228
           },
           "libraries": [
-            "react"
+            "preact"
           ]
         },
         {
@@ -486,22 +512,24 @@
           "libraries": []
         },
         {
+          "path": "_astro/signals.module.d_lnFeMu.js",
+          "kind": "lazy-js",
+          "sizes": {
+            "raw": 7808,
+            "gzip": 3012,
+            "brotli": 2748
+          },
+          "libraries": [
+            "preact"
+          ]
+        },
+        {
           "path": "_astro/tabs.CVKQK71q.js",
           "kind": "external-js",
           "sizes": {
             "raw": 3922,
             "gzip": 1518,
             "brotli": 1328
-          },
-          "libraries": []
-        },
-        {
-          "path": "_astro/hooks.module.D-Jy7yT3.js",
-          "kind": "external-js",
-          "sizes": {
-            "raw": 2877,
-            "gzip": 1282,
-            "brotli": 1165
           },
           "libraries": []
         }
@@ -535,9 +563,9 @@
         "brotli": 20407
       },
       "lazyJs": {
-        "raw": 0,
-        "gzip": 0,
-        "brotli": 0
+        "raw": 7808,
+        "gzip": 3012,
+        "brotli": 2748
       },
       "requestCount": 12,
       "resources": [
@@ -612,7 +640,7 @@
             "brotli": 4228
           },
           "libraries": [
-            "react"
+            "preact"
           ]
         },
         {
@@ -684,6 +712,18 @@
             "brotli": 673
           },
           "libraries": []
+        },
+        {
+          "path": "_astro/signals.module.d_lnFeMu.js",
+          "kind": "lazy-js",
+          "sizes": {
+            "raw": 7808,
+            "gzip": 3012,
+            "brotli": 2748
+          },
+          "libraries": [
+            "preact"
+          ]
         }
       ],
       "topChunks": [
@@ -706,7 +746,19 @@
             "brotli": 4228
           },
           "libraries": [
-            "react"
+            "preact"
+          ]
+        },
+        {
+          "path": "_astro/signals.module.d_lnFeMu.js",
+          "kind": "lazy-js",
+          "sizes": {
+            "raw": 7808,
+            "gzip": 3012,
+            "brotli": 2748
+          },
+          "libraries": [
+            "preact"
           ]
         },
         {
@@ -728,16 +780,6 @@
             "brotli": 1276
           },
           "libraries": []
-        },
-        {
-          "path": "_astro/hooks.module.D-Jy7yT3.js",
-          "kind": "external-js",
-          "sizes": {
-            "raw": 2877,
-            "gzip": 1282,
-            "brotli": 1165
-          },
-          "libraries": []
         }
       ]
     },
@@ -745,8 +787,8 @@
       "route": "/paper-minis",
       "html": {
         "raw": 15555,
-        "gzip": 5318,
-        "brotli": 4269
+        "gzip": 5321,
+        "brotli": 4297
       },
       "css": {
         "raw": 43575,
@@ -754,9 +796,9 @@
         "brotli": 7124
       },
       "externalJs": {
-        "raw": 525728,
-        "gzip": 213012,
-        "brotli": 193288
+        "raw": 525777,
+        "gzip": 213031,
+        "brotli": 193315
       },
       "inlineJs": {
         "raw": 4510,
@@ -764,14 +806,14 @@
         "brotli": 1652
       },
       "initialJs": {
-        "raw": 525728,
-        "gzip": 213012,
-        "brotli": 193288
+        "raw": 525777,
+        "gzip": 213031,
+        "brotli": 193315
       },
       "lazyJs": {
-        "raw": 0,
-        "gzip": 0,
-        "brotli": 0
+        "raw": 20185,
+        "gzip": 9121,
+        "brotli": 8265
       },
       "requestCount": 9,
       "resources": [
@@ -780,8 +822,8 @@
           "kind": "html",
           "sizes": {
             "raw": 15555,
-            "gzip": 5318,
-            "brotli": 4269
+            "gzip": 5321,
+            "brotli": 4297
           },
           "libraries": []
         },
@@ -818,12 +860,12 @@
           "libraries": []
         },
         {
-          "path": "_astro/PaperMinisGenerator.BwEaM1Pt.js",
+          "path": "_astro/PaperMinisGenerator.D9gZWRQY.js",
           "kind": "external-js",
           "sizes": {
-            "raw": 474708,
-            "gzip": 194060,
-            "brotli": 176504
+            "raw": 474757,
+            "gzip": 194079,
+            "brotli": 176531
           },
           "libraries": [
             "pdf-lib"
@@ -838,7 +880,7 @@
             "brotli": 4228
           },
           "libraries": [
-            "react"
+            "preact"
           ]
         },
         {
@@ -890,16 +932,38 @@
             "brotli": 729
           },
           "libraries": []
+        },
+        {
+          "path": "_astro/browser.B92hvlif.js",
+          "kind": "lazy-js",
+          "sizes": {
+            "raw": 12377,
+            "gzip": 6109,
+            "brotli": 5517
+          },
+          "libraries": []
+        },
+        {
+          "path": "_astro/signals.module.d_lnFeMu.js",
+          "kind": "lazy-js",
+          "sizes": {
+            "raw": 7808,
+            "gzip": 3012,
+            "brotli": 2748
+          },
+          "libraries": [
+            "preact"
+          ]
         }
       ],
       "topChunks": [
         {
-          "path": "_astro/PaperMinisGenerator.BwEaM1Pt.js",
+          "path": "_astro/PaperMinisGenerator.D9gZWRQY.js",
           "kind": "external-js",
           "sizes": {
-            "raw": 474708,
-            "gzip": 194060,
-            "brotli": 176504
+            "raw": 474757,
+            "gzip": 194079,
+            "brotli": 176531
           },
           "libraries": [
             "pdf-lib"
@@ -916,6 +980,16 @@
           "libraries": []
         },
         {
+          "path": "_astro/browser.B92hvlif.js",
+          "kind": "lazy-js",
+          "sizes": {
+            "raw": 12377,
+            "gzip": 6109,
+            "brotli": 5517
+          },
+          "libraries": []
+        },
+        {
           "path": "_astro/preact.module.CEGzOhZf.js",
           "kind": "external-js",
           "sizes": {
@@ -924,28 +998,20 @@
             "brotli": 4228
           },
           "libraries": [
-            "react"
+            "preact"
           ]
         },
         {
-          "path": "_astro/hooks.module.D-Jy7yT3.js",
-          "kind": "external-js",
+          "path": "_astro/signals.module.d_lnFeMu.js",
+          "kind": "lazy-js",
           "sizes": {
-            "raw": 2877,
-            "gzip": 1282,
-            "brotli": 1165
+            "raw": 7808,
+            "gzip": 3012,
+            "brotli": 2748
           },
-          "libraries": []
-        },
-        {
-          "path": "_astro/client.DuKWhlt4.js",
-          "kind": "external-js",
-          "sizes": {
-            "raw": 1447,
-            "gzip": 817,
-            "brotli": 729
-          },
-          "libraries": []
+          "libraries": [
+            "preact"
+          ]
         }
       ]
     },
@@ -977,9 +1043,9 @@
         "brotli": 20980
       },
       "lazyJs": {
-        "raw": 0,
-        "gzip": 0,
-        "brotli": 0
+        "raw": 7808,
+        "gzip": 3012,
+        "brotli": 2748
       },
       "requestCount": 11,
       "resources": [
@@ -1054,7 +1120,7 @@
             "brotli": 4228
           },
           "libraries": [
-            "react"
+            "preact"
           ]
         },
         {
@@ -1116,6 +1182,18 @@
             "brotli": 673
           },
           "libraries": []
+        },
+        {
+          "path": "_astro/signals.module.d_lnFeMu.js",
+          "kind": "lazy-js",
+          "sizes": {
+            "raw": 7808,
+            "gzip": 3012,
+            "brotli": 2748
+          },
+          "libraries": [
+            "preact"
+          ]
         }
       ],
       "topChunks": [
@@ -1138,7 +1216,7 @@
             "brotli": 4228
           },
           "libraries": [
-            "react"
+            "preact"
           ]
         },
         {
@@ -1152,22 +1230,24 @@
           "libraries": []
         },
         {
+          "path": "_astro/signals.module.d_lnFeMu.js",
+          "kind": "lazy-js",
+          "sizes": {
+            "raw": 7808,
+            "gzip": 3012,
+            "brotli": 2748
+          },
+          "libraries": [
+            "preact"
+          ]
+        },
+        {
           "path": "_astro/tabs.CVKQK71q.js",
           "kind": "external-js",
           "sizes": {
             "raw": 3922,
             "gzip": 1518,
             "brotli": 1328
-          },
-          "libraries": []
-        },
-        {
-          "path": "_astro/hooks.module.D-Jy7yT3.js",
-          "kind": "external-js",
-          "sizes": {
-            "raw": 2877,
-            "gzip": 1282,
-            "brotli": 1165
           },
           "libraries": []
         }
