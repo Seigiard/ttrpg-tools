@@ -114,9 +114,10 @@ function exportSize(row: MiniRow): string {
 }
 
 function exportCalibration(row: MiniRow): string {
-  if (calibrationGap(row.calibration) === undefined) return '';
-  const head = String(Math.round(row.calibration.head * 1000)).padStart(3, '0');
-  const feet = String(Math.round(row.calibration.feet * 1000)).padStart(3, '0');
+  const calibration = row.calibration;
+  if (!calibration || calibrationGap(calibration) === undefined) return '';
+  const head = String(Math.round(calibration.head * 1000)).padStart(3, '0');
+  const feet = String(Math.round(calibration.feet * 1000)).padStart(3, '0');
   return `-h${head}-f${feet}`;
 }
 
