@@ -893,11 +893,15 @@ t('the scale bar sits in its reserved band, clear of the first row, on both page
         marksAboveRow: bar.marks.every((box) => box.bottom > mini.marks.top),
         noteAboveRow: bar.notes.every((note) => note.position.y > mini.marks.top),
         noteInsidePage: bar.notes.every((note) => note.position.x >= 0),
+        // The note starts at the bar's left end, so it must clear the bar and its ticks.
+        noteClearOfBar: bar.notes.every((note) =>
+          bar.marks.every((box) => note.position.y > box.top),
+        ),
       };
     }),
     [
-      { marksAboveRow: true, noteAboveRow: true, noteInsidePage: true },
-      { marksAboveRow: true, noteAboveRow: true, noteInsidePage: true },
+      { marksAboveRow: true, noteAboveRow: true, noteInsidePage: true, noteClearOfBar: true },
+      { marksAboveRow: true, noteAboveRow: true, noteInsidePage: true, noteClearOfBar: true },
     ],
   );
 });

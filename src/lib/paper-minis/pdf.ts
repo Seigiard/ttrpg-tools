@@ -46,6 +46,7 @@ const SCALE_TICK_MM = 1.5;
 const SCALE_MAJOR_TICK_MM = 2.5;
 const SCALE_TICK_WIDTH_MM = 0.3;
 const SCALE_TEXT_PT = 7;
+const SCALE_NOTE_GAP_MM = 1.5;
 export const SCALE_BAR_NOTE =
   'Print with Scale to Fit. This bar should be 100 mm; if not, reprint the printer test sheet.';
 const TEST_SHEET_INSTRUCTION =
@@ -317,9 +318,11 @@ function drawScaleBar(pdfPage: PDFPage, pageHmm: number, font: PDFFont) {
       color,
     });
   }
+  // Above the bar: the ticks hang below it, and the note is too long to sit
+  // beside a 100 mm bar on a scaled A4 or Letter width.
   pdfPage.drawText(SCALE_BAR_NOTE, {
     x: 0,
-    y: mm(barY - SCALE_MAJOR_TICK_MM),
+    y: mm(barY + SCALE_NOTE_GAP_MM),
     size: SCALE_TEXT_PT,
     font,
     color,
