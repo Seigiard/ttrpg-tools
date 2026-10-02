@@ -34,64 +34,41 @@ async function addBack(bytes = png) {
   });
 }
 
-test('clearing copies disables generation until blur restores the last valid count', async () => {
-  // #given
-  render(<PaperMinisGenerator />);
-  await addFront();
-  const input = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Количество копий' });
-  fireEvent.change(input, { target: { value: '2' } });
-  // #when
-  fireEvent.change(input, { target: { value: '' } });
-  const cleared = input.value;
-  const disabled = screen.getByRole<HTMLButtonElement>('button', { name: 'Скачать PDF' }).disabled;
-  const reason = screen.getByText(
-    'Количество должно быть целым числом от 1, размеры — больше 0 мм.',
-  ).textContent;
-  fireEvent.blur(input);
-  // #then
-  expect({
-    cleared,
-    value: input.value,
-    invalid: input.getAttribute('aria-invalid'),
-    disabled,
-    reason,
-    reasonAfterBlur:
-      screen.queryByText('Количество должно быть целым числом от 1, размеры — больше 0 мм.')
-        ?.textContent ?? null,
-    summary: document.querySelector('[aria-live="polite"]')?.textContent,
-  }).toEqual({
-    cleared: '',
-    value: '2',
-    invalid: 'false',
-    disabled: true,
-    reason: 'Количество должно быть целым числом от 1, размеры — больше 0 мм.',
-    reasonAfterBlur: null,
-    summary: 'Миниатюр: 2 → листов: 1 (A4)',
-  });
-});
-
-test('an invalid margin draft reverts on blur and restores PDF actions', async () => {
+test('both PDF actions follow generation availability', async () => {
   // #given
   render(<PaperMinisGenerator />);
   await addFront();
   const input = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Поля, мм' });
   // #when
   fireEvent.change(input, { target: { value: '' } });
-  const disabled = screen.getByRole<HTMLButtonElement>('button', { name: 'Скачать PDF' }).disabled;
-  fireEvent.blur(input);
+  const disabled = ['Скачать PDF', 'Предпросмотр PDF'].map(
+    (name) => screen.getByRole<HTMLButtonElement>('button', { name }).disabled,
+  );
+  fireEvent.change(input, { target: { value: '2' } });
   // #then
   expect({
     disabled,
-    value: input.value,
-    invalid: input.getAttribute('aria-invalid'),
-    enabled: !screen.getByRole<HTMLButtonElement>('button', { name: 'Скачать PDF' }).disabled,
-  }).toEqual({ disabled: true, value: '2', invalid: 'false', enabled: true });
+    enabled: ['Скачать PDF', 'Предпросмотр PDF'].map(
+      (name) => !screen.getByRole<HTMLButtonElement>('button', { name }).disabled,
+    ),
+  }).toEqual({ disabled: [true, true], enabled: [true, true] });
 });
 
-test('an invalid custom width reverts its own last valid value on blur', async () => {
+test('blur restores every invalid numeric draft without changing another field', async () => {
   // #given
   render(<PaperMinisGenerator />);
   await addFront();
+  const count = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Количество копий' });
+  const margin = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Поля, мм' });
+  fireEvent.change(count, { target: { value: '2' } });
+  fireEvent.change(margin, { target: { value: '5' } });
+  // #when
+  fireEvent.change(count, { target: { value: '' } });
+  fireEvent.blur(count);
+  const restoredCount = { value: count.value, invalid: count.getAttribute('aria-invalid') };
+  fireEvent.change(margin, { target: { value: '' } });
+  fireEvent.blur(margin);
+  const restoredMargin = { value: margin.value, invalid: margin.getAttribute('aria-invalid') };
   fireEvent.change(screen.getByRole('combobox', { name: 'Высота существа' }), {
     target: { value: 'custom' },
   });
@@ -99,18 +76,32 @@ test('an invalid custom width reverts its own last valid value on blur', async (
   const height = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Фигурка, мм' });
   fireEvent.change(width, { target: { value: '12.5' } });
   fireEvent.change(height, { target: { value: '40' } });
-  // #when
   fireEvent.change(width, { target: { value: '0' } });
-  const disabled = screen.getByRole<HTMLButtonElement>('button', { name: 'Скачать PDF' }).disabled;
   fireEvent.blur(width);
+  const afterWidthBlur = { width: width.value, height: height.value };
+  fireEvent.change(height, { target: { value: '0' } });
+  fireEvent.blur(height);
   // #then
   expect({
-    disabled,
-    width: width.value,
-    height: height.value,
-    invalid: width.getAttribute('aria-invalid'),
-    enabled: !screen.getByRole<HTMLButtonElement>('button', { name: 'Скачать PDF' }).disabled,
-  }).toEqual({ disabled: true, width: '12.5', height: '40', invalid: 'false', enabled: true });
+    count: restoredCount,
+    margin: restoredMargin,
+    afterWidthBlur,
+    afterHeightBlur: { width: width.value, height: height.value },
+    dimensionsInvalid: [
+      width.getAttribute('aria-invalid'),
+      height.getAttribute('aria-invalid'),
+    ],
+    actionsEnabled: ['Скачать PDF', 'Предпросмотр PDF'].map(
+      (name) => !screen.getByRole<HTMLButtonElement>('button', { name }).disabled,
+    ),
+  }).toEqual({
+    count: { value: '2', invalid: 'false' },
+    margin: { value: '5', invalid: 'false' },
+    afterWidthBlur: { width: '12.5', height: '40' },
+    afterHeightBlur: { width: '12.5', height: '40' },
+    dimensionsInvalid: ['false', 'false'],
+    actionsEnabled: [true, true],
+  });
 });
 
 test('a thumbnail drop uses the first supported image even after an unsupported file', async () => {
