@@ -103,7 +103,7 @@ function readMarkers(tokens: readonly string[]) {
   let count: number | undefined;
   while (end > 0) {
     const token = tokens[end - 1].toLowerCase();
-    if (count === undefined && token.startsWith('x')) {
+    if (count === undefined && /^x\d+$/i.test(token)) {
       const parsed = parseCount(token);
       if (parsed !== undefined) count = parsed;
       end -= 1;

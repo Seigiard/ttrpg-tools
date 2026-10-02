@@ -199,27 +199,43 @@ test('x1 is ignored and leaves the default count implicit', () => {
   ]);
 });
 
-test.each(['goblin-small-front-x0.png', 'goblin-small-front-xmany.png'])(
-  '%s ignores a broken count marker',
-  (fileName) => {
-    // #given
-    const files = [fileName];
-    // #when
-    const plannedRows = detailedRows(...files);
-    // #then
-    expect(plannedRows).toEqual([
-      {
-        name: 'Goblin',
-        front: fileName,
-        back: undefined,
-        heightSlot: 'small',
-        customWidthMm: undefined,
-        customHeightMm: undefined,
-        count: undefined,
-      },
-    ]);
-  },
-);
+test('x0 is consumed as a broken count marker', () => {
+  // #given
+  const fileName = 'goblin-small-front-x0.png';
+  // #when
+  const plannedRows = detailedRows(fileName);
+  // #then
+  expect(plannedRows).toEqual([
+    {
+      name: 'Goblin',
+      front: fileName,
+      back: undefined,
+      heightSlot: 'small',
+      customWidthMm: undefined,
+      customHeightMm: undefined,
+      count: undefined,
+    },
+  ]);
+});
+
+test('junk after x stays in the name', () => {
+  // #given
+  const fileName = 'goblin-small-front-xmany.png';
+  // #when
+  const plannedRows = detailedRows(fileName);
+  // #then
+  expect(plannedRows).toEqual([
+    {
+      name: 'Goblin small front xmany',
+      front: fileName,
+      back: undefined,
+      heightSlot: undefined,
+      customWidthMm: undefined,
+      customHeightMm: undefined,
+      count: undefined,
+    },
+  ]);
+});
 
 test('a valid count marker plans the row count', () => {
   // #given
@@ -236,6 +252,28 @@ test('a valid count marker plans the row count', () => {
       customWidthMm: undefined,
       customHeightMm: undefined,
       count: 4,
+    },
+  ]);
+});
+
+test.each([
+  ['xorn-small-front.png', 'Xorn', 'small'],
+  ['goblin-xbow-front.png', 'Goblin xbow', undefined],
+])('%s keeps an x-prefixed name token', (fileName, name, heightSlot) => {
+  // #given
+  const files = [fileName];
+  // #when
+  const plannedRows = detailedRows(...files);
+  // #then
+  expect(plannedRows).toEqual([
+    {
+      name,
+      front: fileName,
+      back: undefined,
+      heightSlot,
+      customWidthMm: undefined,
+      customHeightMm: undefined,
+      count: undefined,
     },
   ]);
 });
