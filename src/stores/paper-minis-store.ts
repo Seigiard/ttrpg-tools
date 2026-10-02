@@ -515,13 +515,25 @@ export function createPaperMinisStore({
   }
   async function ingest(files: File[]) {
     if (!$acceptsFiles.get()) return;
-    const valid: File[] = [];
-    let skipped = false;
-    for (const file of files) {
-      if (isZipFile(file)) {
+    const hasZip = files.some(isZipFile);
+    if (!hasZip) {
+      const valid = files.filter(isSupportedArtwork);
+      $message.set(valid.length < files.length ? skippedFilesMessage : '');
+      ingestArtworkFiles(valid);
+      return;
+    }
+    const { unzipSync } = await import('fflate');
+    const expanded = await Promise.all(
+      files.map(async (file): Promise<{ files: File[]; skipped: boolean }> => {
+        if (!isZipFile(file)) {
+          return isSupportedArtwork(file)
+            ? { files: [file], skipped: false }
+            : { files: [], skipped: true };
+        }
         try {
-          const { unzipSync } = await import('fflate');
           const entries = unzipSync(new Uint8Array(await file.arrayBuffer()));
+          const extracted: File[] = [];
+          let skipped = false;
           for (const [path, bytes] of Object.entries(entries)) {
             const name = flattenedFileName(path);
             const type = name && artworkTypeFromName(name);
@@ -529,18 +541,21 @@ export function createPaperMinisStore({
               if (name) skipped = true;
               continue;
             }
-            valid.push(new File([bytes], name, { type }));
+            extracted.push(new File([bytes], name, { type }));
           }
+          return { files: extracted, skipped };
         } catch {
-          skipped = true;
+          return { files: [], skipped: true };
         }
-        continue;
-      }
-      if (isSupportedArtwork(file)) valid.push(file);
-      else skipped = true;
-    }
+      }),
+    );
+    const valid = expanded.flatMap((item) => item.files);
+    const skipped = expanded.some((item) => item.skipped);
     $message.set(skipped ? skippedFilesMessage : '');
-    for (const planned of planBatch(valid)) {
+    ingestArtworkFiles(valid);
+  }
+  function ingestArtworkFiles(files: File[]) {
+    for (const planned of planBatch(files)) {
       const id = addBlank(planned);
       if (id === undefined) continue;
       void setImage(id, planned.front);
