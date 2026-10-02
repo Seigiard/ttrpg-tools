@@ -5,6 +5,7 @@ import {
   hasPackableDimensions,
   resolveSizeDimensionsMm,
   resolveTabHeightMm,
+  validCalibrationGap,
 } from './sizes.ts';
 
 // Page and layout constants. These live here (not in pdf.ts) so the packing
@@ -92,6 +93,7 @@ export function packEntries(entries: Entry[], opts: PackOptions): PackResult {
       customHeightMm: entry.customHeightMm,
       count: entry.count,
       frontCalibration: entry.frontCalibration,
+      backCalibration: entry.backCalibration,
       naturalWidth: isBackArtworkLoading(entry) ? undefined : entry.artwork?.width,
       naturalHeight: isBackArtworkLoading(entry) ? undefined : entry.artwork?.height,
       backNaturalWidth: entry.backArtwork?.width,
@@ -129,9 +131,7 @@ export function packMinis(entries: PackingEntry[], opts: PackOptions): PackResul
       return; // not packable yet
     }
     const tabHMm = resolveTabHeightMm(e);
-    const maxImageHeightMm = e.frontCalibration
-      ? Math.max(0, (usableHmm - marginMm * 2 - tabHMm * 4) / 2)
-      : undefined;
+    const maxImageHeightMm = Math.max(0, (usableHmm - marginMm * 2 - tabHMm * 4) / 2);
     const { imageWidthMm, imageHeightMm, limits } = fitFigure(
       dimensions,
       e.naturalWidth,
@@ -141,7 +141,21 @@ export function packMinis(entries: PackingEntry[], opts: PackOptions): PackResul
     );
     const rawBackFit =
       e.backNaturalWidth && e.backNaturalHeight
-        ? fitFigure(dimensions, e.backNaturalWidth, e.backNaturalHeight)
+        ? validCalibrationGap(e.backCalibration)
+          ? fitFigure(
+              dimensions,
+              e.backNaturalWidth,
+              e.backNaturalHeight,
+              e.backCalibration,
+              maxImageHeightMm,
+            )
+          : validCalibrationGap(e.frontCalibration)
+            ? {
+                imageHeightMm,
+                imageWidthMm: (e.backNaturalWidth / e.backNaturalHeight) * imageHeightMm,
+                limits: [],
+              }
+            : fitFigure(dimensions, e.backNaturalWidth, e.backNaturalHeight)
         : undefined;
     const backFit = rawBackFit && {
       imageWidthMm: rawBackFit.imageWidthMm,
@@ -180,7 +194,7 @@ export function packMinis(entries: PackingEntry[], opts: PackOptions): PackResul
         imageOffsetXMm,
         faceHeightMm,
         ...(back && { back }),
-        fitLimits: limits,
+        fitLimits: [...new Set([...limits, ...(rawBackFit?.limits ?? [])])],
         totalHeightMm,
         label: opts.numberDuplicates ? String(i + 1) : undefined,
       });

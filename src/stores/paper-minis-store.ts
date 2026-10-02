@@ -66,7 +66,7 @@ export function createPaperMinisStore() {
     patch(
       id,
       back
-        ? { backImage: file, backArtwork: null, backWarning: undefined }
+        ? { backImage: file, backArtwork: null, backCalibration: undefined, backWarning: undefined }
         : {
             image: file,
             artwork: null,
@@ -137,7 +137,11 @@ export function createPaperMinisStore() {
       /* Storage is optional. */
     }
     if (previous.normalization !== next.normalization) {
-      $rows.set($rows.get().map((row) => Object.assign({}, row, { frontCalibration: undefined })));
+      $rows.set(
+        $rows
+          .get()
+          .map((row) => Object.assign({}, row, { frontCalibration: undefined, backCalibration: undefined })),
+      );
       for (const row of $rows.get()) {
         if (row.image) void setImage(row.id, row.image);
         if (row.backImage) void setImage(row.id, row.backImage, true);
@@ -192,11 +196,17 @@ export function createPaperMinisStore() {
     clearFrontCalibration(id: number) {
       patch(id, { frontCalibration: undefined });
     },
+    setBackCalibration(id: number, calibration: HeightCalibration) {
+      patch(id, { backCalibration: calibration });
+    },
+    clearBackCalibration(id: number) {
+      patch(id, { backCalibration: undefined });
+    },
     pack: () => packEntries($rows.get(), $settings.get()),
     clearBack(id: number) {
       if ($busy.get()) return;
       loads.delete(`${id}:true`);
-      patch(id, { backImage: null, backArtwork: null, backWarning: undefined });
+      patch(id, { backImage: null, backArtwork: null, backCalibration: undefined, backWarning: undefined });
       $preparing.set(loads.size > 0);
     },
     remove(id: number) {

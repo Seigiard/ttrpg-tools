@@ -177,27 +177,39 @@ function ArtworkSlot({
 
 function HeightCalibrationDialog({
   artwork,
+  backArtwork,
   rowLabel,
   slotHeightMm,
   initial,
   previewLimits,
+  initialBack,
   onApply,
   onCancel,
 }: {
   artwork: PreparedArtwork;
+  backArtwork?: PreparedArtwork | null;
   rowLabel: string;
   slotHeightMm: number;
   initial?: HeightCalibration;
-  previewLimits: (calibration: HeightCalibration) => FigureFitLimit[];
-  onApply: (calibration: HeightCalibration) => void;
+  previewLimits: (side: 'front' | 'back', calibration: HeightCalibration) => FigureFitLimit[];
+  initialBack?: HeightCalibration;
+  onApply: (side: 'front' | 'back', calibration: HeightCalibration) => void;
   onCancel: () => void;
 }) {
-  const url = useArtworkUrl(artwork);
+  const [side, setSide] = useState<'front' | 'back'>('front');
+  const currentArtwork = side === 'front' ? artwork : (backArtwork ?? artwork);
+  const url = useArtworkUrl(currentArtwork);
   const artworkRef = useRef<HTMLDivElement>(null);
   const dragging = useRef<'head' | 'feet' | null>(null);
-  const [lines, setLines] = useState<HeightCalibration>(initial ?? { head: 0, feet: 1 });
+  const [frontLines, setFrontLines] = useState<HeightCalibration>(initial ?? { head: 0, feet: 1 });
+  const [backLines, setBackLines] = useState<HeightCalibration>(
+    initialBack ?? { head: 0, feet: 1 },
+  );
+  const lines = side === 'front' ? frontLines : backLines;
+  const setLines = side === 'front' ? setFrontLines : setBackLines;
   const printedHeightMm = slotHeightMm / Math.max(lines.feet - lines.head, minCalibrationGap);
-  const warning = fitLimitWarning(previewLimits(lines));
+  const warning = fitLimitWarning(previewLimits(side, lines));
+  const hasBack = !!backArtwork;
 
   function setLineFromClientY(which: 'head' | 'feet', clientY: number) {
     const box = artworkRef.current?.getBoundingClientRect();
@@ -215,7 +227,7 @@ function HeightCalibrationDialog({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Задать рост лицевой стороны"
+        aria-label={side === 'front' ? 'Задать рост лицевой стороны' : 'Задать рост оборота'}
         className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-xl border border-border bg-surface p-4 shadow-xl"
       >
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -232,6 +244,22 @@ function HeightCalibrationDialog({
             {warning}
           </p>
         )}
+        {hasBack && (
+          <div role="tablist" aria-label="Сторона" className="mt-4 flex gap-2">
+            {(['front', 'back'] as const).map((key) => (
+              <Button
+                key={key}
+                role="tab"
+                variant={side === key ? 'default' : 'outline'}
+                aria-selected={side === key}
+                className="min-h-11"
+                onClick={() => setSide(key)}
+              >
+                {key === 'front' ? 'Перед' : 'Зад'}
+              </Button>
+            ))}
+          </div>
+        )}
         <div
           ref={artworkRef}
           data-testid="height-calibration-artwork"
@@ -244,7 +272,13 @@ function HeightCalibrationDialog({
             event.currentTarget.releasePointerCapture?.(event.pointerId);
           }}
         >
-          {url && <img src={url} alt="Лицевая сторона" className="h-full w-full object-contain" />}
+          {url && (
+            <img
+              src={url}
+              alt={side === 'front' ? 'Лицевая сторона' : 'Оборот'}
+              className="h-full w-full object-contain"
+            />
+          )}
           {(['head', 'feet'] as const).map((key) => (
             <button
               key={key}
@@ -272,7 +306,7 @@ function HeightCalibrationDialog({
           <Button variant="ghost" className="min-h-11" onClick={onCancel}>
             Отмена
           </Button>
-          <Button className="min-h-11" onClick={() => onApply(lines)}>
+          <Button className="min-h-11" onClick={() => onApply(side, lines)}>
             Применить
           </Button>
         </div>
@@ -300,15 +334,23 @@ export default function PaperMinisGenerator() {
     margin.trim() !== '' && Number.isFinite(Number(margin)) && Number(margin) >= 0;
   const calibratingRow = rows.find((row) => row.id === calibratingId && row.artwork);
 
-  function previewFitLimits(row: typeof calibratingRow, calibration: HeightCalibration) {
+  function previewFitLimits(
+    row: typeof calibratingRow,
+    side: 'front' | 'back',
+    calibration: HeightCalibration,
+  ) {
     if (!row?.artwork) return [];
+    const artwork = side === 'back' ? (row.backArtwork ?? row.artwork) : row.artwork;
     const tabHeightMm = resolveTabHeightMm(row);
     const usableHeightMm = PAGE_SIZES_MM[settings.pageSize].h - MARGIN_MM * 2;
-    const maxImageHeightMm = Math.max(0, (usableHeightMm - settings.marginMm * 2 - tabHeightMm * 4) / 2);
+    const maxImageHeightMm = Math.max(
+      0,
+      (usableHeightMm - settings.marginMm * 2 - tabHeightMm * 4) / 2,
+    );
     return fitFigure(
       resolveSizeDimensionsMm(row),
-      row.artwork.width,
-      row.artwork.height,
+      artwork.width,
+      artwork.height,
       calibration,
       maxImageHeightMm,
     ).limits;
@@ -409,121 +451,121 @@ export default function PaperMinisGenerator() {
         <div className="grid gap-6 xl:block">
           <div className="xl:absolute xl:right-full xl:h-full xl:w-60">
             <aside className="space-y-6 rounded-lg border border-border bg-surface-elevated p-4 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
-            <div>
-              <h2 className="text-2xl text-text">Настройки</h2>
-              <p className="mt-1 text-sm leading-relaxed text-text-muted">
-                Общие параметры печати.
-              </p>
-            </div>
-            <label className="block text-sm">
-              Размер бумаги
-              <select
-                className={field}
-                value={settings.pageSize}
-                onChange={(event) =>
-                  store.settings({ pageSize: event.target.value as 'a4' | 'letter' })
-                }
-              >
-                <option value="a4">A4 (210 × 297 мм)</option>
-                <option value="letter">Letter (216 × 279 мм)</option>
-              </select>
-            </label>
-            <label className="block text-sm">
-              Поля, мм
-              <input
-                className={field}
-                type="number"
-                min="0"
-                step="any"
-                required
-                value={margin}
-                aria-invalid={!marginValid}
-                onChange={(event) => {
-                  if (store.$busy.get()) return;
-                  setMargin(event.target.value);
-                  const n = event.target.valueAsNumber;
-                  if (Number.isFinite(n) && n >= 0) store.settings({ marginMm: n });
-                }}
-              />
-            </label>
-            {rows.length > 0 && (
+              <div>
+                <h2 className="text-2xl text-text">Настройки</h2>
+                <p className="mt-1 text-sm leading-relaxed text-text-muted">
+                  Общие параметры печати.
+                </p>
+              </div>
               <label className="block text-sm">
-                Высота всех фигурок
+                Размер бумаги
                 <select
                   className={field}
-                  value=""
-                  onChange={(event) => {
-                    for (const row of rows)
-                      store.patch(row.id, { heightSlot: event.target.value as MiniSize });
-                  }}
+                  value={settings.pageSize}
+                  onChange={(event) =>
+                    store.settings({ pageSize: event.target.value as 'a4' | 'letter' })
+                  }
                 >
-                  <option value="" disabled>
-                    Выберите…
-                  </option>
-                  <SizeOptions />
+                  <option value="a4">A4 (210 × 297 мм)</option>
+                  <option value="letter">Letter (216 × 279 мм)</option>
                 </select>
               </label>
-            )}
-            <div className="space-y-2 border-y border-border py-3">
-              <label className="flex min-h-11 items-center gap-3 text-sm">
+              <label className="block text-sm">
+                Поля, мм
                 <input
-                  type="checkbox"
-                  checked={settings.numberDuplicates}
-                  onChange={(event) => store.settings({ numberDuplicates: event.target.checked })}
+                  className={field}
+                  type="number"
+                  min="0"
+                  step="any"
+                  required
+                  value={margin}
+                  aria-invalid={!marginValid}
+                  onChange={(event) => {
+                    if (store.$busy.get()) return;
+                    setMargin(event.target.value);
+                    const n = event.target.valueAsNumber;
+                    if (Number.isFinite(n) && n >= 0) store.settings({ marginMm: n });
+                  }}
                 />
-                Нумеровать копии
               </label>
-              <label className="flex min-h-11 items-center gap-3 text-sm">
-                <input
-                  type="checkbox"
-                  checked={settings.normalization}
-                  onChange={(event) => store.settings({ normalization: event.target.checked })}
-                />
-                Обрезать пустые поля
-              </label>
-            </div>
-            <div className="space-y-3">
-              <h3 className="text-xl text-text">PDF</h3>
-              <p aria-live="polite" className="text-sm">
-                {rows.length
-                  ? `Миниатюр: ${packed.miniCount} → листов: ${packed.pageCount} (${settings.pageSize === 'a4' ? 'A4' : 'Letter'})`
-                  : 'Добавьте изображения для печати миниатюр.'}
-              </p>
-              {message && (
-                <p role="status" className="text-sm">
-                  {message}
-                </p>
+              {rows.length > 0 && (
+                <label className="block text-sm">
+                  Высота всех фигурок
+                  <select
+                    className={field}
+                    value=""
+                    onChange={(event) => {
+                      for (const row of rows)
+                        store.patch(row.id, { heightSlot: event.target.value as MiniSize });
+                    }}
+                  >
+                    <option value="" disabled>
+                      Выберите…
+                    </option>
+                    <SizeOptions />
+                  </select>
+                </label>
               )}
-              <p role="status" className="text-sm">
-                {busy
-                  ? 'Создаём PDF. Редактирование временно недоступно.'
-                  : preparing
-                    ? 'Обрабатываем изображения. PDF будет доступен после завершения.'
-                    : ''}
-              </p>
-              {!marginValid && (
-                <p role="status" className="text-sm text-danger">
-                  Поля должны быть числом от 0 мм.
-                </p>
-              )}
-              <div className="space-y-2">
-                <Button
-                  className="min-h-11 w-full"
-                  disabled={busy || preparing || !packed.miniCount || !marginValid}
-                  onClick={() => void generate(false)}
-                >
-                  {busy ? 'Подготовка PDF…' : 'Скачать PDF'}
-                </Button>
-                <Button
-                  variant="outline"
-                  className="min-h-11 w-full"
-                  disabled={busy || preparing || !packed.miniCount || !marginValid}
-                  onClick={() => void generate(true)}
-                >
-                  {preview ? 'Обновить предпросмотр' : 'Предпросмотр PDF'}
-                </Button>
+              <div className="space-y-2 border-y border-border py-3">
+                <label className="flex min-h-11 items-center gap-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={settings.numberDuplicates}
+                    onChange={(event) => store.settings({ numberDuplicates: event.target.checked })}
+                  />
+                  Нумеровать копии
+                </label>
+                <label className="flex min-h-11 items-center gap-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={settings.normalization}
+                    onChange={(event) => store.settings({ normalization: event.target.checked })}
+                  />
+                  Обрезать пустые поля
+                </label>
               </div>
-            </div>
+              <div className="space-y-3">
+                <h3 className="text-xl text-text">PDF</h3>
+                <p aria-live="polite" className="text-sm">
+                  {rows.length
+                    ? `Миниатюр: ${packed.miniCount} → листов: ${packed.pageCount} (${settings.pageSize === 'a4' ? 'A4' : 'Letter'})`
+                    : 'Добавьте изображения для печати миниатюр.'}
+                </p>
+                {message && (
+                  <p role="status" className="text-sm">
+                    {message}
+                  </p>
+                )}
+                <p role="status" className="text-sm">
+                  {busy
+                    ? 'Создаём PDF. Редактирование временно недоступно.'
+                    : preparing
+                      ? 'Обрабатываем изображения. PDF будет доступен после завершения.'
+                      : ''}
+                </p>
+                {!marginValid && (
+                  <p role="status" className="text-sm text-danger">
+                    Поля должны быть числом от 0 мм.
+                  </p>
+                )}
+                <div className="space-y-2">
+                  <Button
+                    className="min-h-11 w-full"
+                    disabled={busy || preparing || !packed.miniCount || !marginValid}
+                    onClick={() => void generate(false)}
+                  >
+                    {busy ? 'Подготовка PDF…' : 'Скачать PDF'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="min-h-11 w-full"
+                    disabled={busy || preparing || !packed.miniCount || !marginValid}
+                    onClick={() => void generate(true)}
+                  >
+                    {preview ? 'Обновить предпросмотр' : 'Предпросмотр PDF'}
+                  </Button>
+                </div>
+              </div>
             </aside>
           </div>
 
@@ -597,6 +639,7 @@ export default function PaperMinisGenerator() {
                     <div className="space-y-2">
                       <ArtworkSlot
                         artwork={row.backArtwork}
+                        calibration={row.backCalibration}
                         label={
                           row.backImage
                             ? `Оборот: ${row.backImage.name}`
@@ -630,17 +673,20 @@ export default function PaperMinisGenerator() {
                         >
                           Задать рост
                         </Button>
-                        {row.frontCalibration && (
+                        {(row.frontCalibration || row.backCalibration) && (
                           <Button
                             variant="ghost"
                             className="min-h-11"
-                            onClick={() => store.clearFrontCalibration(row.id)}
+                            onClick={() => {
+                              store.clearFrontCalibration(row.id);
+                              store.clearBackCalibration(row.id);
+                            }}
                           >
                             Сбросить рост
                           </Button>
                         )}
                       </div>
-                      {row.frontCalibration && (
+                      {(row.frontCalibration || row.backCalibration) && (
                         <p className="text-sm font-medium text-text">Рост задан вручную</p>
                       )}
                     </div>
@@ -808,13 +854,16 @@ export default function PaperMinisGenerator() {
       {calibratingRow?.artwork && (
         <HeightCalibrationDialog
           artwork={calibratingRow.artwork}
+          backArtwork={calibratingRow.backArtwork}
           rowLabel={calibratingRow.name || 'Миниатюра'}
           slotHeightMm={resolveFigureHeightMm(calibratingRow)}
           initial={calibratingRow.frontCalibration}
-          previewLimits={(calibration) => previewFitLimits(calibratingRow, calibration)}
+          previewLimits={(side, calibration) => previewFitLimits(calibratingRow, side, calibration)}
+          initialBack={calibratingRow.backCalibration}
           onCancel={() => setCalibratingId(undefined)}
-          onApply={(calibration) => {
-            store.setFrontCalibration(calibratingRow.id, calibration);
+          onApply={(side, calibration) => {
+            if (side === 'front') store.setFrontCalibration(calibratingRow.id, calibration);
+            else store.setBackCalibration(calibratingRow.id, calibration);
             setCalibratingId(undefined);
           }}
         />

@@ -400,3 +400,27 @@ test('front image replacement and normalization toggle clear front calibration',
   // #then
   expect([afterReplace, afterNormalization]).toEqual([undefined, undefined]);
 });
+
+test('back calibration can be set, copied, cleared and reset without changing the front', async () => {
+  // #given
+  const store = setup();
+  const id = store.addBlank()!;
+  await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
+  await store.setImage(id, new File([png], 'back.png', { type: 'image/png' }), true);
+  store.setFrontCalibration(id, { head: 0.2, feet: 0.8 });
+  store.setBackCalibration(id, { head: 0.25, feet: 0.75 });
+  // #when
+  store.duplicate(id);
+  store.clearBackCalibration(id);
+  const afterClear = store.$rows.get().map((row) => [row.frontCalibration, row.backCalibration]);
+  await store.setImage(id, new File([png], 'new-back.png', { type: 'image/png' }), true);
+  const afterReplace = store.$rows.get()[0];
+  // #then
+  expect({ afterClear, afterReplace: [afterReplace.frontCalibration, afterReplace.backCalibration] }).toEqual({
+    afterClear: [
+      [{ head: 0.2, feet: 0.8 }, undefined],
+      [{ head: 0.2, feet: 0.8 }, { head: 0.25, feet: 0.75 }],
+    ],
+    afterReplace: [{ head: 0.2, feet: 0.8 }, undefined],
+  });
+});

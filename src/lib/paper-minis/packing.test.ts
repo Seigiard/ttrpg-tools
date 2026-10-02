@@ -100,32 +100,111 @@ t('front calibration that hits the width cap scales down whole and reports width
   );
 });
 
-t('front calibration too tall for the page scales to fit and is reported instead of skipped', () => {
+t(
+  'front calibration too tall for the page scales to fit and is reported instead of skipped',
+  () => {
+    // #given
+    const entries = [
+      entry({
+        heightSlot: 'custom',
+        customWidthMm: 10,
+        customHeightMm: 140,
+        naturalWidth: 50,
+        naturalHeight: 100,
+        frontCalibration: { head: 0.25, feet: 0.75 },
+      }),
+    ];
+    // #when
+    const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 });
+    const mini = result.pages[0].rows[0].items[0];
+    // #then
+    assert.deepEqual(
+      [
+        result.miniCount,
+        result.skipped.length,
+        mini.imageHeightMm,
+        mini.totalHeightMm,
+        mini.fitLimits,
+        result.limitedEntryFitLimits,
+      ],
+      [1, 0, 128.5, usableH, ['page'], [{ entryIndex: 0, limits: ['page'] }]],
+    );
+  },
+);
+
+t('back calibration scales the back artwork height from its own marked creature height', () => {
   // #given
   const entries = [
     entry({
-      heightSlot: 'custom',
-      customWidthMm: 10,
-      customHeightMm: 140,
+      naturalWidth: 100,
+      naturalHeight: 100,
+      backNaturalWidth: 50,
+      backNaturalHeight: 100,
+      backCalibration: { head: 0.25, feet: 0.75 },
+    }),
+  ];
+  // #when
+  const mini = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 }).pages[0]
+    .rows[0].items[0];
+  // #then
+  assert.deepEqual(
+    [mini.imageHeightMm, mini.back?.imageWidthMm, mini.back?.imageHeightMm],
+    [35, 35, 70],
+  );
+});
+
+t('uncalibrated back on a calibrated front matches the front printed height', () => {
+  // #given
+  const entries = [
+    entry({
       naturalWidth: 50,
       naturalHeight: 100,
       frontCalibration: { head: 0.25, feet: 0.75 },
+      backNaturalWidth: 100,
+      backNaturalHeight: 100,
+    }),
+  ];
+  // #when
+  const mini = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 }).pages[0]
+    .rows[0].items[0];
+  // #then
+  assert.deepEqual(
+    [mini.imageHeightMm, mini.back?.imageWidthMm, mini.back?.imageHeightMm],
+    [70, 70, 70],
+  );
+});
+
+t('back-only calibration is capped to the page and reports every active limit', () => {
+  // #given
+  const entries = [
+    entry({
+      heightSlot: 'gargantuan',
+      naturalWidth: 50,
+      naturalHeight: 100,
+      backNaturalWidth: 100,
+      backNaturalHeight: 100,
+      backCalibration: { head: 0, feet: 0.25 },
     }),
   ];
   // #when
   const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 });
-  const mini = result.pages[0].rows[0].items[0];
+  const mini = result.pages[0]?.rows[0].items[0];
   // #then
   assert.deepEqual(
-    [
-      result.miniCount,
-      result.skipped.length,
-      mini.imageHeightMm,
-      mini.totalHeightMm,
-      mini.fitLimits,
-      result.limitedEntryFitLimits,
-    ],
-    [1, 0, 128.5, usableH, ['page'], [{ entryIndex: 0, limits: ['page'] }]],
+    {
+      count: result.miniCount,
+      skipped: result.skipped.length,
+      front: mini?.imageHeightMm,
+      back: mini?.back,
+      limits: result.limitedEntryFitLimits,
+    },
+    {
+      count: 1,
+      skipped: 0,
+      front: 111,
+      back: { imageWidthMm: 125.5, imageHeightMm: 125.5, imageOffsetXMm: 0 },
+      limits: [{ entryIndex: 0, limits: ['height', 'width', 'page'] }],
+    },
   );
 });
 
@@ -143,7 +222,8 @@ t('calibrated slots keep their height order with the same marked lines', () => {
   // #when
   const bySlot = Object.fromEntries(
     packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 }).pages.flatMap(
-      (page) => page.rows.flatMap((row) => row.items.map((mini) => [mini.heightSlot, mini.imageHeightMm])),
+      (page) =>
+        page.rows.flatMap((row) => row.items.map((mini) => [mini.heightSlot, mini.imageHeightMm])),
     ),
   );
   // #then
