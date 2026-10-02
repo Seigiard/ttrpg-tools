@@ -1,14 +1,8 @@
-commit e728a55ca349af840ec72e4fa9dc42cebffb42cb
-Author: Andrew Borisenko <seigiard@gmail.com>
-Date:   Fri Oct 2 16:00:41 2026 +0200
-
-    feat(encounters): show the last five check outcomes (experiment follow-up, Preact)
-
 diff --git a/src/components/EncounterGenerator.test.tsx b/src/components/EncounterGenerator.test.tsx
-index 5d1b6d4..f55521a 100644
+index 5d1b6d4..5d85fbf 100644
 --- a/src/components/EncounterGenerator.test.tsx
 +++ b/src/components/EncounterGenerator.test.tsx
-@@ -60,6 +60,91 @@ describe('EncounterGenerator (Preact presentation)', () => {
+@@ -60,6 +60,108 @@ describe('EncounterGenerator (Preact presentation)', () => {
      });
    });
  
@@ -97,43 +91,67 @@ index 5d1b6d4..f55521a 100644
 +    expect(screen.getByTestId('check-history').querySelectorAll('li')).toHaveLength(0);
 +  });
 +
++  test('очистка сразу после нового броска не возвращает его отложенным эффектом', async () => {
++    // #given mount: check d6=1; reaction. Затем новый бросок d6=2
++    restoreCrypto = mockCrypto([0, 0, 0, 1]);
++    render(<EncounterGenerator table={mausritterEncounters} />);
++    await waitFor(() => {
++      expect(screen.getByTestId('check-history').querySelectorAll('li')).toHaveLength(1);
++    });
++
++    // #when the user clears before the new roll effect is flushed
++    fireEvent.click(screen.getByTestId('check-roll-button'));
++    fireEvent.click(screen.getByTestId('check-history-clear'));
++    await new Promise((resolve) => setTimeout(resolve, 0));
++
++    // #then history remains empty without another roll
++    expect(screen.getByTestId('check-history').querySelectorAll('li')).toHaveLength(0);
++  });
++
    test('результат реакции показывает отношение и вопрос', async () => {
      // #given reaction 2d6=12 (mock 5,5) → дружелюбное; check d6 (mock 0)
      restoreCrypto = mockCrypto([0, 5, 5]);
 diff --git a/src/components/EncounterGenerator.tsx b/src/components/EncounterGenerator.tsx
-index de34fe5..841501f 100644
+index de34fe5..79af5fc 100644
 --- a/src/components/EncounterGenerator.tsx
 +++ b/src/components/EncounterGenerator.tsx
 @@ -1,5 +1,5 @@
  import { useStore } from '@nanostores/preact';
 -import { useEffect, useMemo } from 'preact/hooks';
-+import { useEffect, useMemo, useState } from 'preact/hooks';
++import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
  import { ReferenceList } from '@/components/ReferenceList';
  import { Button } from '@/components/ui/button';
  import { Card, CardContent, CardHeader } from '@/components/ui/card';
-@@ -49,6 +49,14 @@ function CheckSection({ table, roll, onRoll }: SectionProps) {
+@@ -49,6 +49,21 @@ function CheckSection({ table, roll, onRoll }: SectionProps) {
    const rows = table.check.rows;
    const row = roll ? rows[roll.rowIndex] : null;
    const loading = !row;
 +  const [history, setHistory] = useState<Array<{ sum: number; label: string }>>([]);
++  const clearedRoll = useRef<RangePick | null>(null);
 +
 +  useEffect(() => {
 +    if (!roll || !row) return;
++    if (clearedRoll.current === roll) return;
 +
 +    setHistory((items) => [{ sum: roll.sum, label: row.ru }, ...items].slice(0, 5));
 +  }, [roll, row]);
 +
++  const clearHistory = () => {
++    clearedRoll.current = roll;
++    setHistory([]);
++  };
++
    return (
      <section className="space-y-6">
        <h2 className="font-display text-2xl text-text">Проверка столкновения</h2>
-@@ -77,6 +85,23 @@ function CheckSection({ table, roll, onRoll }: SectionProps) {
+@@ -77,6 +92,23 @@ function CheckSection({ table, roll, onRoll }: SectionProps) {
          </CardContent>
        </Card>
  
 +      <div className="space-y-3">
 +        <div className="flex items-center justify-between gap-3">
 +          <h3 className="font-display text-lg text-text">Последние проверки</h3>
-+          <Button variant="outline" size="sm" onClick={() => setHistory([])} data-testid="check-history-clear">
++          <Button variant="outline" size="sm" onClick={clearHistory} data-testid="check-history-clear">
 +            Очистить
 +          </Button>
 +        </div>
