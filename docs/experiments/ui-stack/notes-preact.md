@@ -51,7 +51,7 @@
 
 - `@base-ui/react`: removed in P5. Preact uses local native primitives instead of routing React wrappers through `preact/compat`.
 - Reason: Base UI wrappers are React components, so compat would make Preact islands depend on React-shaped component semantics and would weaken the “no React runtime” proof. The local needs are small: button styling, card slots, tabs selection/keyboard movement and one modal dialog.
-- Compatibility gap accepted after P5: the native Dialog does not implement full top-layer modality or inert background behavior. It implements the behavior currently covered by Paper Minis tests: default-open modal, title, Escape close, basic Tab focus loop and `finalFocus` restore. Browser verification shows the background is still tabbable with `Shift+Tab`.
+- Dialog: Base UI is replaced by a native `<dialog>` opened with `showModal()`, which gives top-layer modality and an inert background. A page scroll lock and focus restore on every close path match what Base UI did on main. No accepted compatibility gap remains for the dialog.
 - `lucide-react`: removed in P5. Preact components use `lucide-preact` through `src/components/icons.ts`.
 - `preact/compat`: not enabled. All islands and primitives use native Preact APIs.
 
