@@ -296,7 +296,9 @@ export function fitFigure(
   return { imageWidthMm, imageHeightMm, limits };
 }
 
-export function validCalibrationGap(calibration: HeightCalibration | undefined): number | undefined {
+export function validCalibrationGap(
+  calibration: HeightCalibration | undefined,
+): number | undefined {
   if (!calibration) return undefined;
   const { head, feet } = calibration;
   if (

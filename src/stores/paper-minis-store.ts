@@ -140,7 +140,9 @@ export function createPaperMinisStore() {
       $rows.set(
         $rows
           .get()
-          .map((row) => Object.assign({}, row, { frontCalibration: undefined, backCalibration: undefined })),
+          .map((row) =>
+            Object.assign({}, row, { frontCalibration: undefined, backCalibration: undefined }),
+          ),
       );
       for (const row of $rows.get()) {
         if (row.image) void setImage(row.id, row.image);
@@ -206,7 +208,12 @@ export function createPaperMinisStore() {
     clearBack(id: number) {
       if ($busy.get()) return;
       loads.delete(`${id}:true`);
-      patch(id, { backImage: null, backArtwork: null, backCalibration: undefined, backWarning: undefined });
+      patch(id, {
+        backImage: null,
+        backArtwork: null,
+        backCalibration: undefined,
+        backWarning: undefined,
+      });
       $preparing.set(loads.size > 0);
     },
     remove(id: number) {

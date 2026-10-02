@@ -57,7 +57,9 @@ describe('computePricesVersion', () => {
     const [first, ...rest] = blackHackPrices.categories;
     const trimmed = [{ ...first, items: first.items.slice(0, -1) }, ...rest];
 
-    expect(computePricesVersion(trimmed)).not.toBe(computePricesVersion(blackHackPrices.categories));
+    expect(computePricesVersion(trimmed)).not.toBe(
+      computePricesVersion(blackHackPrices.categories),
+    );
   });
 
   test('меняется при изменении порядка предметов', () => {
@@ -66,6 +68,8 @@ describe('computePricesVersion', () => {
     const [a, b, ...tail] = first.items;
     const swapped = [{ ...first, items: [b, a, ...tail] }, ...rest];
 
-    expect(computePricesVersion(swapped)).not.toBe(computePricesVersion(blackHackPrices.categories));
+    expect(computePricesVersion(swapped)).not.toBe(
+      computePricesVersion(blackHackPrices.categories),
+    );
   });
 });

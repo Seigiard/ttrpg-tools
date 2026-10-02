@@ -53,7 +53,12 @@ export type PreparedArtwork = {
 // Geometry-only input keeps packing independent of image preparation.
 export type PackingEntry = Pick<
   Entry,
-  'heightSlot' | 'customWidthMm' | 'customHeightMm' | 'count' | 'frontCalibration' | 'backCalibration'
+  | 'heightSlot'
+  | 'customWidthMm'
+  | 'customHeightMm'
+  | 'count'
+  | 'frontCalibration'
+  | 'backCalibration'
 > & {
   naturalWidth?: number;
   naturalHeight?: number;

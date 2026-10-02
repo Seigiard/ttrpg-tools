@@ -174,7 +174,9 @@ interface ReactionReferenceProps {
 function ReactionReference({ rows, hitRow }: ReactionReferenceProps) {
   return (
     <section data-testid="reaction-reference">
-      <h3 className="font-mono text-xs uppercase tracking-wider text-text-muted">Отношение · 2d6</h3>
+      <h3 className="font-mono text-xs uppercase tracking-wider text-text-muted">
+        Отношение · 2d6
+      </h3>
       <ul className="mt-3 divide-y divide-border">
         {rows.map((row, i) => {
           const label = row.min === row.max ? String(row.min) : `${row.min}–${row.max}`;

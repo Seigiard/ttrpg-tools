@@ -416,10 +416,16 @@ test('back calibration can be set, copied, cleared and reset without changing th
   await store.setImage(id, new File([png], 'new-back.png', { type: 'image/png' }), true);
   const afterReplace = store.$rows.get()[0];
   // #then
-  expect({ afterClear, afterReplace: [afterReplace.frontCalibration, afterReplace.backCalibration] }).toEqual({
+  expect({
+    afterClear,
+    afterReplace: [afterReplace.frontCalibration, afterReplace.backCalibration],
+  }).toEqual({
     afterClear: [
       [{ head: 0.2, feet: 0.8 }, undefined],
-      [{ head: 0.2, feet: 0.8 }, { head: 0.25, feet: 0.75 }],
+      [
+        { head: 0.2, feet: 0.8 },
+        { head: 0.25, feet: 0.75 },
+      ],
     ],
     afterReplace: [{ head: 0.2, feet: 0.8 }, undefined],
   });

@@ -71,10 +71,7 @@ describe('BlackHackPricesGenerator', () => {
   test('URL-стейт приоритетнее localStorage, localStorage перезаписан стейтом из URL', () => {
     // #given AE2: в хранилище «город», в ссылке «большой город»
     restoreCrypto = mockCrypto([]);
-    storage.store.set(
-      STORAGE_KEY,
-      serialize({ settlement: 'town', seed: 111 }, blackHackPrices),
-    );
+    storage.store.set(STORAGE_KEY, serialize({ settlement: 'town', seed: 111 }, blackHackPrices));
     const urlQuery = serialize({ settlement: 'city', seed: 222 }, blackHackPrices);
     setPageUrl(`${PAGE_URL}?${urlQuery}`);
 
