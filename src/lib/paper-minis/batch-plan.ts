@@ -1,3 +1,4 @@
+import { calibrationGap } from './calibration';
 import { HEIGHT_SLOT_ORDER } from './sizes';
 import type { HeightCalibration, HeightSlot, MiniSize } from './types';
 
@@ -20,6 +21,7 @@ type ParsedFile = {
   file: File;
   side: Side;
   heightSlot?: HeightSlot;
+  calibration?: HeightCalibration;
   name: string;
   key: string;
 };
@@ -50,6 +52,8 @@ export function planBatch(files: readonly File[]): PlannedRow[] {
       if (back) row.back = back.file;
       const heightSlot = front.heightSlot ?? back?.heightSlot;
       if (heightSlot) row.heightSlot = heightSlot;
+      const calibration = front.calibration ?? back?.calibration;
+      if (calibration) row.calibration = calibration;
       return row;
     });
 }
@@ -64,12 +68,13 @@ function parseFile(file: File): ParsedFile {
   const tokens = stem(file.name)
     .split(separators)
     .filter((token) => token !== '');
-  const { nameTokens, side, heightSlot } = readMarkers(tokens);
+  const { nameTokens, side, heightSlot, calibration } = readMarkers(tokens);
   const raw = nameTokens.join(' ');
   return {
     file,
     side,
     heightSlot,
+    calibration,
     // An empty name stays empty: the view owns the "Миниатюра N" fallback.
     name: raw.charAt(0).toUpperCase() + raw.slice(1),
     key: raw.toLowerCase(),
@@ -81,8 +86,17 @@ function readMarkers(tokens: readonly string[]) {
   let end = tokens.length;
   let side: Side | undefined;
   let heightSlot: HeightSlot | undefined;
+  let calibration: HeightCalibration | undefined;
   while (end > 0) {
     const token = tokens[end - 1].toLowerCase();
+    if (calibration === undefined && end > 1) {
+      const parsed = parseCalibration(tokens[end - 2], token);
+      if (parsed) {
+        calibration = parsed;
+        end -= 2;
+        continue;
+      }
+    }
     if (side === undefined && (token === 'front' || token === 'back')) {
       side = token;
       end -= 1;
@@ -100,7 +114,15 @@ function readMarkers(tokens: readonly string[]) {
     }
     break;
   }
-  return { nameTokens: tokens.slice(0, end), side: side ?? 'front', heightSlot };
+  return { nameTokens: tokens.slice(0, end), side: side ?? 'front', heightSlot, calibration };
+}
+
+function parseCalibration(headToken: string, feetToken: string): HeightCalibration | undefined {
+  const headMatch = /^h(\d{3})$/i.exec(headToken);
+  const feetMatch = /^f(\d{3})$/i.exec(feetToken);
+  if (!headMatch || !feetMatch) return undefined;
+  const calibration = { head: Number(headMatch[1]) / 1000, feet: Number(feetMatch[1]) / 1000 };
+  return calibrationGap(calibration) === undefined ? undefined : calibration;
 }
 
 function stem(fileName: string) {
