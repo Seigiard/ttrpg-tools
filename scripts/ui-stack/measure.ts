@@ -69,8 +69,24 @@ async function waitForPreview(baseUrl: string, proc: ChildProcess, ready: Promis
   throw new Error('vite preview did not start within 60s');
 }
 
-async function withPreview<T>(port: number, work: (baseUrl: string) => Promise<T>) {
-  await assertPortFree(port);
+interface PreviewDeps {
+  assertPortFree: typeof assertPortFree;
+  spawn: typeof spawn;
+  waitForPreview: typeof waitForPreview;
+}
+
+const previewDeps = {
+  assertPortFree,
+  spawn,
+  waitForPreview,
+} satisfies PreviewDeps;
+
+export async function withPreview<T>(
+  port: number,
+  work: (baseUrl: string) => Promise<T>,
+  deps: PreviewDeps = previewDeps,
+) {
+  await deps.assertPortFree(port);
   // vite preview stays in the foreground, unlike astro preview, which detaches and is
   // shared by every checkout; parallel worktrees would stop each other's servers.
   const baseUrl = `http://127.0.0.1:${port}`;
@@ -78,7 +94,7 @@ async function withPreview<T>(port: number, work: (baseUrl: string) => Promise<T
   const ready = new Promise<void>((resolve) => {
     markReady = resolve;
   });
-  const proc = spawn(
+  const proc = deps.spawn(
     'bunx',
     ['vite', 'preview', '--host', '127.0.0.1', '--port', String(port), '--strictPort'],
     { stdio: ['ignore', 'pipe', 'pipe'] },
@@ -97,8 +113,8 @@ async function withPreview<T>(port: number, work: (baseUrl: string) => Promise<T
       if (text.includes(baseUrl)) markReady();
     });
   }
-  await waitForPreview(baseUrl, proc, Promise.race([ready, exit]));
   try {
+    await deps.waitForPreview(baseUrl, proc, Promise.race([ready, exit]));
     return await Promise.race([work(baseUrl), exit]);
   } finally {
     stopping = true;

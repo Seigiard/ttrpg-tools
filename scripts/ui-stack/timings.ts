@@ -47,13 +47,22 @@ export async function measureTimings(browser: Browser, baseUrl: string) {
         'weather click-to-result',
         10,
         async (page) => {
+          const previous = await page.getByTestId('result-weather').textContent();
           await page.getByRole('button', { name: /Бросить погоду/ }).click();
-          await page.getByTestId('result-weather').waitFor({ state: 'visible' });
-          await page.evaluate(() => new Promise(requestAnimationFrame));
+          await page.waitForFunction((before) => {
+            const result = document.querySelector('[data-testid="result-weather"]');
+            return (
+              result?.textContent?.trim() &&
+              result.textContent !== before &&
+              result.querySelector('[data-loading="true"]') === null
+            );
+          }, previous);
         },
         async (page) => {
+          await installDeterministicWeatherRolls(page);
           await page.goto(new URL('/mausritter/weather/', baseUrl).toString());
-          await page.getByTestId('result-weather').waitFor({ state: 'visible' });
+          await waitForHydratedIslands(page);
+          await waitForWeatherRoll(page);
         },
       ),
     );
@@ -79,11 +88,7 @@ export async function measureTimings(browser: Browser, baseUrl: string) {
               baseUrl,
             ).toString(),
           );
-          await page.waitForFunction(() =>
-            [...document.querySelectorAll('astro-island')].every(
-              (island) => !island.hasAttribute('ssr'),
-            ),
-          );
+          await waitForHydratedIslands(page);
           await page.waitForFunction(
             () => new URLSearchParams(location.search).get('s') === 'rural',
           );
@@ -103,6 +108,7 @@ export async function measureTimings(browser: Browser, baseUrl: string) {
         },
         async (page) => {
           await page.goto(new URL('/paper-minis/', baseUrl).toString());
+          await waitForHydratedIslands(page);
         },
       ),
     );
@@ -140,11 +146,50 @@ export async function measureTimings(browser: Browser, baseUrl: string) {
 function setupPaperMinis(baseUrl: string) {
   return async (page: Page) => {
     await page.goto(new URL('/paper-minis/', baseUrl).toString());
+    await waitForHydratedIslands(page);
     await page
       .locator('input[aria-label="Добавить изображения"]')
       .setInputFiles('e2e/fixtures/mini.png');
     await page.getByRole('article').first().waitFor({ state: 'visible' });
   };
+}
+
+async function waitForHydratedIslands(page: Page) {
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll('astro-island')].every((island) => !island.hasAttribute('ssr')),
+  );
+}
+
+async function waitForWeatherRoll(page: Page) {
+  await page.getByTestId('result-weather').waitFor({ state: 'visible' });
+  await page.waitForFunction(() => {
+    const result = document.querySelector('[data-testid="result-weather"]');
+    return (
+      result?.textContent?.trim() &&
+      result.textContent.trim() !== 'Погода' &&
+      result.querySelector('[data-loading="true"]') === null
+    );
+  });
+}
+
+async function installDeterministicWeatherRolls(page: Page) {
+  await page.addInitScript(() => {
+    const values = [0, 0, 5, 5];
+    let index = 0;
+    const original = crypto.getRandomValues.bind(crypto);
+    Object.defineProperty(crypto, 'getRandomValues', {
+      configurable: true,
+      value(array: Uint32Array) {
+        if (array instanceof Uint32Array && index < values.length) {
+          for (let i = 0; i < array.length; i++) {
+            array[i] = values[index++] ?? 0;
+          }
+          return array;
+        }
+        return original(array);
+      },
+    });
+  });
 }
 
 export function timingsMarkdown(timings: TimingSummary[]) {
