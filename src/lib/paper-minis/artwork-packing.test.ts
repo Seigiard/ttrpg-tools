@@ -65,7 +65,7 @@ t('unprepared entries preserve the source indices of packed and oversized entrie
   // #then
   assert.deepEqual(
     {
-      placed: result.pages[0].rows[0].items.map((mini) => mini.entryIndex),
+      placed: result.pages[0].placements.map(({ mini }) => mini.entryIndex),
       oversized: result.oversizedEntryIndices,
     },
     { placed: [1], oversized: [2] },
@@ -76,7 +76,7 @@ t('prepared artwork proportions reach fitting through packEntries', () => {
   // #given  tall art at Medium prints 35 mm tall, whatever its proportions
   const e = { ...entry(1), artwork: { ...square, width: 100, height: 350 } };
   // #when
-  const mini = packEntries([e], opts).pages[0].rows[0].items[0];
+  const mini = packEntries([e], opts).pages[0].placements[0].mini;
   // #then
   assert.deepEqual([mini.imageHeightMm, mini.imageWidthMm], [35, 10]);
 });
@@ -85,7 +85,7 @@ t('a custom entry carries both of its dimensions into the fit and the stand', ()
   // #given
   const e: Entry = { ...entry(1), heightSlot: 'custom', customWidthMm: 30, customHeightMm: 45 };
   // #when
-  const mini = packEntries([e], opts).pages[0].rows[0].items[0];
+  const mini = packEntries([e], opts).pages[0].placements[0].mini;
   // #then  its tab is half its own base, as a slot's is
   assert.deepEqual(
     [mini.imageHeightMm, mini.imageWidthMm, mini.baseWidthMm, mini.tabHeightMm],
@@ -110,7 +110,7 @@ t('prepared back artwork proportions reach fitting through packEntries', () => {
     backArtwork: { ...square, width: 150, height: 100 },
   };
   // #when
-  const mini = packEntries([e], opts).pages[0].rows[0].items[0];
+  const mini = packEntries([e], opts).pages[0].placements[0].mini;
   // #then
   assert.deepEqual([mini.totalWidthMm, mini.back?.imageWidthMm], [52.5, 52.5]);
 });

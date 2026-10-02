@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { packMinis, GAP_MM, MARGIN_MM, PAGE_SIZES_MM } from './packing.ts';
+import { packRows as packMinis, GAP_MM, MARGIN_MM, PAGE_SIZES_MM } from './packing.ts';
 import { HEIGHT_SLOT_ORDER, slotGeometryLabel } from './sizes.ts';
 import type { PackingEntry as Entry } from './types.ts';
 

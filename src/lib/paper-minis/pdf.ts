@@ -19,7 +19,6 @@ import type { PreparedArtwork, Entry } from './types';
 import { hasPackableDimensions } from './sizes.ts';
 import {
   CUT_MARK_ARM_MM,
-  GAP_MM,
   MARGIN_MM,
   PAGE_SIZES_MM,
   isBackArtworkLoading,
@@ -102,14 +101,15 @@ export async function generatePDF(entries: Entry[], opts: GenerateOptions): Prom
   const { w: pageWmm, h: pageHmm } = PAGE_SIZES_MM[opts.pageSize];
   for (const page of pages) {
     const pdfPage = pdf.addPage([mm(pageWmm), mm(pageHmm)]);
-    let yTopMm = pageHmm - MARGIN_MM;
-    for (const row of page.rows) {
-      let xMm = MARGIN_MM;
-      for (const mini of row.items) {
-        drawMini(pdfPage, mini, faces[mini.entryIndex], xMm, yTopMm, font);
-        xMm += mini.totalWidthMm + GAP_MM;
-      }
-      yTopMm -= row.heightMm + GAP_MM;
+    for (const { mini, xMm, yMm } of page.placements) {
+      drawMini(
+        pdfPage,
+        mini,
+        faces[mini.entryIndex],
+        MARGIN_MM + xMm,
+        pageHmm - MARGIN_MM - yMm,
+        font,
+      );
     }
     drawScaleBar(pdfPage, pageHmm, noteFont);
   }

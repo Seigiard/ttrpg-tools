@@ -242,6 +242,44 @@ const artwork = {
 };
 const entry: Entry = { image: null, artwork, heightSlot: 'tiny', count: 1 };
 
+t('stacked minis print on one sheet with separate cut marks and complete faces', async () => {
+  // #given: one 92×264 footprint beside two stacks of two 44×124 footprints.
+  const entries: Entry[] = [
+    { ...entry, heightSlot: 'custom', customWidthMm: 88, customHeightMm: 42 },
+    { ...entry, heightSlot: 'custom', customWidthMm: 40, customHeightMm: 20, count: 4 },
+  ];
+  // #when
+  const sheet = await read(await generatePDF(entries, { pageSize: 'a4', numberDuplicates: true }));
+  // #then
+  assert.deepEqual(
+    {
+      pages: sheet.pages,
+      minis: sheet.minis.length,
+      touching: sheet.minis.some((a, i) =>
+        sheet.minis
+          .slice(i + 1)
+          .some(
+            (b) =>
+              !(
+                a.marks.right < b.marks.left ||
+                b.marks.right < a.marks.left ||
+                a.marks.top < b.marks.bottom ||
+                b.marks.top < a.marks.bottom
+              ),
+          ),
+      ),
+      complete: sheet.minis.every(
+        (mini) =>
+          inside(mini.front.image, mini.extent) &&
+          inside(mini.back.image, mini.extent) &&
+          inside(mini.back.badge!, mini.extent),
+      ),
+      labels: sheet.texts.map((text) => text.label).toSorted(),
+    },
+    { pages: 1, minis: 5, touching: false, complete: true, labels: ['1', '1', '2', '3', '4'] },
+  );
+});
+
 // 3x2 px at Medium: the figure prints 52.5 mm wide at its 35 mm height, over a
 // 25 mm base, overhanging it and staying under the width cap.
 const wide: Entry = {
