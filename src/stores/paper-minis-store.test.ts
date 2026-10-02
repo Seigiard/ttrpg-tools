@@ -1,12 +1,12 @@
 import { afterEach, expect, spyOn, test } from 'bun:test';
-import { createPaperMinisStore } from './paper-minis-store';
+import { createPaperMinisStore, type PaperMinisRenderer } from './paper-minis-store';
 
 const png = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==',
   'base64',
 );
-function setup() {
-  const store = createPaperMinisStore();
+function setup(renderer?: PaperMinisRenderer) {
+  const store = createPaperMinisStore(renderer);
   store.settings({ normalization: false });
   return store;
 }
@@ -26,9 +26,135 @@ function deferredFile() {
 }
 afterEach(() => localStorage.removeItem('pmg-settings'));
 
-test('generation holds rows and settings stable until the lock is released', async () => {
+test('download renders the layout shown by the counter and returns the renderer bytes', async () => {
   // #given
-  const store = setup();
+  const bytes = Uint8Array.from([11, 22, 33]);
+  let rendered: Parameters<PaperMinisRenderer> | undefined;
+  const store = setup(async (...input) => {
+    rendered = input;
+    return bytes;
+  });
+  const id = store.addBlank()!;
+  const file = new File([png], 'front.png', { type: 'image/png' });
+  await store.setImage(id, file);
+  const counterLayout = store.pack();
+  // #when
+  const result = await store.download();
+  // #then
+  expect({
+    bytes: result && Array.from(result),
+    rows: rendered?.[0].map((row) => row.id),
+    sameLayout: rendered?.[1] === counterLayout,
+    settings: rendered?.[2],
+    busy: store.$busy.get(),
+    message: store.$message.get(),
+  }).toEqual({
+    bytes: [11, 22, 33],
+    rows: [id],
+    sameLayout: true,
+    settings: {
+      pageSize: 'a4',
+      marginMm: 2,
+      numberDuplicates: false,
+      normalization: false,
+    },
+    busy: false,
+    message: 'PDF готов.',
+  });
+});
+
+test('a render failure releases the generation lock and reports the failure', async () => {
+  // #given
+  const store = setup(async () => {
+    throw new Error('renderer failed');
+  });
+  await store.setImage(
+    store.addBlank()!,
+    new File([png], 'front.png', { type: 'image/png' }),
+  );
+  // #when
+  const result = await store.download();
+  // #then
+  expect({ result, busy: store.$busy.get(), message: store.$message.get() }).toEqual({
+    result: undefined,
+    busy: false,
+    message: 'Не удалось создать PDF. Попробуйте ещё раз или уменьшите изображения.',
+  });
+});
+
+test('a preview records its revision and becomes stale after an edit', async () => {
+  // #given
+  const bytes = Uint8Array.from([44, 55]);
+  const store = setup(async () => bytes);
+  const id = store.addBlank()!;
+  await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
+  const revision = store.$revision.get();
+  // #when
+  await store.refreshPreview();
+  const current = {
+    preview: store.$preview.get(),
+    stale: store.$previewStale.get(),
+  };
+  store.patch(id, { count: 2 });
+  // #then
+  expect({
+    current: {
+      bytes: current.preview && Array.from(current.preview.bytes),
+      revisionMatches: current.preview?.revision === revision,
+      stale: current.stale,
+    },
+    revisionAdvanced: store.$revision.get() === revision + 1,
+    stale: store.$previewStale.get(),
+  }).toEqual({
+    current: { bytes: [44, 55], revisionMatches: true, stale: false },
+    revisionAdvanced: true,
+    stale: true,
+  });
+});
+
+test('a second generation call does nothing while the renderer is pending', async () => {
+  // #given
+  let release!: (bytes: Uint8Array) => void;
+  const pending = new Promise<Uint8Array>((resolve) => {
+    release = resolve;
+  });
+  let calls = 0;
+  const store = setup(() => {
+    calls++;
+    return pending;
+  });
+  await store.setImage(
+    store.addBlank()!,
+    new File([png], 'front.png', { type: 'image/png' }),
+  );
+  // #when
+  const download = store.download();
+  const preview = await store.refreshPreview();
+  release(Uint8Array.from([66]));
+  const result = await download;
+  // #then
+  expect({
+    calls,
+    preview,
+    storedPreview: store.$preview.get(),
+    result: result && Array.from(result),
+    busy: store.$busy.get(),
+  }).toEqual({
+    calls: 1,
+    preview: undefined,
+    storedPreview: undefined,
+    result: [66],
+    busy: false,
+  });
+});
+
+test('generation keeps every row and setting mutation locked until rendering settles', async () => {
+  // #given
+  let release!: (bytes: Uint8Array) => void;
+  const rendering = new Promise<Uint8Array>((resolve) => {
+    release = resolve;
+  });
+  const store = setup(() => rendering);
   const id = store.addBlank()!;
   const file = new File([png], 'front.png', { type: 'image/png' });
   await store.setImage(id, file);
@@ -39,8 +165,7 @@ test('generation holds rows and settings stable until the lock is released', asy
     revision: store.$revision.get(),
   };
   // #when
-  const started = store.beginGeneration();
-  const repeated = store.beginGeneration();
+  const download = store.download();
   store.patch(id, { count: 7 });
   store.settings({ pageSize: 'letter', normalization: true });
   store.addBlank();
@@ -55,16 +180,18 @@ test('generation holds rows and settings stable until the lock is released', asy
     settings: store.$settings.get(),
     revision: store.$revision.get(),
   };
-  store.endGeneration();
+  release(Uint8Array.from([1]));
+  await download;
   store.patch(id, { count: 3 });
   // #then
   expect({
-    started,
-    repeated,
-    during,
+    sameSnapshot:
+      during.rows === before.rows &&
+      during.settings === before.settings &&
+      during.revision === before.revision,
     busy: store.$busy.get(),
     count: store.pack().miniCount,
-  }).toEqual({ started: true, repeated: false, during: before, busy: false, count: 3 });
+  }).toEqual({ sameSnapshot: true, busy: false, count: 3 });
 });
 
 test('a removed row’s late load neither restores it nor invalidates the preview', async () => {
@@ -87,34 +214,42 @@ test('a removed row’s late load neither restores it nor invalidates the previe
 
 test('generation waits for artwork preparation even when another row is printable', async () => {
   // #given
-  const store = setup();
+  let renders = 0;
+  const store = setup(async () => {
+    renders++;
+    return Uint8Array.from([1]);
+  });
   await store.setImage(store.addBlank()!, new File([png], 'front.png', { type: 'image/png' }));
   const slow = deferredFile();
   const pending = store.setImage(store.addBlank()!, slow.file);
   // #when
   const during = {
     preparing: store.$preparing.get(),
-    started: store.beginGeneration(),
+    result: await store.download(),
     count: store.pack().miniCount,
   };
   slow.release();
   await pending;
   const after = {
     preparing: store.$preparing.get(),
-    started: store.beginGeneration(),
+    result: Array.from((await store.download()) ?? []),
     count: store.pack().miniCount,
   };
-  store.endGeneration();
   // #then
-  expect({ during, after }).toEqual({
-    during: { preparing: true, started: false, count: 1 },
-    after: { preparing: false, started: true, count: 2 },
+  expect({ during, after, renders }).toEqual({
+    during: { preparing: true, result: undefined, count: 1 },
+    after: { preparing: false, result: [1], count: 2 },
+    renders: 1,
   });
 });
 
 test('a normalization job keeps generation unavailable until its failure fallback is published', async () => {
   // #given
-  const store = setup();
+  let renders = 0;
+  const store = setup(async () => {
+    renders++;
+    return Uint8Array.from([1]);
+  });
   await store.setImage(store.addBlank()!, new File([png], 'front.png', { type: 'image/png' }));
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'createImageBitmap');
   const errors = spyOn(console, 'error').mockImplementation(() => {});
@@ -136,7 +271,7 @@ test('a normalization job keeps generation unavailable until its failure fallbac
     // #when
     store.settings({ normalization: true });
     await decoding;
-    const during = store.beginGeneration();
+    const during = await store.download();
     const settled = new Promise<void>((resolve) => {
       const unsubscribe = store.$preparing.listen((preparing) => {
         if (!preparing) {
@@ -147,17 +282,18 @@ test('a normalization job keeps generation unavailable until its failure fallbac
     });
     reject(new Error('Bitmap decoding failed'));
     await settled;
-    const after = store.beginGeneration();
-    store.endGeneration();
+    const after = await store.download();
     // #then
     expect({
       during,
-      after,
+      after: after && Array.from(after),
+      renders,
       count: store.pack().miniCount,
       warning: store.$rows.get()[0].normalizationWarning,
     }).toEqual({
-      during: false,
-      after: true,
+      during: undefined,
+      after: [1],
+      renders: 1,
       count: 1,
       warning: 'Не удалось обрезать изображение. Будет напечатан оригинал.',
     });
@@ -172,7 +308,7 @@ test.each(['remove', 'clearBack', 'replace'])(
   '%s releases preparation without waiting for obsolete artwork',
   async (action) => {
     // #given
-    const store = setup();
+    const store = setup(async () => Uint8Array.from([1]));
     const id = store.addBlank()!;
     const front = new File([png], 'front.png', { type: 'image/png' });
     await store.setImage(id, front);
@@ -184,15 +320,14 @@ test.each(['remove', 'clearBack', 'replace'])(
     else if (action === 'clearBack') store.clearBack(target);
     else await store.setImage(target, front);
     const preparing = store.$preparing.get();
-    const started = store.beginGeneration();
+    const generated = await store.download();
     const revision = store.$revision.get();
     slow.release();
     await pending;
-    store.endGeneration();
     // #then
     expect({
       preparing,
-      started,
+      generated: generated && Array.from(generated),
       rows: store.$rows
         .get()
         .map((row) => [row.image?.name, row.artwork?.width, row.artwork?.height]),
@@ -200,7 +335,7 @@ test.each(['remove', 'clearBack', 'replace'])(
       revisionChanged: store.$revision.get() !== revision,
     }).toEqual({
       preparing: false,
-      started: true,
+      generated: [1],
       rows: [['front.png', 1, 1]],
       count: 1,
       revisionChanged: false,
@@ -212,18 +347,22 @@ test.each([false, true])(
   'a file selected while locked cannot publish after unlock (back=%s)',
   async (back) => {
     // #given
-    const store = setup();
+    let finish!: (bytes: Uint8Array) => void;
+    const rendering = new Promise<Uint8Array>((resolve) => {
+      finish = resolve;
+    });
+    const store = setup(() => rendering);
     const id = store.addBlank()!;
     const original = new File([png], 'original.png', { type: 'image/png' });
     await store.setImage(id, original);
     await store.setImage(id, original, true);
     const slow = deferredFile();
-    store.beginGeneration();
+    const download = store.download();
     // #when
-    const pending = store.setImage(id, slow.file, back);
-    store.endGeneration();
+    await store.setImage(id, slow.file, back);
+    finish(Uint8Array.from([1]));
+    await download;
     slow.release();
-    await pending;
     const row = store.$rows.get()[0];
     // #then
     expect({
