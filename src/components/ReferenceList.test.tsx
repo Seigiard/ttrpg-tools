@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/preact';
 import { ReferenceList } from './ReferenceList';
 
 beforeEach(cleanup);
@@ -13,21 +13,12 @@ test('each row shows its own label before its outcome', () => {
   ];
   // #when the reference table renders both callbacks
   render(
-    <ReferenceList
-      title="Outcomes"
-      testId="reference"
-      rows={rows}
-      hitIndex={null}
-      label={(row, i) => `${i + 1}: ${row.code} `}
-    >
+    <ReferenceList title="Outcomes" testId="reference" rows={rows} hitIndex={null} label={(row, i) => `${i + 1}: ${row.code} `}>
       {(row) => <em>{row.outcome}</em>}
     </ReferenceList>,
   );
   // #then each label stays paired with its outcome in display order
-  expect(screen.getAllByRole('listitem').map((row) => row.textContent)).toEqual([
-    '1: A Clear',
-    '2: B Omen',
-  ]);
+  expect(screen.getAllByRole('listitem').map((row) => row.textContent)).toEqual(['1: A Clear', '2: B Omen']);
 });
 
 test.each([0, 1, 2, null])('marks only the rolled row for hitIndex %s', (hitIndex) => {
@@ -35,13 +26,7 @@ test.each([0, 1, 2, null])('marks only the rolled row for hitIndex %s', (hitInde
   const rows = ['Clear', 'Omen', 'Encounter'];
   // #when the reference table is rendered
   const { container } = render(
-    <ReferenceList
-      title="Outcomes"
-      testId="reference"
-      rows={rows}
-      hitIndex={hitIndex}
-      label={(_, i) => i + 1}
-    >
+    <ReferenceList title="Outcomes" testId="reference" rows={rows} hitIndex={hitIndex} label={(_, i) => i + 1}>
       {(row) => row}
     </ReferenceList>,
   );
@@ -59,20 +44,12 @@ test('the rolled row has a left border as a non-colour marker', () => {
   const rows = ['Clear', 'Omen'];
   // #when the reference table is rendered
   render(
-    <ReferenceList
-      title="Outcomes"
-      testId="reference"
-      rows={rows}
-      hitIndex={1}
-      label={(_, i) => i + 1}
-    >
+    <ReferenceList title="Outcomes" testId="reference" rows={rows} hitIndex={1} label={(_, i) => i + 1}>
       {(row) => row}
     </ReferenceList>,
   );
   // #then the marker is present on the rolled row only
-  expect(
-    screen.getAllByRole('listitem').map((row) => row.classList.contains('border-l-2')),
-  ).toEqual([false, true]);
+  expect(screen.getAllByRole('listitem').map((row) => row.classList.contains('border-l-2'))).toEqual([false, true]);
 });
 
 test('every reference row has its positional index', () => {
@@ -80,20 +57,10 @@ test('every reference row has its positional index', () => {
   const rows = ['Clear', 'Omen', 'Encounter'];
   // #when the reference table is rendered
   render(
-    <ReferenceList
-      title="Outcomes"
-      testId="reference"
-      rows={rows}
-      hitIndex={1}
-      label={(_, i) => i + 1}
-    >
+    <ReferenceList title="Outcomes" testId="reference" rows={rows} hitIndex={1} label={(_, i) => i + 1}>
       {(row) => row}
     </ReferenceList>,
   );
   // #then every row exposes its index
-  expect(screen.getAllByRole('listitem').map((row) => row.getAttribute('data-row-index'))).toEqual([
-    '0',
-    '1',
-    '2',
-  ]);
+  expect(screen.getAllByRole('listitem').map((row) => row.getAttribute('data-row-index'))).toEqual(['0', '1', '2']);
 });

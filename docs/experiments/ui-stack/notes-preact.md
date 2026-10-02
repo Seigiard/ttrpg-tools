@@ -34,18 +34,31 @@
 - Test port notes: Preact + happy-dom needs explicit waits for nanostore-driven rerenders, and primary pointer-capture paths are stubbed in the Paper Minis component tests because happy-dom's pointer capture can keep the test process alive. Browser coverage still exercises the calibration user flow through Playwright.
 - Verification after P4: `bun run lint`, `bun run format:check`, `bun run typecheck`, `bun test`, `bun run build`, `bun run test:browser`, and `PORT=4401 bun run e2e` all pass. `lint` still reports existing warnings outside the P4 port.
 
+## P5: React Removed
+
+- Removed the React-side packages and config: `@astrojs/react`, `react`, `react-dom`, `@types/react`, `@types/react-dom`, `@base-ui/react`, `lucide-react`, `@nanostores/react`, `@testing-library/react`, `shadcn` and `components.json`.
+- Kept the Preact-side replacements versus main: `@astrojs/preact`, `preact`, `@nanostores/preact`, `lucide-preact` and `@testing-library/preact`.
+- Dropped the `.preact` suffix from production files and tests. `astro.config.mjs` now registers `preact()` without include/exclude filters, and `tsconfig.json` sets `jsxImportSource` to `preact`, so file-level `/** @jsxImportSource preact */` pragmas are gone.
+- Removed the P1 smoke route and fixture. Coverage moved to real primitives and production islands: `Button`, `Card`, `Tabs`, `Dialog`, `Skeleton`, `ReferenceList`, icons and all generator components have Preact tests.
+- Line counts after suffix collapse, compared with React originals on main `0c530f3` using `git show 0c530f3:<path> | wc -l`: UI source is 2148 LOC Preact versus 1915 LOC React. UI tests are 1921 LOC Preact versus 1578 LOC React. The Preact counts include native primitive tests and icon seam tests that main did not have.
+- No React runtime evidence after `bun run build`: grep of `dist/` for `react-dom`, `react.production`, `react/jsx-runtime` and `jsx-runtime` returned no matches. `results/preact/versions.json` also has empty snippets for `@astrojs/react`, `react-dom`, `@base-ui/react` and `@nanostores/react`; the `react` key only catches package names containing `preact`.
+- Measurement output was refreshed with `PORT=4411 bun run measure -- --out docs/experiments/ui-stack/results/preact`. Summary payload gzip: `/` has 0 external JS, encounters 2019, locations 3973, weather 2305, paper-minis 194877 and prices 3912.
+- Dialog modality gap verified in Chromium against the built preview: after opening Paper Minis calibration and pressing `Shift+Tab`, focus moved to the background back-slot button (`inDialog:false`). The custom div dialog traps focus only at the first/last focusable elements inside the dialog when focus is already there; it does not inert the background like native `<dialog>.showModal()` would.
+- Test pitfall: happy-dom primary pointer-capture paths can keep the test process alive. Paper Minis component tests stub `setPointerCapture`/`releasePointerCapture` and use store-driven calibration updates for unit-level apply/reset assertions. Playwright still covers the keyboard calibration flow in a browser.
+- Migration pitfalls seen before fixing: first browser modality probe failed with `ERR_CONNECTION_REFUSED` because Astro preview kept a stale singleton status for port 4401; `astro preview stop` cleared it. Removing `shadcn` also required deleting `@import 'shadcn/tailwind.css'` from `global.css`.
+
 ## Compatibility Decisions
 
-- `@base-ui/react`: keep it only for unmigrated React islands. For Preact, use native primitives instead of routing Base UI through `preact/compat`.
-- Reason: Base UI wrappers are React components, so compat would make Preact islands depend on React-shaped component semantics during the migration and make the final “no React runtime” target harder to prove. The local needs are small: button styling, tabs selection/keyboard movement and one modal dialog.
-- Compatibility gap accepted in P2: the native Dialog does not implement Base UI's full portal/focus-management surface. It implements the behavior used by `PaperMinisGenerator`: default-open modal, title, Escape close and `finalFocus` restore. P4 will validate it against the paper-minis component tests.
-- `lucide-react`: keep it only for unmigrated React islands. Preact components use `lucide-preact` through `src/components/icons.preact.ts`.
-- `preact/compat`: not enabled. P1 smoke and P2 primitives use native Preact APIs.
+- `@base-ui/react`: removed in P5. Preact uses local native primitives instead of routing React wrappers through `preact/compat`.
+- Reason: Base UI wrappers are React components, so compat would make Preact islands depend on React-shaped component semantics and would weaken the “no React runtime” proof. The local needs are small: button styling, card slots, tabs selection/keyboard movement and one modal dialog.
+- Compatibility gap accepted after P5: the native Dialog does not implement full top-layer modality or inert background behavior. It implements the behavior currently covered by Paper Minis tests: default-open modal, title, Escape close, basic Tab focus loop and `finalFocus` restore. Browser verification shows the background is still tabbable with `Shift+Tab`.
+- `lucide-react`: removed in P5. Preact components use `lucide-preact` through `src/components/icons.ts`.
+- `preact/compat`: not enabled. All islands and primitives use native Preact APIs.
 
 ## Config And Cost
 
-- Config cost: one extra Astro integration and renderer include/exclude patterns in `astro.config.mjs`.
-- Runtime cost in production tool routes: not measured in P1. No production island migrated yet, and React remains in current bundles until P5.
+- Config cost after P5: one Astro integration, `@astrojs/preact`; no React renderer and no include/exclude suffix filter.
+- Runtime cost in production tool routes: measured in `docs/experiments/ui-stack/results/preact/` after React removal.
 - Framework-independent code changes: none. `src/data`, `src/lib` and `src/stores` were not changed.
 - P2 local source/test cost: 864 added lines across native Preact primitives, `ReferenceList`, icon seam and tests, measured with `wc -l` on the new P2 files.
 - P2 installed package footprint in `node_modules`: `preact` 1.8M, `@preact` 1.1M, `lucide-preact` 32M, `@nanostores/preact` 20K, `@testing-library/preact` 3.6M. This is install footprint, not production bundle cost.

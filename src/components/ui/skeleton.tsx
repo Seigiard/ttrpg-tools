@@ -1,4 +1,4 @@
-import * as React from 'react';
+import type { JSX } from 'preact';
 
 import { cn } from '@/lib/utils';
 
@@ -7,7 +7,7 @@ function Skeleton({
   className,
   children,
   ...props
-}: React.ComponentProps<'span'> & { loading?: boolean }) {
+}: JSX.IntrinsicElements['span'] & { loading?: boolean }) {
   return (
     <span
       data-slot="skeleton"
