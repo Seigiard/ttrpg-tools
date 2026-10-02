@@ -11,3 +11,15 @@
 - Astro's multi-renderer check cannot identify the existing hook-based React function islands by calling them, so the current React island exports are wrapped in `React.memo`. This keeps the components on React while giving Astro an object marker it can route to the React renderer.
 
 No changes to `src/data`, `src/lib` or `src/stores` were needed.
+
+## S2 · Svelte primitives, icons and ReferenceList
+
+- Added Svelte versions of `Button`, `Card`, `Skeleton`, `Tabs`, `Dialog` and `ReferenceList` beside the React files. Existing React islands still import the React files; production island migration starts in S3.
+- `ReferenceList.svelte` uses Svelte snippets for the label and row content slots. Its tests keep the previous DOM contract: row order, `data-hit`, `data-row-index` and the non-colour left border marker.
+- `Tabs` is implemented without Base UI. It keeps `role="tablist"`, `role="tab"`, `aria-selected`, roving focus and arrow-key selection.
+- `Dialog` uses native `<dialog>`, with Escape handling, focus trap and focus restore. Happy DOM does not expose native dialog semantics exactly like a browser, so the test dispatches keyboard events on the `<dialog>` element directly.
+- Added `@lucide/svelte` and a local `src/components/icons.ts` facade for Svelte icons. `lucide-react` remains until the React islands are migrated.
+- `astro check` alone did not catch a deliberate `.svelte` type error. The `typecheck` script now runs `astro check && svelte-check --tsconfig ./tsconfig.json`.
+- `svelte-check` also caught real S2 issues that `astro check` missed: an invalid Svelte element type import, dialog props being spread onto the wrong element type and a possibly undefined bound dialog element.
+
+No changes to `src/data`, `src/lib` or `src/stores` were needed.

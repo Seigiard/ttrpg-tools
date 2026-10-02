@@ -82,7 +82,7 @@ Review base: 48c587c626dba17990da59ea1ccb475054d36c35
 - [ ] P5 · React removed; no React runtime in any bundle; parity suite green; measurements saved. Done: CI checks and e2e green, `results/preact/` filled.
 - [ ] P6 · Follow-up change in Preact. Done: own commit, CI checks and e2e green.
 - [x] S1 · Svelte toolchain beside React (`@astrojs/svelte`, svelte-check in `astro check`, prettier for `.svelte`, test support). Done: all CI checks green.
-- [ ] S2 · Svelte primitives, icons and `ReferenceList` with their tests. Done: CI checks green.
+- [x] S2 · Svelte primitives, icons and `ReferenceList` with their tests. Done: CI checks green.
 - [ ] S3 · Svelte weather, locations, encounters and prices with their tests. Done: CI checks green.
 - [ ] S4 · Svelte paper minis with its tests. Done: CI checks green.
 - [ ] S5 · React removed; no React runtime in any bundle; parity suite green; measurements saved. Done: CI checks and e2e green, `results/svelte/` filled.

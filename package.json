@@ -18,13 +18,14 @@
     "format": "oxfmt src && prettier --write 'src/**/*.svelte'",
     "format:check": "oxfmt --check src && prettier --check 'src/**/*.svelte'",
     "format:astro": "prettier --write '**/*.astro'",
-    "typecheck": "astro check",
+    "typecheck": "astro check && svelte-check --tsconfig ./tsconfig.json",
     "deploy": "bun run build && bunx wrangler deploy"
   },
   "dependencies": {
     "@astrojs/react": "^7.0.0",
     "@astrojs/svelte": "^9.0.1",
     "@base-ui/react": "^1.8.0",
+    "@lucide/svelte": "^1.50.0",
     "@nanostores/react": "^2.0.1",
     "@tailwindcss/vite": "^4.3.3",
     "@types/react": "^19.3.0",

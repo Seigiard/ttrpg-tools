@@ -9,6 +9,10 @@ const svelteClientEntry = fileURLToPath(
 );
 const svelteClientSpecifier = pathToFileURL(svelteClientEntry).href;
 
+function useSvelteClientEntry(source: string) {
+  return source.replaceAll("from 'svelte'", `from '${svelteClientSpecifier}'`);
+}
+
 plugin({
   name: 'svelte-test-loader',
   setup(build) {
@@ -23,7 +27,7 @@ plugin({
       });
 
       return {
-        contents: compiled.js.code,
+        contents: useSvelteClientEntry(compiled.js.code),
         loader: 'js',
       };
     });
@@ -36,7 +40,7 @@ plugin({
       });
 
       return {
-        contents: compiled.js.code,
+        contents: useSvelteClientEntry(compiled.js.code),
         loader: path.endsWith('.ts') ? 'ts' : 'js',
       };
     });
@@ -47,13 +51,15 @@ plugin({
           /node_modules\/\@testing-library\/svelte(?:-core)?\/src\/(mount|pure|svelte-version)\.js$/,
       },
       ({ path }) => ({
-        contents: readFileSync(path, 'utf8').replaceAll(
-          "from 'svelte'",
-          `from '${svelteClientSpecifier}'`,
-        ),
+        contents: useSvelteClientEntry(readFileSync(path, 'utf8')),
         loader: 'js',
       }),
     );
+
+    build.onLoad({ filter: /node_modules\/\@lucide\/svelte\/dist\/.*\.js$/ }, ({ path }) => ({
+      contents: useSvelteClientEntry(readFileSync(path, 'utf8')),
+      loader: 'js',
+    }));
   },
 });
 
