@@ -17,12 +17,11 @@ import {
 } from '@/lib/paper-minis/calibration';
 import {
   DEFAULT_FIGURE_MARGIN_MM,
-  fitLimitWarning,
-  resolveMini,
+  entryStatusWarning,
   type PageSizeKey,
 } from '@/lib/paper-minis/geometry';
 import { generatePDF } from '@/lib/paper-minis/pdf';
-import { packEntries, toPackingEntry, type PackResult } from '@/lib/paper-minis/packing';
+import { packEntries, resolveEntry, type PackResult } from '@/lib/paper-minis/packing';
 import {
   DEFAULT_CUSTOM_HEIGHT_MM,
   DEFAULT_CUSTOM_WIDTH_MM,
@@ -78,6 +77,7 @@ export type CalibrationSession = {
   slotHeightMm: number;
   printedHeightMm: number;
   warning?: string;
+  warningTone?: 'warning' | 'danger';
 };
 const storageKey = 'pmg-settings';
 const successMessage = 'PDF готов.';
@@ -145,12 +145,14 @@ export function createPaperMinisStore({
     if (!row.artwork) return undefined;
     const calibration = calibrationChanged(lines, initialCalibration) ? lines : initialCalibration;
     // Every copy shares one geometry, so a single copy is enough to preview it.
-    const mini = resolveMini(
-      { ...toPackingEntry(row), calibration, count: 1 },
+    const resolved = resolveEntry(
+      { ...row, calibration, count: 1 },
       0,
       $settings.get(),
     );
+    const { mini } = resolved;
     if (!mini) return undefined;
+    const warning = entryStatusWarning(resolved.status);
     return {
       rowId: row.id,
       rowLabel: row.name || 'Миниатюра',
@@ -164,7 +166,10 @@ export function createPaperMinisStore({
       },
       slotHeightMm: resolveFigureHeightMm(row),
       printedHeightMm: mini.copies[0].imageHeightMm,
-      warning: fitLimitWarning(mini.limits),
+      warning,
+      ...(warning && {
+        warningTone: resolved.status.state === 'oversized' ? ('danger' as const) : ('warning' as const),
+      }),
     };
   }
 

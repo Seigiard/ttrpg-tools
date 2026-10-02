@@ -1,11 +1,10 @@
 import assert from 'node:assert/strict';
-import { MARGIN_MM, PAGE_SIZES_MM, fitFigure, resolveMini } from './geometry.ts';
+import { PAGE_SIZES_MM, SHEET_MARGIN_MM, fitFigure, resolveMini } from './geometry.ts';
 import { type PackResult, packMinis } from './packing.ts';
 import {
   HEIGHT_SLOTS,
   HEIGHT_SLOT_ORDER,
-  resolveBaseWidthMm,
-  resolveFigureHeightMm,
+  resolveSizeDimensionsMm,
   slotGeometryLabel,
 } from './sizes.ts';
 import type { PackingEntry as Entry } from './types.ts';
@@ -18,7 +17,7 @@ t('every adjacent pair of slots prints a taller figure than the one below it', (
     (slot) =>
       fitFigure(
         {
-          baseWidthMm: resolveBaseWidthMm({ heightSlot: slot }),
+          baseWidthMm: resolveSizeDimensionsMm({ heightSlot: slot }).baseWidthMm,
           figureHeightMm: HEIGHT_SLOTS[slot].figureHeightMm,
         },
         100,
@@ -103,10 +102,7 @@ t('the tallest slot’s widest figure still fits the page', () => {
 t('a custom size honours both of its numbers', () => {
   // #given
   const e = { heightSlot: 'custom' as const, customWidthMm: 20, customHeightMm: 45 };
-  const dimensions = {
-    baseWidthMm: resolveBaseWidthMm(e),
-    figureHeightMm: resolveFigureHeightMm(e),
-  };
+  const dimensions = resolveSizeDimensionsMm(e);
   // #when
   const fit = fitFigure(dimensions, 100, 300);
   // #then
@@ -132,7 +128,7 @@ const placedMinis = (result: PackResult) =>
     .flatMap((page) => page.placements.map(({ mini }) => mini))
     .toSorted((a, b) => a.entryIndex - b.entryIndex || a.copyIndex - b.copyIndex);
 
-const usableH = PAGE_SIZES_MM.a4.h - MARGIN_MM * 2; // 277
+const usableH = PAGE_SIZES_MM.a4.h - SHEET_MARGIN_MM * 2; // 277
 const sheetOpts = { pageSize: 'a4', numberDuplicates: false } as const;
 
 t('default margin reserves paper around both faces without shrinking the figure', () => {
