@@ -310,6 +310,85 @@ test('PDF actions wait for a pending image while the editor stays available', as
   });
 });
 
+test('height calibration stays disabled while the front loads and does not open after a blocked click', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  let release!: (bytes: ArrayBuffer) => void;
+  const file = new File([png], 'pending.png', { type: 'image/png' });
+  file.arrayBuffer = () =>
+    new Promise((resolve) => {
+      release = resolve;
+    });
+  fireEvent.change(screen.getByLabelText('Добавить изображения', { selector: 'input' }), {
+    target: { files: [file] },
+  });
+  const button = screen.getByRole<HTMLButtonElement>('button', { name: 'Задать рост' });
+  // #when
+  const disabledDuringLoad = button.disabled;
+  fireEvent.click(button);
+  await act(async () => {
+    release(Uint8Array.from(png).buffer);
+  });
+  // #then
+  expect({
+    disabledDuringLoad,
+    disabledAfter: button.disabled,
+    dialog: screen.queryByRole('dialog') !== null,
+  }).toEqual({ disabledDuringLoad: true, disabledAfter: false, dialog: false });
+});
+
+const overlay = (slot: HTMLElement) =>
+  ['head', 'feet'].map(
+    (key) => within(slot).queryByTestId(`calibration-${key}`)?.style.top ?? null,
+  );
+
+test('back-only calibration draws thumbnail lines only on the back and reset removes them', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  await addBack();
+  const front = screen.getByRole('button', { name: 'Лицевая сторона' });
+  const back = screen.getByRole('button', { name: 'Оборот: back.png' });
+  const before = [overlay(front), overlay(back)];
+  // #when
+  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Зад' }));
+  fireEvent.keyDown(screen.getByRole('slider', { name: 'Голова' }), { key: 'ArrowDown' });
+  fireEvent.click(screen.getByRole('button', { name: 'Применить' }));
+  const calibrated = [overlay(front), overlay(back)];
+  fireEvent.click(screen.getByRole('button', { name: 'Сбросить рост' }));
+  // #then
+  expect({ before, calibrated, reset: [overlay(front), overlay(back)] }).toEqual({
+    before: [
+      [null, null],
+      [null, null],
+    ],
+    calibrated: [
+      [null, null],
+      ['90%', '100%'],
+    ],
+    reset: [
+      [null, null],
+      [null, null],
+    ],
+  });
+});
+
+test('a front-only calibration dialog exposes sliders without an orphan tab stop', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  // #when
+  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
+  const dialog = within(screen.getByRole('dialog'));
+  // #then
+  expect({
+    tabs: dialog.queryAllByRole('tab').length,
+    panels: dialog.queryAllByRole('tabpanel').length,
+    sliders: dialog.getAllByRole('slider').map((el) => el.getAttribute('aria-label')),
+  }).toEqual({ tabs: 0, panels: 0, sliders: ['Голова', 'Ступни'] });
+});
+
 test('front height dialog applies pointer calibration and row reset clears it', async () => {
   // #given
   render(<PaperMinisGenerator />);
@@ -507,6 +586,72 @@ test('Apply after only viewing both tabs keeps both sides uncalibrated', async (
   fireEvent.click(screen.getByRole('button', { name: 'Применить' }));
   // #then
   expect(screen.queryByText('Рост задан вручную')).toBe(null);
+});
+
+test.each(['pointerCancel', 'lostPointerCapture'] as const)(
+  '%s ends calibration dragging',
+  async (end) => {
+    // #given
+    render(<PaperMinisGenerator />);
+    await addFront();
+    fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
+    const dialog = within(screen.getByRole('dialog'));
+    const head = dialog.getByRole('slider', { name: 'Голова' });
+    const area = dialog.getByTestId('height-calibration-artwork');
+    Object.defineProperty(dialog.getByRole('img'), 'getBoundingClientRect', {
+      value: () => ({ top: 0, height: 100 }),
+      configurable: true,
+    });
+    fireEvent.pointerDown(head, { pointerId: 1, button: 0, clientY: 25 });
+    // #when
+    fireEvent[end](head, { pointerId: 1 });
+    fireEvent.pointerMove(area, { pointerId: 1, clientY: 50 });
+    // #then
+    expect(head.getAttribute('aria-valuenow')).toBe('25');
+  },
+);
+
+test.each([{ button: 2 }, { button: 0, ctrlKey: true }])(
+  'context-menu press %j does not start calibration',
+  async (press) => {
+    // #given
+    render(<PaperMinisGenerator />);
+    await addFront();
+    fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
+    const dialog = within(screen.getByRole('dialog'));
+    Object.defineProperty(dialog.getByRole('img'), 'getBoundingClientRect', {
+      value: () => ({ top: 0, height: 100 }),
+      configurable: true,
+    });
+    // #when
+    fireEvent.pointerDown(dialog.getByRole('slider', { name: 'Голова' }), {
+      ...press,
+      pointerId: 1,
+      clientY: 25,
+    });
+    fireEvent.pointerMove(dialog.getByTestId('height-calibration-artwork'), {
+      pointerId: 1,
+      clientY: 50,
+    });
+    fireEvent.click(dialog.getByRole('button', { name: 'Применить' }));
+    // #then
+    expect(screen.queryByText('Рост задан вручную') !== null).toBe(false);
+  },
+);
+
+test('pushing untouched lines against their boundaries does not calibrate either side', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  await addBack();
+  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
+  // #when
+  fireEvent.keyDown(screen.getByRole('slider', { name: 'Голова' }), { key: 'ArrowUp' });
+  fireEvent.click(screen.getByRole('tab', { name: 'Зад' }));
+  fireEvent.keyDown(screen.getByRole('slider', { name: 'Ступни' }), { key: 'ArrowDown' });
+  fireEvent.click(screen.getByRole('button', { name: 'Применить' }));
+  // #then
+  expect(screen.queryByText('Рост задан вручную') !== null).toBe(false);
 });
 
 test('an untouched back preview and Apply preserve its inherited printed height', async () => {

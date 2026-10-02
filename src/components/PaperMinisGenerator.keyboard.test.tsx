@@ -106,6 +106,22 @@ test('arrows move each line by artwork pixels and update the live print height',
     readout: 'Рост 35 мм · напечатается 39 мм',
   });
 });
+
+test('slider ranges announce the movement allowed by the other line', async () => {
+  // #given
+  const dialog = await openCalibration();
+  const head = dialog.getByRole('slider', { name: 'Голова' });
+  const feet = dialog.getByRole('slider', { name: 'Ступни' });
+  // #when
+  fireEvent.keyDown(feet, { key: 'ArrowUp', shiftKey: true });
+  // #then
+  expect(
+    [head, feet].map((el) => [el.getAttribute('aria-valuemin'), el.getAttribute('aria-valuemax')]),
+  ).toEqual([
+    ['0', '85'],
+    ['10', '100'],
+  ]);
+});
 test('keyboard moves keep both lines inside the artwork and at least 10 percent apart', async () => {
   // #given
   const dialog = await openCalibration();

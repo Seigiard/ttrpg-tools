@@ -45,10 +45,19 @@ t('front calibration scales the artwork height from the marked creature height',
     entry({ naturalWidth: 50, naturalHeight: 100, frontCalibration: { head: 0.25, feet: 0.75 } }),
   ];
   // #when
-  const mini = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 }).pages[0]
-    .rows[0].items[0];
+  const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 });
+  const mini = result.pages[0].rows[0].items[0];
   // #then
-  assert.deepEqual([mini.imageWidthMm, mini.imageHeightMm, mini.faceHeightMm], [35, 70, 70]);
+  assert.deepEqual(
+    [
+      mini.imageWidthMm,
+      mini.imageHeightMm,
+      mini.faceHeightMm,
+      mini.fitLimits,
+      result.limitedEntryFitLimits,
+    ],
+    [35, 70, 70, [], []],
+  );
 });
 
 t('front calibration uses a custom figure height as its target', () => {
@@ -244,6 +253,65 @@ t('back-only calibration is capped to the page and reports every active limit', 
       back: { imageWidthMm: 125.5, imageHeightMm: 125.5, imageOffsetXMm: 0 },
       limits: [{ entryIndex: 0, limits: ['height', 'width', 'page'] }],
     },
+  );
+});
+
+t('back-only calibration fits an oversized custom front and back onto the page', () => {
+  // #given
+  const entries = [
+    entry({
+      heightSlot: 'custom',
+      customWidthMm: 10,
+      customHeightMm: 140,
+      naturalWidth: 50,
+      naturalHeight: 100,
+      backNaturalWidth: 25,
+      backNaturalHeight: 100,
+      backCalibration: { head: 0.25, feet: 0.75 },
+    }),
+  ];
+  // #when
+  const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 });
+  const mini = result.pages[0]?.rows[0].items[0];
+  // #then
+  assert.deepEqual(
+    {
+      count: result.miniCount,
+      skipped: result.skipped,
+      front: [mini?.imageWidthMm, mini?.imageHeightMm],
+      back: [mini?.back?.imageWidthMm, mini?.back?.imageHeightMm],
+      total: mini?.totalHeightMm,
+      warnings: result.limitedEntryFitLimits,
+    },
+    {
+      count: 1,
+      skipped: [],
+      front: [64.25, 128.5],
+      back: [32.125, 128.5],
+      total: 277,
+      warnings: [{ entryIndex: 0, limits: ['page'] }],
+    },
+  );
+});
+
+t('a calibrated mini with an oversized base does not claim it was fitted to the page', () => {
+  // #given
+  const entries = [
+    entry({
+      heightSlot: 'custom',
+      customWidthMm: 200,
+      customHeightMm: 140,
+      backNaturalWidth: 50,
+      backNaturalHeight: 100,
+      backCalibration: { head: 0.25, feet: 0.75 },
+    }),
+  ];
+  // #when
+  const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 });
+  // #then
+  assert.deepEqual(
+    [result.miniCount, result.oversizedEntryIndices, result.limitedEntryFitLimits],
+    [0, [0], []],
   );
 });
 

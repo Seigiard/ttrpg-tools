@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
 import { useStore } from '@nanostores/react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
@@ -11,6 +11,7 @@ import {
   DEFAULT_CUSTOM_HEIGHT_MM,
   DEFAULT_CUSTOM_WIDTH_MM,
   HEIGHT_SLOT_ORDER,
+  MIN_CALIBRATION_GAP,
   type FigureFitLimit,
   resolveFigureHeightMm,
   slotLabel,
@@ -23,7 +24,6 @@ type CalibrationDraft = Pick<Entry, 'frontCalibration' | 'backCalibration'>;
 
 const field =
   'min-h-11 w-full rounded-lg border border-border bg-surface-elevated px-3 text-text focus-visible:outline-2 focus-visible:outline-primary';
-const minCalibrationGap = 0.1;
 
 function useArtworkUrl(artwork?: PreparedArtwork | null) {
   const [url, setUrl] = useState<string>();
@@ -177,6 +177,7 @@ function ArtworkSlot({
                 {(['head', 'feet'] as const).map((key) => (
                   <span
                     key={key}
+                    data-testid={`calibration-${key}`}
                     className="absolute left-0 right-0 border-t-2 border-primary bg-surface/70 text-[10px] font-bold text-primary shadow-sm"
                     style={{ top: `${calibration[key] * 100}%` }}
                   />
@@ -203,6 +204,32 @@ function ArtworkSlot({
         }}
       />
     </div>
+  );
+}
+
+function CalibrationSides({
+  hasBack,
+  side,
+  onSideChange,
+  children,
+}: {
+  hasBack: boolean;
+  side: 'front' | 'back';
+  onSideChange: (side: 'front' | 'back') => void;
+  children: ReactNode;
+}) {
+  if (!hasBack) return children;
+  return (
+    <Tabs value={side} onValueChange={(value) => onSideChange(value as 'front' | 'back')}>
+      <TabsList aria-label="Сторона" className="mt-4 min-h-11">
+        {(['front', 'back'] as const).map((key) => (
+          <TabsTrigger key={key} value={key} className="min-h-11">
+            {key === 'front' ? 'Перед' : 'Зад'}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+      <TabsContent value={side}>{children}</TabsContent>
+    </Tabs>
   );
 }
 
@@ -257,9 +284,11 @@ function HeightCalibrationDialog({
     setLines((previous) => {
       const current = previous ?? { head: 0, feet: 1 };
       const fraction = position(current[which]);
-      if (which === 'head')
-        return { ...current, head: clamp(fraction, 0, current.feet - minCalibrationGap) };
-      return { ...current, feet: clamp(fraction, current.head + minCalibrationGap, 1) };
+      const next =
+        which === 'head'
+          ? clamp(fraction, 0, current.feet - MIN_CALIBRATION_GAP)
+          : clamp(fraction, current.head + MIN_CALIBRATION_GAP, 1);
+      return next === current[which] ? previous : { ...current, [which]: next };
     });
   }
 
@@ -291,47 +320,50 @@ function HeightCalibrationDialog({
             {warning}
           </p>
         )}
-        <Tabs value={side} onValueChange={(value) => setSide(value as 'front' | 'back')}>
-          {hasBack && (
-            <TabsList aria-label="Сторона" className="mt-4 min-h-11">
-              {(['front', 'back'] as const).map((key) => (
-                <TabsTrigger key={key} value={key} className="min-h-11">
-                  {key === 'front' ? 'Перед' : 'Зад'}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          )}
-          <TabsContent value={side}>
-            <div
-              data-testid="height-calibration-artwork"
-              className="relative mt-4 h-[min(65vh,640px)] touch-none overflow-hidden rounded-lg border border-border bg-surface-elevated"
-              onPointerMove={(event) => {
-                if (dragging.current) setLineFromClientY(dragging.current, event.clientY);
-              }}
-              onPointerUp={(event) => {
-                dragging.current = null;
-                event.currentTarget.releasePointerCapture?.(event.pointerId);
-              }}
-            >
-              {url && (
-                <ArtworkFrame
-                  artwork={currentArtwork}
-                  url={url}
-                  label={side === 'front' ? 'Лицевая сторона' : 'Оборот'}
-                  imageRef={artworkRef}
-                >
-                  {(['head', 'feet'] as const).map((key) => (
+        <CalibrationSides hasBack={hasBack} side={side} onSideChange={setSide}>
+          <div
+            data-testid="height-calibration-artwork"
+            className="relative mt-4 h-[min(65vh,640px)] touch-none rounded-lg border border-border bg-surface-elevated p-6"
+            onPointerMove={(event) => {
+              if (dragging.current) setLineFromClientY(dragging.current, event.clientY);
+            }}
+            onPointerUp={(event) => {
+              dragging.current = null;
+              event.currentTarget.releasePointerCapture?.(event.pointerId);
+            }}
+            onPointerCancel={() => {
+              dragging.current = null;
+            }}
+            onLostPointerCapture={() => {
+              dragging.current = null;
+            }}
+          >
+            {url && (
+              <ArtworkFrame
+                artwork={currentArtwork}
+                url={url}
+                label={side === 'front' ? 'Лицевая сторона' : 'Оборот'}
+                imageRef={artworkRef}
+              >
+                {(['head', 'feet'] as const).map((key) => (
+                  <Fragment key={key}>
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-x-0 border-t-2 border-primary"
+                      style={lineStyle(lines[key])}
+                    />
                     <button
-                      key={key}
                       type="button"
                       role="slider"
                       aria-label={key === 'head' ? 'Голова' : 'Ступни'}
                       aria-orientation="vertical"
-                      aria-valuemin={0}
-                      aria-valuemax={100}
+                      aria-valuemin={key === 'feet' ? (lines.head + MIN_CALIBRATION_GAP) * 100 : 0}
+                      aria-valuemax={
+                        key === 'head' ? (lines.feet - MIN_CALIBRATION_GAP) * 100 : 100
+                      }
                       aria-valuenow={lines[key] * 100}
                       aria-valuetext={`${Number((lines[key] * currentArtwork.height).toFixed(2))} пикселей от верха`}
-                      className="absolute left-0 right-0 h-8 -translate-y-1/2 cursor-row-resize border-y-2 border-primary bg-primary/10 text-left text-xs font-bold text-primary focus-visible:outline-2 focus-visible:outline-primary"
+                      className={`absolute left-1/2 h-11 w-1/2 min-w-11 -translate-y-1/2 cursor-row-resize text-left text-xs font-bold text-primary focus-visible:outline-2 focus-visible:outline-primary ${key === 'head' ? '-translate-x-full' : ''}`}
                       style={lineStyle(lines[key])}
                       onKeyDown={(event) => {
                         if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
@@ -343,21 +375,22 @@ function HeightCalibrationDialog({
                         );
                       }}
                       onPointerDown={(event) => {
+                        if (event.button !== 0 || event.ctrlKey) return;
                         dragging.current = key;
                         event.currentTarget.setPointerCapture?.(event.pointerId);
                         setLineFromClientY(key, event.clientY);
                       }}
                     >
-                      <span className="ml-2 rounded bg-surface/90 px-1">
+                      <span className="relative ml-2 rounded bg-surface/90 px-1">
                         {key === 'head' ? 'Голова' : 'Ступни'}
                       </span>
                     </button>
-                  ))}
-                </ArtworkFrame>
-              )}
-            </div>
-          </TabsContent>
-        </Tabs>
+                  </Fragment>
+                ))}
+              </ArtworkFrame>
+            )}
+          </div>
+        </CalibrationSides>
         <div className="mt-4 flex justify-end gap-2">
           <Button variant="ghost" className="min-h-11" onClick={onCancel}>
             Отмена

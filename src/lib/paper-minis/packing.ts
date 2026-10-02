@@ -88,11 +88,21 @@ export function fitMiniFaces(
 ): { front: FigureFitMm; back?: FigureFitMm } {
   const dimensions = resolveSizeDimensionsMm(e);
   const usableHeightMm = PAGE_SIZES_MM[opts.pageSize].h - MARGIN_MM * 2;
+  const usableWidthMm = PAGE_SIZES_MM[opts.pageSize].w - MARGIN_MM * 2;
   const marginMm = opts.marginMm ?? DEFAULT_FIGURE_MARGIN_MM;
-  const maxImageHeightMm = Math.max(
-    0,
-    (usableHeightMm - marginMm * 2 - resolveTabHeightMm(e) * 4) / 2,
+  const imageSpaceMm = (usableHeightMm - marginMm * 2 - resolveTabHeightMm(e) * 4) / 2;
+  const hasBack = !!(e.backNaturalWidth && e.backNaturalHeight);
+  const calibrated = !!(
+    validCalibrationGap(e.frontCalibration) ||
+    (hasBack && validCalibrationGap(e.backCalibration))
   );
+  // Page fitting belongs to the whole calibrated mini, including an unmarked
+  // front. Do not promise a page fit when the base/tabs alone cannot fit.
+  const maxImageHeightMm =
+    calibrated && imageSpaceMm > 0 && dimensions.baseWidthMm + marginMm * 2 <= usableWidthMm
+      ? imageSpaceMm
+      : undefined;
+  let faces: { front: FigureFitMm; back?: FigureFitMm };
   if (
     e.backNaturalWidth &&
     e.backNaturalHeight &&
@@ -109,30 +119,40 @@ export function fitMiniFaces(
       e.frontCalibration,
       maxImageHeightMm,
     );
-    return {
+    faces = {
       front: { ...shared, imageWidthMm: frontAspect * shared.imageHeightMm },
       back: { ...shared, imageWidthMm: backAspect * shared.imageHeightMm },
     };
+  } else {
+    faces = {
+      front: fitFigure(
+        dimensions,
+        e.naturalWidth,
+        e.naturalHeight,
+        e.frontCalibration,
+        maxImageHeightMm,
+      ),
+      back:
+        e.backNaturalWidth && e.backNaturalHeight
+          ? fitFigure(
+              dimensions,
+              e.backNaturalWidth,
+              e.backNaturalHeight,
+              e.backCalibration,
+              maxImageHeightMm,
+            )
+          : undefined,
+    };
   }
-  return {
-    front: fitFigure(
-      dimensions,
-      e.naturalWidth,
-      e.naturalHeight,
-      e.frontCalibration,
-      maxImageHeightMm,
-    ),
-    back:
-      e.backNaturalWidth && e.backNaturalHeight
-        ? fitFigure(
-            dimensions,
-            e.backNaturalWidth,
-            e.backNaturalHeight,
-            e.backCalibration,
-            maxImageHeightMm,
-          )
-        : undefined,
-  };
+  if (
+    Math.max(dimensions.baseWidthMm, faces.front.imageWidthMm, faces.back?.imageWidthMm ?? 0) +
+      marginMm * 2 >
+    usableWidthMm
+  ) {
+    faces.front.limits = faces.front.limits.filter((limit) => limit !== 'page');
+    if (faces.back) faces.back.limits = faces.back.limits.filter((limit) => limit !== 'page');
+  }
+  return faces;
 }
 
 // A back file is chosen but not prepared yet. Such an entry is not ready, so

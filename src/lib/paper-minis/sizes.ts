@@ -260,12 +260,14 @@ export function hasPackableDimensions(
 export const MAX_WIDTH_TO_SLOT_HEIGHT = 1.5;
 // Leave room for raised weapons without letting a short marked gap make a giant mini.
 export const MAX_CALIBRATED_HEIGHT_TO_SLOT_HEIGHT = 2;
+export const MIN_CALIBRATION_GAP = 0.1;
 
 // Convert the slot height to artwork millimetres, dividing by a valid marked gap.
 // Then apply the 2× height cap, width cap, and supplied page-height cap, in order.
 // Each cap only shrinks the whole image; proportions stay intact, without cropping.
-// Height/page caps and limit reporting require valid calibration. Without it,
-// only the existing width cap applies; oversized uncalibrated minis stay skippable.
+// The height cap and width-limit reporting require valid calibration. The page
+// cap is opt-in: packing supplies it for both faces when either is calibrated.
+// Without calibration or a supplied page cap, only the existing width cap applies.
 export function fitFigure(
   { figureHeightMm }: SizeDimensionsMm,
   imgWidthPx: number,
@@ -290,7 +292,7 @@ export function fitFigure(
     imageHeightMm = maxWidthMm / aspect;
     if (calibrationGap) limits.push('width');
   }
-  if (calibrationGap && maxImageHeightMm != null && imageHeightMm > maxImageHeightMm) {
+  if (maxImageHeightMm != null && imageHeightMm > maxImageHeightMm) {
     imageHeightMm = maxImageHeightMm;
     imageWidthMm = aspect * imageHeightMm;
     limits.push('page');
@@ -309,7 +311,7 @@ export function validCalibrationGap(
     head < 0 ||
     feet > 1 ||
     head >= feet ||
-    feet - head < 0.1 - Number.EPSILON
+    feet - head < MIN_CALIBRATION_GAP - Number.EPSILON
   )
     return undefined;
   return feet - head;
