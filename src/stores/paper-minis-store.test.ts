@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from 'bun:test';
+import { unzipSync, zipSync } from 'fflate';
 import {
   DEFAULT_CUSTOM_HEIGHT_MM,
   DEFAULT_CUSTOM_WIDTH_MM,
@@ -29,6 +30,9 @@ function artworkFile(width: number, height: number, name = 'front.png') {
   file[preparation] = Promise.resolve({ artwork: preparedArtwork(width, height) });
   return file;
 }
+function zipFile(entries: Record<string, Uint8Array>, name = 'paper-minis.zip') {
+  return new File([zipSync(entries)], name, { type: 'application/zip' });
+}
 function fakeArtwork(): PaperMinisArtwork {
   return {
     prepare(file) {
@@ -57,6 +61,26 @@ function deferredFile() {
   const file = new File(['slow'], 'slow.png', { type: 'image/png' }) as ControlledFile;
   file[preparation] = pending;
   return { file, release: () => release({ artwork: preparedArtwork(1, 100) }) };
+}
+function deferredZipFile(entries: Record<string, Uint8Array>) {
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let arrayBufferStarted!: () => void;
+  const arrayBufferCalled = new Promise<void>((resolve) => {
+    arrayBufferStarted = resolve;
+  });
+  const bytes = zipSync(entries);
+  const file = new File([], 'paper-minis.zip', { type: 'application/zip' });
+  Object.defineProperty(file, 'arrayBuffer', {
+    value: async () => {
+      arrayBufferStarted();
+      await pending;
+      return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    },
+  });
+  return { file, arrayBufferCalled, release };
 }
 function failedFile(name: string) {
   const file = new File(['broken'], name, { type: 'image/png' }) as ControlledFile;
@@ -333,6 +357,451 @@ test('download renders the layout shown by the counter and returns the renderer 
     busy: false,
     message: 'PDF готов.',
   });
+});
+
+test('export zip restores names, sizes, counts, calibration and sides through batch ingest', async () => {
+  // #given
+  const store = setup();
+  const goblin = store.addBlank({ name: 'Goblin', heightSlot: 'small' })!;
+  store.setCount(goblin, '2');
+  await store.setImage(goblin, artworkFile(10, 20, 'goblin-front.png'));
+  await store.setImage(goblin, artworkFile(11, 20, 'goblin-back.png'), true);
+  calibrate(store, goblin, { head: 0.2, feet: 0.8 });
+  const troll = store.addBlank({ name: 'Troll', heightSlot: 'medium' })!;
+  await store.setImage(troll, artworkFile(10, 20, 'troll-front.png'));
+  calibrate(store, troll, { head: 0.2, feet: 1 });
+  const empty = store.addBlank({ name: '', heightSlot: 'large' })!;
+  await store.setImage(empty, artworkFile(12, 20, 'empty.png'));
+  const custom = store.addBlank({ name: 'Dragon', heightSlot: 'custom' })!;
+  store.setCustomDimensions(custom, { width: '30', height: '45' });
+  store.setCount(custom, '3');
+  await store.setImage(custom, artworkFile(12, 24, 'dragon.png'));
+  const duplicate = store.addBlank({ name: 'Goblin', heightSlot: 'small' })!;
+  await store.setImage(duplicate, artworkFile(13, 20, 'duplicate.png'));
+  await store.setImage(duplicate, artworkFile(13, 20, 'duplicate-back.png'), true);
+
+  // #when
+  const bytes = await store.exportZip();
+  const entries = bytes ? unzipSync(bytes) : {};
+  const extracted = Object.entries(entries).map(
+    ([name, fileBytes]) => new File([fileBytes], name, { type: 'image/png' }),
+  );
+  const restored = setup();
+  restored.ingest(extracted);
+  await Promise.resolve();
+
+  // #then
+  expect({
+    entryNames: Object.keys(entries).toSorted(),
+    message: store.$message.get(),
+    rows: restored.$rows.get().map((row) => ({
+      name: row.name,
+      heightSlot: row.heightSlot,
+      count: row.count,
+      customWidthMm: row.customWidthMm,
+      customHeightMm: row.customHeightMm,
+      calibration: row.calibration,
+      front: row.image?.name,
+      back: row.backImage?.name,
+      inputs: restored.$inputs.get().rows[row.id],
+    })),
+  }).toEqual({
+    entryNames: [
+      'Dragon-custom-30x45-front-x3.png',
+      'Goblin-2-small-back.png',
+      'Goblin-2-small-front.png',
+      'Goblin-small-back-x2-h200-f800.png',
+      'Goblin-small-front-x2-h200-f800.png',
+      'Troll-medium-front-h200-f1000.png',
+      'mini-3-large-front.png',
+    ],
+    message: 'Архив готов.',
+    rows: [
+      {
+        name: 'Goblin',
+        heightSlot: 'small',
+        count: 2,
+        customWidthMm: undefined,
+        customHeightMm: undefined,
+        calibration: { head: 0.2, feet: 0.8 },
+        front: 'Goblin-small-front-x2-h200-f800.png',
+        back: 'Goblin-small-back-x2-h200-f800.png',
+        inputs: {
+          count: { text: '2', valid: true },
+          customWidthMm: { text: '', valid: false },
+          customHeightMm: { text: '', valid: false },
+        },
+      },
+      {
+        name: 'Troll',
+        heightSlot: 'medium',
+        count: 1,
+        customWidthMm: undefined,
+        customHeightMm: undefined,
+        calibration: { head: 0.2, feet: 1 },
+        front: 'Troll-medium-front-h200-f1000.png',
+        back: undefined,
+        inputs: {
+          count: { text: '1', valid: true },
+          customWidthMm: { text: '', valid: false },
+          customHeightMm: { text: '', valid: false },
+        },
+      },
+      {
+        name: 'Mini 3',
+        heightSlot: 'large',
+        count: 1,
+        customWidthMm: undefined,
+        customHeightMm: undefined,
+        calibration: undefined,
+        front: 'mini-3-large-front.png',
+        back: undefined,
+        inputs: {
+          count: { text: '1', valid: true },
+          customWidthMm: { text: '', valid: false },
+          customHeightMm: { text: '', valid: false },
+        },
+      },
+      {
+        name: 'Dragon',
+        heightSlot: 'custom',
+        count: 3,
+        customWidthMm: 30,
+        customHeightMm: 45,
+        calibration: undefined,
+        front: 'Dragon-custom-30x45-front-x3.png',
+        back: undefined,
+        inputs: {
+          count: { text: '3', valid: true },
+          customWidthMm: { text: '30', valid: true },
+          customHeightMm: { text: '45', valid: true },
+        },
+      },
+      {
+        name: 'Goblin 2',
+        heightSlot: 'small',
+        count: 1,
+        customWidthMm: undefined,
+        customHeightMm: undefined,
+        calibration: undefined,
+        front: 'Goblin-2-small-front.png',
+        back: 'Goblin-2-small-back.png',
+        inputs: {
+          count: { text: '1', valid: true },
+          customWidthMm: { text: '', valid: false },
+          customHeightMm: { text: '', valid: false },
+        },
+      },
+    ],
+  });
+});
+
+test('export zip separates reserved filename characters and compares collisions case-insensitively', async () => {
+  // #given
+  const store = setup();
+  for (const name of ['Orc/Chief', 'orc chief', 'Mage:Boss*Elite?One"Two<Three>Four|Five\\Six']) {
+    const id = store.addBlank({ name, heightSlot: 'small' })!;
+    await store.setImage(id, artworkFile(10, 20, `${name}.png`));
+  }
+
+  // #when
+  const bytes = await store.exportZip();
+  const entries = bytes ? Object.keys(unzipSync(bytes)).toSorted() : [];
+
+  // #then
+  expect(entries).toEqual([
+    'Mage-Boss-Elite-One-Two-Three-Four-Five-Six-small-front.png',
+    'Orc-Chief-small-front.png',
+    'orc-chief-2-small-front.png',
+  ]);
+});
+
+test('export zip bytes can be dropped straight onto a fresh store', async () => {
+  // #given
+  const store = setup();
+  const goblin = store.addBlank({ name: 'Goblin', heightSlot: 'small' })!;
+  await store.setImage(goblin, artworkFile(10, 20, 'goblin-front.png'));
+  await store.setImage(goblin, artworkFile(11, 20, 'goblin-back.png'), true);
+  const empty = store.addBlank({ name: '', heightSlot: 'large' })!;
+  await store.setImage(empty, artworkFile(12, 20, 'empty.png'));
+
+  // #when
+  const bytes = await store.exportZip();
+  const restored = setup();
+  await restored.ingest([new File([bytes!], 'paper-minis.zip', { type: 'application/zip' })]);
+
+  // #then
+  expect(
+    restored.$rows.get().map((row) => ({
+      name: row.name,
+      heightSlot: row.heightSlot,
+      front: row.image?.name,
+      back: row.backImage?.name,
+    })),
+  ).toEqual([
+    {
+      name: 'Goblin',
+      heightSlot: 'small',
+      front: 'Goblin-small-front.png',
+      back: 'Goblin-small-back.png',
+    },
+    {
+      name: 'Mini 2',
+      heightSlot: 'large',
+      front: 'mini-2-large-front.png',
+      back: undefined,
+    },
+  ]);
+});
+
+test('a zip and loose images are flattened into one batch plan', async () => {
+  // #given
+  const store = setup();
+  const zip = zipFile({ 'nested/goblin-back.png': Uint8Array.from(png) });
+  const front = new File([png], 'goblin-front.png', { type: 'image/png' });
+
+  // #when
+  await store.ingest([zip, front]);
+
+  // #then
+  expect(
+    store.$rows.get().map((row) => ({
+      name: row.name,
+      front: row.image?.name,
+      back: row.backImage?.name,
+    })),
+  ).toEqual([{ name: 'Goblin', front: 'goblin-front.png', back: 'goblin-back.png' }]);
+});
+
+test('a zip with a non-image entry reports skipped files', async () => {
+  // #given
+  const store = setup();
+  const zip = zipFile({
+    'goblin.png': Uint8Array.from(png),
+    'notes.txt': Uint8Array.from([110, 111, 116, 101, 115]),
+  });
+
+  // #when
+  await store.ingest([zip]);
+
+  // #then
+  expect({
+    message: store.$message.get(),
+    rows: store.$rows.get().map((row) => row.image?.name),
+  }).toEqual({
+    message: 'Некоторые файлы пропущены: поддерживаются PNG, JPG и WebP.',
+    rows: ['goblin.png'],
+  });
+});
+
+test('a broken zip reports an archive failure and still imports loose images', async () => {
+  // #given
+  const store = setup();
+  const zip = new File([Uint8Array.from([1, 2, 3])], 'broken.zip', { type: 'application/zip' });
+  const front = new File([png], 'goblin.png', { type: 'image/png' });
+
+  // #when
+  await store.ingest([zip, front]);
+
+  // #then
+  expect({ message: store.$message.get(), rows: store.$rows.get().map((row) => row.image?.name) }).toEqual({
+    message: 'Не удалось распаковать архив. Добавьте изображения вручную или попробуйте другой файл.',
+    rows: ['goblin.png'],
+  });
+});
+
+test('zip expansion is preparing work that blocks generation and calibration', async () => {
+  // #given
+  const store = setup(async () => Uint8Array.from([1]));
+  const existing = store.addBlank()!;
+  await store.setImage(existing, artworkFile(10, 20, 'existing.png'));
+  const slow = deferredZipFile({ 'goblin.png': Uint8Array.from(png) });
+
+  // #when
+  const ingest = store.ingest([slow.file]);
+  await slow.arrayBufferCalled;
+  const during = {
+    preparing: store.$preparing.get(),
+    download: await store.download(),
+    exportBytes: await store.exportZip(),
+    calibrationOpened: store.openCalibration(existing),
+    rows: store.$rows.get().map((row) => row.image?.name),
+  };
+  slow.release();
+  await ingest;
+
+  // #then
+  expect({
+    during,
+    after: {
+      preparing: store.$preparing.get(),
+      rows: store.$rows.get().map((row) => row.image?.name),
+    },
+  }).toEqual({
+    during: {
+      preparing: true,
+      download: undefined,
+      exportBytes: undefined,
+      calibrationOpened: false,
+      rows: ['existing.png'],
+    },
+    after: { preparing: false, rows: ['existing.png', 'goblin.png'] },
+  });
+});
+
+test('export zip decodes JPEG artwork without EXIF orientation and releases the canvas', async () => {
+  // #given
+  const previousCreateImageBitmap = globalThis.createImageBitmap;
+  const calls: unknown[] = [];
+  let closed = false;
+  globalThis.createImageBitmap = ((...args: unknown[]) => {
+    calls.push(args[1]);
+    return Promise.resolve({ width: 2, height: 3, close: () => (closed = true) } as ImageBitmap);
+  }) as typeof createImageBitmap;
+  const canvas = document.createElement('canvas');
+  const originalCreateElement = document.createElement.bind(document);
+  const released: number[] = [];
+  const originalWidth = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, 'width');
+  const originalHeight = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, 'height');
+  Object.defineProperty(canvas, 'width', {
+    get: () => 2,
+    set: (value) => released.push(value),
+  });
+  Object.defineProperty(canvas, 'height', {
+    get: () => 3,
+    set: (value) => released.push(value),
+  });
+  Object.defineProperty(canvas, 'getContext', {
+    value: () => ({ drawImage() {} }),
+  });
+  Object.defineProperty(canvas, 'toBlob', {
+    value: (callback: (blob: Blob | null) => void) => callback(new Blob([png], { type: 'image/png' })),
+  });
+  document.createElement = ((tagName: string, options?: ElementCreationOptions) =>
+    tagName === 'canvas' ? canvas : originalCreateElement(tagName, options)) as typeof document.createElement;
+  const artwork: PaperMinisArtwork = {
+    prepare: () =>
+      Promise.resolve({ artwork: { bytes: Uint8Array.from([255, 216, 255, 217]), format: 'jpg', width: 2, height: 3 } }),
+  };
+  const store = setup(undefined, artwork);
+  await store.setImage(store.addBlank({ name: 'Photo' })!, new File(['jpg'], 'photo.jpg', { type: 'image/jpeg' }));
+
+  try {
+    // #when
+    const bytes = await store.exportZip();
+    // #then
+    expect({
+      entries: bytes ? Object.keys(unzipSync(bytes)) : [],
+      options: calls,
+      closed,
+      released: released.slice(-2),
+    }).toEqual({
+      entries: ['Photo-medium-front.png'],
+      options: [{ imageOrientation: 'none' }],
+      closed: true,
+      released: [0, 0],
+    });
+  } finally {
+    globalThis.createImageBitmap = previousCreateImageBitmap;
+    document.createElement = originalCreateElement;
+    if (originalWidth) Object.defineProperty(HTMLCanvasElement.prototype, 'width', originalWidth);
+    if (originalHeight) Object.defineProperty(HTMLCanvasElement.prototype, 'height', originalHeight);
+  }
+});
+
+test('zip folders and macOS metadata entries are ignored silently', async () => {
+  // #given
+  const store = setup();
+  const zip = zipFile({
+    'folder/': Uint8Array.from([]),
+    '__MACOSX/._goblin-small-front.png': Uint8Array.from([1, 2, 3]),
+    '.DS_Store': Uint8Array.from([1, 2, 3]),
+    'folder/goblin-small-front.png': Uint8Array.from(png),
+  });
+
+  // #when
+  await store.ingest([zip]);
+
+  // #then
+  expect({
+    message: store.$message.get(),
+    rows: store.$rows.get().map((row) => ({
+      name: row.name,
+      heightSlot: row.heightSlot,
+      front: row.image?.name,
+    })),
+  }).toEqual({
+    message: '',
+    rows: [{ name: 'Goblin', heightSlot: 'small', front: 'goblin-small-front.png' }],
+  });
+});
+
+test('export zip includes oversized artwork and skips rows without artwork', async () => {
+  // #given
+  const store = setup();
+  const oversized = store.addBlank({ name: 'Castle', heightSlot: 'custom' })!;
+  store.setCustomDimensions(oversized, { width: '10000', height: '10000' });
+  await store.setImage(oversized, artworkFile(14, 20, 'castle.png'));
+  store.addBlank({ name: 'Missing', heightSlot: 'huge' });
+
+  // #when
+  const bytes = await store.exportZip();
+  const entries = bytes ? Object.keys(unzipSync(bytes)).toSorted() : [];
+
+  // #then
+  expect(entries).toEqual(['Castle-custom-10000x10000-front.png']);
+});
+
+test('a ready mini opens calibration while another mini is still preparing', async () => {
+  // #given
+  const store = setup();
+  const ready = store.addBlank()!;
+  await store.setImage(ready, artworkFile(10, 20, 'ready.png'));
+  const slow = deferredFile();
+  const pendingImage = store.setImage(store.addBlank()!, slow.file);
+
+  // #when
+  const opened = store.openCalibration(ready);
+  store.cancelCalibration();
+  slow.release();
+  await pendingImage;
+
+  // #then
+  expect(opened).toBe(true);
+});
+
+test('export zip does nothing while locked, preparing, or without a ready mini', async () => {
+  // #given
+  let finish!: (bytes: Uint8Array) => void;
+  const rendering = new Promise<Uint8Array>((resolve) => {
+    finish = resolve;
+  });
+  const busy = setup(() => rendering);
+  await busy.setImage(busy.addBlank()!, artworkFile(1, 1));
+  const download = busy.download();
+
+  const preparing = setup();
+  const slow = deferredFile();
+  const pendingImage = preparing.setImage(preparing.addBlank()!, slow.file);
+
+  const empty = setup();
+  empty.addBlank();
+  const failed = setup();
+  await failed.setImage(failed.addBlank()!, failedFile('broken.png'));
+
+  // #when
+  const results = await Promise.all([
+    busy.exportZip(),
+    preparing.exportZip(),
+    empty.exportZip(),
+    failed.exportZip(),
+  ]);
+  finish(Uint8Array.from([1]));
+  slow.release();
+  await Promise.all([download, pendingImage]);
+
+  // #then
+  expect(results).toEqual([undefined, undefined, undefined, undefined]);
 });
 
 test.each([

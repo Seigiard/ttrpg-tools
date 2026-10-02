@@ -2,7 +2,10 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode, type Re
 import { useStore } from '@nanostores/react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { createPaperMinisStore, type CalibrationSession } from '@/stores/paper-minis-store';
+import {
+  createPaperMinisStore,
+  type CalibrationSession,
+} from '@/stores/paper-minis-store';
 import { ARTWORK_ACCEPT, artworkMimeType } from '@/lib/paper-minis/artwork-formats';
 import { isSupportedArtwork } from '@/lib/paper-minis/artwork';
 import type { CalibrationLine } from '@/lib/paper-minis/calibration';
@@ -13,6 +16,13 @@ import type { HeightCalibration, MiniSize, PreparedArtwork } from '@/lib/paper-m
 
 const field =
   'min-h-11 w-full rounded-lg border border-border bg-surface-elevated px-3 text-text focus-visible:outline-2 focus-visible:outline-primary';
+
+function buildZipFilename(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `paper-minis-${year}-${month}-${day}.zip`;
+}
 
 function useArtworkUrl(artwork?: PreparedArtwork | null) {
   const [url, setUrl] = useState<string>();
@@ -460,6 +470,28 @@ export default function PaperMinisGenerator() {
     }
   }
 
+  async function exportZip() {
+    const bytes = await store.exportZip();
+    if (!bytes) return;
+    let url: string | undefined;
+    try {
+      const nextUrl = URL.createObjectURL(
+        new Blob([bytes as BlobPart], { type: 'application/zip' }),
+      );
+      url = nextUrl;
+      const anchor = document.createElement('a');
+      anchor.href = nextUrl;
+      anchor.download = buildZipFilename();
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(nextUrl), 5000);
+    } catch {
+      if (url) URL.revokeObjectURL(url);
+      store.reportExportFailure();
+    }
+  }
+
   return (
     <div className="space-y-8">
       <fieldset
@@ -573,6 +605,14 @@ export default function PaperMinisGenerator() {
                     variant="outline"
                     className="min-h-11 w-full"
                     disabled={!canGenerate}
+                    onClick={() => void exportZip()}
+                  >
+                    Экспорт в ZIP
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="min-h-11 w-full"
+                    disabled={!canGenerate}
                     onClick={() => void store.refreshPreview()}
                   >
                     {preview ? 'Обновить предпросмотр' : 'Предпросмотр PDF'}
@@ -601,7 +641,7 @@ export default function PaperMinisGenerator() {
               ref={files}
               type="file"
               multiple
-              accept={ARTWORK_ACCEPT}
+              accept={`${ARTWORK_ACCEPT},.zip,application/zip`}
               className="hidden"
               aria-label="Добавить изображения"
               onChange={(event) => {
