@@ -12,10 +12,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Setup bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+      # Bun version comes from mise.toml, same as local dev.
+      - name: Setup tools
+        uses: jdx/mise-action@v5
 
       - name: Install
         run: bun install --frozen-lockfile

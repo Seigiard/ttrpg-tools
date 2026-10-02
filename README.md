@@ -13,12 +13,13 @@
 - [oxlint](https://oxc.rs/docs/guide/usage/linter.html) — линт TS/TSX (Rust, быстро).
 - [oxfmt](https://oxc.rs/docs/guide/usage/formatter.html) — форматтер TS/TSX/CSS (Prettier-совместимый).
 - [Prettier + prettier-plugin-astro](https://github.com/withastro/prettier-plugin-astro) — форматирование `.astro` файлов.
-- `bun` — менеджер пакетов и test runner.
+- `bun` — менеджер пакетов и test runner. Версия закреплена в `mise.toml` (`mise install`); CI берёт её оттуда же.
 - [happy-dom](https://github.com/capricorn86/happy-dom) для DOM в тестах.
 
 ## Разработка
 
 ```sh
+mise install
 bun install
 bun run dev        # http://localhost:4321
 bun run build      # сборка в dist/
