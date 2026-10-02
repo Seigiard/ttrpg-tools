@@ -346,6 +346,34 @@ test('a batch row keeps its planned name through image replacement and duplicati
   expect(store.$rows.get().map((row) => row.name)).toEqual(['Big bad wolf', 'Big bad wolf']);
 });
 
+test('duplicating while a missing back loads keeps calibration on the copy', async () => {
+  // #given
+  const store = setup();
+  const id = store.addBlank()!;
+  await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
+  store.setCalibration(id, { head: 0.2, feet: 0.8 });
+  const slow = deferredFile();
+  const pending = store.setImage(id, slow.file, true);
+  const settled = new Promise<void>((resolve) => {
+    const unsubscribe = store.$preparing.listen((preparing) => {
+      if (!preparing) {
+        unsubscribe();
+        resolve();
+      }
+    });
+  });
+  // #when
+  store.duplicate(id);
+  const calibrations = store.$rows.get().map((row) => row.calibration);
+  slow.release();
+  await Promise.all([pending, settled]);
+  // #then
+  expect(calibrations).toEqual([
+    { head: 0.2, feet: 0.8 },
+    { head: 0.2, feet: 0.8 },
+  ]);
+});
+
 test('a batch row lands on the size its file name carries', () => {
   // #given
   const store = setup();
@@ -367,43 +395,58 @@ test('a single-slot upload ignores the size in its file name', async () => {
   expect(store.$rows.get()[0].heightSlot).toBe('medium');
 });
 
-test('front calibration can be set, cleared, copied and kept across size changes', async () => {
+test('calibration can be set, cleared, copied and kept across size changes', async () => {
   // #given
   const store = setup();
   const id = store.addBlank()!;
   await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
   // #when
-  store.setFrontCalibration(id, { head: 0.25, feet: 0.75 });
+  store.setCalibration(id, { head: 0.25, feet: 0.75 });
   store.patch(id, { heightSlot: 'large' });
   store.duplicate(id);
-  store.clearFrontCalibration(id);
+  store.clearCalibration(id);
   // #then
-  expect(store.$rows.get().map((row) => row.frontCalibration)).toEqual([
+  expect(store.$rows.get().map((row) => row.calibration)).toEqual([
     undefined,
     { head: 0.25, feet: 0.75 },
   ]);
 });
 
-test('front image replacement clears front calibration', async () => {
+test('adding a missing back keeps calibration', async () => {
   // #given
   const store = setup();
   const id = store.addBlank()!;
   await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
-  store.setFrontCalibration(id, { head: 0.25, feet: 0.75 });
+  store.setCalibration(id, { head: 0.2, feet: 0.8 });
   // #when
-  await store.setImage(id, new File([png], 'replacement.png', { type: 'image/png' }));
+  await store.setImage(id, new File([png], 'back.png', { type: 'image/png' }), true);
   // #then
-  expect(store.$rows.get()[0].frontCalibration).toBe(undefined);
+  expect(store.$rows.get()[0].calibration).toEqual({ head: 0.2, feet: 0.8 });
 });
 
-test('normalization clears both calibrations on a row with loaded front and back images', async () => {
+test.each([false, true])(
+  'replacing an existing image resets calibration (back=%s)',
+  async (back) => {
+    // #given
+    const store = setup();
+    const id = store.addBlank()!;
+    await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
+    if (back) await store.setImage(id, new File([png], 'back.png', { type: 'image/png' }), true);
+    store.setCalibration(id, { head: 0.2, feet: 0.8 });
+    // #when
+    await store.setImage(id, new File([png], 'replacement.png', { type: 'image/png' }), back);
+    // #then
+    expect(store.$rows.get()[0].calibration).toBe(undefined);
+  },
+);
+
+test('normalization clears calibration on a row with loaded front and back images', async () => {
   // #given
   const store = setup();
   const id = store.addBlank()!;
   await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
   await store.setImage(id, new File([png], 'back.png', { type: 'image/png' }), true);
-  store.setFrontCalibration(id, { head: 0.2, feet: 0.8 });
-  store.setBackCalibration(id, { head: 0.25, feet: 0.75 });
+  store.setCalibration(id, { head: 0.2, feet: 0.8 });
   // happy-dom has no bitmap decoder. The reset must also survive trim fallback.
   const errors = spyOn(console, 'error').mockImplementation(() => {});
   const settled = new Promise<void>((resolve) => {
@@ -422,68 +465,42 @@ test('normalization clears both calibrations on a row with loaded front and back
     const after = store.$rows.get()[0];
     // #then
     expect(
-      [during, after].map((row) => [
-        row.image?.name,
-        row.backImage?.name,
-        row.frontCalibration,
-        row.backCalibration,
-      ]),
+      [during, after].map((row) => [row.image?.name, row.backImage?.name, row.calibration]),
     ).toEqual([
-      ['front.png', 'back.png', undefined, undefined],
-      ['front.png', 'back.png', undefined, undefined],
+      ['front.png', 'back.png', undefined],
+      ['front.png', 'back.png', undefined],
     ]);
   } finally {
     errors.mockRestore();
   }
 });
 
-test('removing a calibrated back clears its lines and preserves front calibration', async () => {
+test('removing one of two sides keeps calibration', async () => {
   // #given
   const store = setup();
   const id = store.addBlank()!;
   await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
   await store.setImage(id, new File([png], 'back.png', { type: 'image/png' }), true);
-  store.setFrontCalibration(id, { head: 0.2, feet: 0.8 });
-  store.setBackCalibration(id, { head: 0.25, feet: 0.75 });
+  store.setCalibration(id, { head: 0.2, feet: 0.8 });
   // #when
   store.clearBack(id);
   const row = store.$rows.get()[0];
   // #then
-  expect([row.backImage, row.backArtwork, row.backCalibration, row.frontCalibration]).toEqual([
+  expect([row.backImage, row.backArtwork, row.calibration]).toEqual([
     null,
     null,
-    undefined,
     { head: 0.2, feet: 0.8 },
   ]);
 });
 
-test('back calibration can be set, copied, cleared and reset without changing the front', async () => {
+test('removing the only image resets calibration', async () => {
   // #given
   const store = setup();
   const id = store.addBlank()!;
-  await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
   await store.setImage(id, new File([png], 'back.png', { type: 'image/png' }), true);
-  store.setFrontCalibration(id, { head: 0.2, feet: 0.8 });
-  store.setBackCalibration(id, { head: 0.25, feet: 0.75 });
+  store.setCalibration(id, { head: 0.2, feet: 0.8 });
   // #when
-  store.duplicate(id);
-  store.clearBackCalibration(id);
-  const afterClear = store.$rows.get().map((row) => [row.frontCalibration, row.backCalibration]);
-  store.setBackCalibration(id, { head: 0.3, feet: 0.9 });
-  await store.setImage(id, new File([png], 'new-back.png', { type: 'image/png' }), true);
-  const afterReplace = store.$rows.get()[0];
+  store.clearBack(id);
   // #then
-  expect({
-    afterClear,
-    afterReplace: [afterReplace.frontCalibration, afterReplace.backCalibration],
-  }).toEqual({
-    afterClear: [
-      [{ head: 0.2, feet: 0.8 }, undefined],
-      [
-        { head: 0.2, feet: 0.8 },
-        { head: 0.25, feet: 0.75 },
-      ],
-    ],
-    afterReplace: [{ head: 0.2, feet: 0.8 }, undefined],
-  });
+  expect(store.$rows.get()[0].calibration).toBe(undefined);
 });
