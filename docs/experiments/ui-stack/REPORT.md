@@ -16,7 +16,7 @@ Both candidates pass the gate.
 | Check | React | Preact | Svelte |
 | --- | --- | --- | --- |
 | Lint, format, typecheck, build | pass | pass | pass |
-| Unit and component tests | 520 | 534 | 533 |
+| Unit and component tests | 520 | 536 | 534 |
 | Browser tests (main's paper-minis suite + parity suite) | 12/12 | 12/12 | 12/12 |
 | React runtime in `dist/` | — | none | none |
 
@@ -37,11 +37,11 @@ Behaviour that had to be rebuilt by hand, because Base UI has no Preact or Svelt
 | Primitive | React | Preact | Svelte |
 | --- | --- | --- | --- |
 | Tabs | Base UI | own, roving focus, arrows/Home/End | own, roving focus, arrows |
-| Dialog | Base UI (portal, focus guards, inert) | own `div` + `aria-modal` + keydown trap | native `<dialog>` + `showModal()` |
+| Dialog | Base UI (portal, focus guards, inert, scroll lock) | native `<dialog>` + `showModal()` + scroll lock | native `<dialog>` + `showModal()` + scroll lock |
 | Icons | `lucide-react` | `lucide-preact` | `@lucide/svelte` |
 | Store binding | `@nanostores/react` | `@nanostores/preact` | Svelte store contract (`$store`), no adapter |
 
-The Preact dialog passes the focus-trap test, but its background is not `inert`. Svelte gets real modality from the browser top layer.
+Both candidates get modality from the browser top layer, and both add the page scroll lock that Base UI provided. The first Preact dialog was a `div` with a keydown trap. Review showed that Shift+Tab from the dialog container reached the page, so it was replaced.
 
 ## Payload
 
@@ -51,21 +51,21 @@ Initial-load JS:
 
 | Route | React | Preact | Svelte |
 | --- | ---: | ---: | ---: |
-| encounters | 87,400 | 21,688 | 34,312 |
-| weather | 95,222 | 23,217 | 35,301 |
-| locations | 96,440 | 24,368 | 36,878 |
-| prices | 95,813 | 23,852 | 35,891 |
-| paper-minis | 296,499 | 213,031 | 227,940 |
+| encounters | 87,400 | 21,714 | 34,312 |
+| weather | 95,222 | 23,289 | 35,301 |
+| locations | 96,440 | 24,440 | 36,878 |
+| prices | 95,813 | 23,923 | 35,891 |
+| paper-minis | 296,499 | 213,098 | 228,093 |
 
-Lazy JS, loaded only on demand: the zip export chunk on paper minis (6.1 KB in every build). Preact adds 3.0 KB on every island page for `@preact/signals`, which `@astrojs/preact` imports dynamically. The candidates' encounters page includes the follow-up change (about 300 B); React's does not.
+Lazy JS, loaded only on demand: the zip export chunk on paper minis (6.1 KB in every build). Preact builds also emit a 3.0 KB `@preact/signals` chunk; `@astrojs/preact` imports it only for islands that receive signal props, and none here does, so pages never fetch it. The candidates' encounters page includes the follow-up change (about 300 B); React's does not.
 
 Cold load, all bytes on the wire (HTML + CSS + JS as served gzip-encoded by `vite preview`; Chrome's `encodedDataLength`):
 
 | Route | React | Preact | Svelte |
 | --- | ---: | ---: | ---: |
-| encounters | 104,332 | 39,316 | 52,295 |
-| weather | 113,287 | 41,423 | 53,098 |
-| paper-minis | 312,146 | 228,935 | 243,460 |
+| encounters | 104,332 | 39,365 | 52,295 |
+| weather | 113,287 | 41,515 | 53,098 |
+| paper-minis | 312,146 | 229,024 | 243,616 |
 
 Warm loads are 1.1–1.7 KB in all three (cache revalidation only).
 
@@ -84,15 +84,15 @@ Ten repeats per scenario in Playwright Chromium 153 on an Apple M1 Pro. Values a
 
 | Scenario | React | Preact | Svelte |
 | --- | --- | --- | --- |
-| weather click-to-result | 42 (26–86) | 69 (55–87) | 38 (33–65) |
-| prices tab switch | 51 (39–61) | 80 (78–80) | 50 (47–52) |
-| paper-minis upload-to-row | 28 (27–31) | 25 (24–27) | 27 (26–29) |
-| paper-minis preview ready | 80 (72–86) | 74 (68–81) | 70 (64–84) |
-| paper-minis PDF generation | 71 (60–90) | 68 (62–77) | 63 (60–78) |
+| weather click-to-result | 33 (28–63) | 76 (58–87) | 39 (36–64) |
+| prices tab switch | 53 (42–59) | 80 (68–82) | 51 (37–54) |
+| paper-minis upload-to-row | 26 (25–31) | 22 (22–25) | 26 (25–31) |
+| paper-minis preview ready | 77 (69–86) | 68 (57–83) | 70 (60–80) |
+| paper-minis PDF generation | 70 (62–80) | 62 (53–67) | 66 (59–78) |
 
 Every scenario waits until all islands have hydrated, then stops the clock only once its action is visible: a new result, a new URL, a new row, a ready preview, or a finished PDF. The timings include Playwright round trips.
 
-Paper minis timings are within noise of each other. The generators are not: Preact is about 25–30 ms slower than React and Svelte on both interaction scenarios, and on the prices tab switch the ranges do not overlap. This was not profiled. Two likely contributors: Preact runs `useEffect` after the next paint, and both the prices URL sync and the first-roll logic live in effects; also, `@nanostores/preact` subscribes through an effect. Nothing here is visible as lag to a person, but it is the one measured runtime cost of Preact in this experiment.
+Paper minis timings are within noise of each other. The generators are not: Preact is about 30–40 ms slower than React and Svelte on both interaction scenarios, and the ranges barely overlap. This was not profiled. Two likely contributors: Preact runs `useEffect` after the next paint, and both the prices URL sync and the first-roll logic live in effects; also, `@nanostores/preact` subscribes through an effect. Nothing here is visible as lag to a person, but it is the one measured runtime cost of Preact in this experiment.
 
 Earlier versions of this table had two harness defects. Some scenarios clicked before hydration, and the prices scenario clicked an already selected tab. Review caught both, and all three builds were remeasured.
 
@@ -108,7 +108,7 @@ Line counts are supporting evidence, not a score. They are counted after formatt
 | UI source files | 11 | 12 | 30 |
 | Paper minis component | 902 (1 file) | 948 (1 file) | 807 (3 files) |
 
-- **Preact** keeps the React authoring model: JSX, hooks and `useStore`. Generator components port almost line for line. The extra lines are the hand-written Tabs and Dialog. The Preact tests are longer: Preact plus happy-dom needs explicit waits after Nanostores-driven re-renders, and pointer capture is stubbed in tests, which the browser suite covers.
+- **Preact** keeps the React authoring model: JSX, hooks and `useStore`. Generator components port almost line for line. The extra lines are the hand-written Tabs and Dialog. The Preact tests are longer: Preact plus happy-dom needs explicit waits after Nanostores-driven re-renders, and pointer capture is stubbed in tests. No browser test drags the calibration lines in any build either; keyboard calibration is covered.
 - **Svelte** removes the store adapter (`$store`), and templates are shorter per component. One `.svelte` file holds one component, so sub-components and Card parts become separate files: 30 files against 11. Generic render props become snippets. Svelte also warns when a prop is captured to build a store; the code suppresses this, because Astro props are static.
 
 ## Change cost (follow-up change)
@@ -120,9 +120,9 @@ The change was fixed before anyone implemented it: a history of the last five en
 | Files touched | 2 | 2 | 2 |
 | Component diff | +34 −1 | +26 −1 | +40 −4 |
 | Test diff | +52 | +85 | +48 |
-| Shape | `useState` + `useEffect` on the roll | identical to React | `$state` + a wrapper around `rollCheck` |
+| Shape | `useState` + `useEffect` on the roll | the React shape, plus a ref guard (+8 lines) | `$state` + a wrapper around `rollCheck` |
 
-Diffs: `results/{react,preact,svelte}/followup.diff`. The Svelte diff contains formatter noise: prettier re-wrapped a `Button` line that the change did not touch. It also needs one `<!-- prettier-ignore -->`, because prettier otherwise changes the whitespace between two `<span>`s. The first Preact attempt was over-engineered; one review round brought it to the React shape.
+Diffs: `results/{react,preact,svelte}/followup.diff`. The Svelte diff contains formatter noise: prettier re-wrapped a `Button` line that the change did not touch. It also needs one `<!-- prettier-ignore -->`, because prettier otherwise changes the whitespace between two `<span>`s. The first Preact attempt was over-engineered and one review round brought it to the React shape. A later review then found a race in that shape: Preact runs the effect after paint, so a roll followed quickly by «Очистить» could add the entry back. React flushes the effect after the click and does not race. The Preact fix is a ref guard, 8 more lines.
 
 ## Maintenance and toolchain
 
@@ -165,12 +165,23 @@ To keep React: close both PRs. The harness commits are still useful on their own
 
 ## Recommendation
 
-**Preact.** On this project it gives the smallest payload: about 22–24 KB of JS per generator page, against 34–37 KB for Svelte and 87–96 KB for React. It changes the fewest files and keeps the authoring model and the test tooling the codebase already uses. The follow-up change came out identical in shape to React.
+**Preact, by a narrower margin than the payload alone suggests.**
 
-What it costs: owning Tabs and Dialog (about 220 extra lines), longer component tests, and a dialog that is not `inert` like a native one. Switching that Dialog to `<dialog>.showModal()`, as Svelte did, is the first follow-up worth doing. The second is to profile the 25–30 ms Preact lag on generator interactions (see Runtime).
+For Preact:
+- the smallest payload: about 22–24 KB of JS per generator page, against 34–37 KB for Svelte and 87–96 KB for React;
+- the fewest config changes and no new test tooling;
+- the same JSX and hooks model the code already uses.
 
-Svelte is a reasonable choice if shorter templates and the adapter-free store binding matter more than payload. On this app it ships about 12 KB more per page than Preact. Its toolchain also needs three additions that React and Preact do not: `svelte-check`, a Bun compile plugin and serial unit tests.
+Against it, both measured on this branch:
+- generator interactions run 30–40 ms slower than React and Svelte;
+- Preact runs effects after paint, and this produced one real race in the follow-up change.
 
-Keeping React costs about 65–70 KB of extra JS per generator page and buys Base UI's maintained primitives. It is a valid choice if that payload does not matter for this site.
+Neither delay is visible to a person, but any effect that must happen before the next interaction needs care in Preact. Profiling that lag is the first follow-up worth doing.
+
+**Svelte is the close second.** It ships about 12 KB more JS per page than Preact and has the shortest templates. It binds stores with no adapter and matches React's interaction timings. Its cost is in tooling: `svelte-check`, a Bun compile plugin and serial unit tests, none of which React or Preact need.
+
+**Keeping React** costs about 65–70 KB of extra JS per generator page and buys Base UI's maintained primitives. It is a valid choice if that payload does not matter for this site.
+
+Both candidates now own their Tabs and Dialog: about 220 extra lines in Preact and about 360 in Svelte.
 
 Maintainer's choice and rationale: _pending_.
