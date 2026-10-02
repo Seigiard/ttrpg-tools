@@ -23,6 +23,10 @@ export interface RangePick {
   rowIndex: number;
 }
 
+export function formatRangeLabel(row: RangeBounds): string {
+  return row.min === row.max ? String(row.min) : `${row.min}–${row.max}`;
+}
+
 /** Индекс строки, чей диапазон содержит `sum`, или `-1`. */
 export function findRangeIndex(rows: readonly RangeBounds[], sum: number): number {
   return rows.findIndex((row) => sum >= row.min && sum <= row.max);
