@@ -6,8 +6,8 @@ Each scenario runs 10 repeats in Playwright Chromium. Values are milliseconds.
 
 | Scenario | Median | Min | Max | Samples |
 | --- | ---: | ---: | ---: | --- |
-| weather click-to-result | 63 | 60 | 76 | 76, 65, 63, 66, 63, 67, 60, 61, 61, 62 |
-| prices tab switch | 80 | 78 | 83 | 80, 78, 80, 79, 83, 80, 80, 80, 80, 79 |
-| paper-minis upload-to-row | 39 | 38 | 40 | 38, 40, 39, 39, 40, 39, 38, 39, 39, 39 |
-| paper-minis preview ready | 80 | 67 | 87 | 67, 70, 82, 71, 87, 82, 80, 79, 79, 81 |
-| paper-minis PDF generation | 76 | 61 | 86 | 78, 62, 61, 68, 79, 61, 62, 76, 86, 82 |
+| weather click-to-result | 69 | 55 | 87 | 68, 57, 69, 71, 56, 87, 70, 85, 55, 68 |
+| prices tab switch | 80 | 78 | 80 | 80, 78, 80, 79, 80, 80, 79, 79, 80, 80 |
+| paper-minis upload-to-row | 25 | 24 | 27 | 27, 25, 25, 25, 25, 24, 24, 25, 25, 26 |
+| paper-minis preview ready | 74 | 68 | 81 | 76, 76, 74, 71, 73, 70, 75, 81, 71, 68 |
+| paper-minis PDF generation | 68 | 62 | 77 | 65, 68, 70, 64, 62, 69, 68, 68, 71, 77 |

@@ -8,5 +8,5 @@ HTML is read from dist. Linked scripts, modulepreload links, stylesheets, Astro 
 | /mausritter/encounters | 21688 | 3012 | 1902 | 8124 | 5431 | 11 |
 | /mausritter/locations | 24368 | 3012 | 1902 | 8124 | 7937 | 11 |
 | /mausritter/weather | 23217 | 3012 | 1902 | 8124 | 5641 | 12 |
-| /paper-minis | 213031 | 9121 | 1902 | 8124 | 5321 | 9 |
+| /paper-minis | 213067 | 9121 | 1902 | 8124 | 5319 | 9 |
 | /the-black-hack/prices | 23852 | 3012 | 1902 | 8124 | 6179 | 11 |
