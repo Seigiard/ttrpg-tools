@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/preact';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/preact';
 import { useState } from 'preact/hooks';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs';
 
@@ -20,7 +20,7 @@ function StatefulTabs() {
 describe('Preact Tabs', () => {
   afterEach(cleanup);
 
-  test('clicking a tab changes selection and visible panel', () => {
+  test('clicking a tab changes selection and visible panel', async () => {
     // #given controlled tabs with one selected value
     render(<StatefulTabs />);
 
@@ -28,7 +28,11 @@ describe('Preact Tabs', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Зима' }));
 
     // #then aria/data state and panel visibility move together
-    expect(screen.getByRole('tab', { name: 'Зима' }).getAttribute('aria-selected')).toBe('true');
+    // The parent's state update re-renders asynchronously; on slower CI runners the
+    // synchronous read happened before it.
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: 'Зима' }).getAttribute('aria-selected')).toBe('true');
+    });
     expect(screen.getByRole('tab', { name: 'Зима' }).hasAttribute('data-active')).toBe(true);
     expect(screen.getByText('Winter panel').hasAttribute('hidden')).toBe(false);
     expect(screen.getByText('Spring panel').hasAttribute('hidden')).toBe(true);
