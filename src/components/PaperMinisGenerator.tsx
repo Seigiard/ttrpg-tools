@@ -21,6 +21,14 @@ import type { HeightCalibration, MiniSize, PreparedArtwork } from '@/lib/paper-m
 const field =
   'min-h-11 w-full rounded-lg border border-border bg-surface-elevated px-3 text-text focus-visible:outline-2 focus-visible:outline-primary';
 const pdfFailureMessage = 'Не удалось создать PDF. Попробуйте ещё раз или уменьшите изображения.';
+const exportFailureMessage = 'Не удалось создать Export. Попробуйте ещё раз.';
+
+function buildZipFilename(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `paper-minis-${year}-${month}-${day}.zip`;
+}
 
 function useArtworkUrl(artwork?: PreparedArtwork | null) {
   const [url, setUrl] = useState<string>();
@@ -464,6 +472,33 @@ export default function PaperMinisGenerator() {
     }
   }
 
+  async function exportZip() {
+    const bytes = await store.exportZip();
+    if (!bytes) return;
+    let url: string | undefined;
+    try {
+      const nextUrl = URL.createObjectURL(
+        new Blob([bytes as BlobPart], { type: 'application/zip' }),
+      );
+      url = nextUrl;
+      const anchor = document.createElement('a');
+      anchor.href = nextUrl;
+      anchor.download = buildZipFilename();
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(nextUrl), 5000);
+    } catch {
+      if (url) URL.revokeObjectURL(url);
+      store.$message.set(exportFailureMessage);
+    }
+  }
+
+  const canGenerate =
+    packed.miniCount > 0 &&
+    inputsValid &&
+    !rows.some((_, index) => !['upright', 'rotated'].includes(packed.entries[index]?.state));
+
   return (
     <div className="space-y-8">
       <fieldset
@@ -576,7 +611,7 @@ export default function PaperMinisGenerator() {
                 <div className="space-y-2">
                   <Button
                     className="min-h-11 w-full"
-                    disabled={busy || preparing || !packed.miniCount || !inputsValid}
+                    disabled={busy || preparing || !canGenerate}
                     onClick={() => void download()}
                   >
                     {busy ? 'Подготовка PDF…' : 'Скачать PDF'}
@@ -584,7 +619,15 @@ export default function PaperMinisGenerator() {
                   <Button
                     variant="outline"
                     className="min-h-11 w-full"
-                    disabled={busy || preparing || !packed.miniCount || !inputsValid}
+                    disabled={busy || preparing || !canGenerate}
+                    onClick={() => void exportZip()}
+                  >
+                    Export
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="min-h-11 w-full"
+                    disabled={busy || preparing || !canGenerate}
                     onClick={() => void store.refreshPreview()}
                   >
                     {preview ? 'Обновить предпросмотр' : 'Предпросмотр PDF'}

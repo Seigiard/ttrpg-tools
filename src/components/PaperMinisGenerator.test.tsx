@@ -264,6 +264,61 @@ test('download action clicks an attached PDF download anchor', async () => {
   }
 });
 
+test('export action waits for ready minis and clicks an attached zip download anchor', async () => {
+  // #given
+  setSystemTime(new Date(2026, 9, 2, 10, 30));
+  const originalClick = HTMLAnchorElement.prototype.click;
+  let clicked: { attached: boolean; download: string; protocol: string } | undefined;
+  HTMLAnchorElement.prototype.click = function () {
+    clicked = {
+      attached: this.isConnected,
+      download: this.download,
+      protocol: new URL(this.href).protocol,
+    };
+  };
+  try {
+    render(<PaperMinisGenerator />);
+    const emptyDisabled = screen.getByRole<HTMLButtonElement>('button', { name: 'Export' }).disabled;
+    await addFront();
+    const readyDisabled = screen.getByRole<HTMLButtonElement>('button', { name: 'Export' }).disabled;
+    let release!: (bytes: ArrayBuffer) => void;
+    const slow = new File([png], 'slow-back.png', { type: 'image/png' });
+    slow.arrayBuffer = () =>
+      new Promise<ArrayBuffer>((resolve) => {
+        release = resolve;
+      });
+    fireEvent.change(
+      screen.getByLabelText('Оборот: отражение лицевой стороны', { selector: 'input' }),
+      { target: { files: [slow] } },
+    );
+    const loadingDisabled = screen.getByRole<HTMLButtonElement>('button', { name: 'Export' }).disabled;
+    await act(async () => {
+      release(Uint8Array.from(png).buffer);
+    });
+
+    // #when
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }));
+
+    // #then
+    await waitFor(() =>
+      expect({
+        disabled: [emptyDisabled, readyDisabled, loadingDisabled],
+        clicked,
+      }).toEqual({
+        disabled: [true, false, true],
+        clicked: {
+          attached: true,
+          download: 'paper-minis-2026-10-02.zip',
+          protocol: 'blob:',
+        },
+      }),
+    );
+  } finally {
+    HTMLAnchorElement.prototype.click = originalClick;
+    setSystemTime();
+  }
+});
+
 test('download reports a browser object-URL failure', async () => {
   // #given
   render(<PaperMinisGenerator />);

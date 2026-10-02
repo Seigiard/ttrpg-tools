@@ -1,5 +1,5 @@
 import { HEIGHT_SLOT_ORDER } from './sizes';
-import type { HeightSlot } from './types';
+import type { HeightCalibration, HeightSlot, MiniSize } from './types';
 
 // One row a batch upload will create. All naming, pairing and size rules for
 // dropped files live in this module, so the store only executes a plan.
@@ -7,7 +7,11 @@ export type PlannedRow = {
   name: string;
   front: File;
   back?: File;
-  heightSlot?: HeightSlot;
+  heightSlot?: MiniSize;
+  customWidthMm?: number;
+  customHeightMm?: number;
+  count?: number;
+  calibration?: HeightCalibration;
 };
 
 type Side = 'front' | 'back';

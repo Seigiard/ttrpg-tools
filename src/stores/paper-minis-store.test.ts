@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from 'bun:test';
+import { unzipSync } from 'fflate';
 import {
   DEFAULT_CUSTOM_HEIGHT_MM,
   DEFAULT_CUSTOM_WIDTH_MM,
@@ -266,6 +267,104 @@ test('download renders the layout shown by the counter and returns the renderer 
     busy: false,
     message: 'PDF готов.',
   });
+});
+
+test('export zip restores names, sizes and sides through batch ingest', async () => {
+  // #given
+  const store = setup();
+  const goblin = store.addBlank({ name: 'Goblin', heightSlot: 'small' })!;
+  await store.setImage(goblin, artworkFile(10, 20, 'goblin-front.png'));
+  await store.setImage(goblin, artworkFile(11, 20, 'goblin-back.png'), true);
+  const empty = store.addBlank({ name: '', heightSlot: 'large' })!;
+  await store.setImage(empty, artworkFile(12, 20, 'empty.png'));
+  await store.setImage(empty, artworkFile(12, 20, 'empty-back.png'), true);
+  const duplicate = store.addBlank({ name: 'Goblin', heightSlot: 'small' })!;
+  await store.setImage(duplicate, artworkFile(13, 20, 'duplicate.png'));
+  await store.setImage(duplicate, artworkFile(13, 20, 'duplicate-back.png'), true);
+
+  // #when
+  const bytes = await store.exportZip();
+  const entries = bytes ? unzipSync(bytes) : {};
+  const extracted = Object.entries(entries).map(
+    ([name, fileBytes]) => new File([fileBytes], name, { type: 'image/png' }),
+  );
+  const restored = setup();
+  restored.ingest(extracted);
+  await Promise.resolve();
+
+  // #then
+  expect({
+    entryNames: Object.keys(entries).toSorted(),
+    rows: restored.$rows.get().map((row) => ({
+      name: row.name,
+      heightSlot: row.heightSlot,
+      front: row.image?.name,
+      back: row.backImage?.name,
+    })),
+  }).toEqual({
+    entryNames: [
+      'Goblin-2-small-back.png',
+      'Goblin-2-small-front.png',
+      'Goblin-small-back.png',
+      'Goblin-small-front.png',
+      'mini-2-large-back.png',
+      'mini-2-large-front.png',
+    ],
+    rows: [
+      {
+        name: 'Goblin',
+        heightSlot: 'small',
+        front: 'Goblin-small-front.png',
+        back: 'Goblin-small-back.png',
+      },
+      {
+        name: 'Mini 2',
+        heightSlot: 'large',
+        front: 'mini-2-large-front.png',
+        back: 'mini-2-large-back.png',
+      },
+      {
+        name: 'Goblin 2',
+        heightSlot: 'small',
+        front: 'Goblin-2-small-front.png',
+        back: 'Goblin-2-small-back.png',
+      },
+    ],
+  });
+});
+
+test('export zip does nothing while locked, preparing, or without a ready mini', async () => {
+  // #given
+  let finish!: (bytes: Uint8Array) => void;
+  const rendering = new Promise<Uint8Array>((resolve) => {
+    finish = resolve;
+  });
+  const busy = setup(() => rendering);
+  await busy.setImage(busy.addBlank()!, artworkFile(1, 1));
+  const download = busy.download();
+
+  const preparing = setup();
+  const slow = deferredFile();
+  const pendingImage = preparing.setImage(preparing.addBlank()!, slow.file);
+
+  const empty = setup();
+  empty.addBlank();
+  const failed = setup();
+  await failed.setImage(failed.addBlank()!, failedFile('broken.png'));
+
+  // #when
+  const results = await Promise.all([
+    busy.exportZip(),
+    preparing.exportZip(),
+    empty.exportZip(),
+    failed.exportZip(),
+  ]);
+  finish(Uint8Array.from([1]));
+  slow.release();
+  await Promise.all([download, pendingImage]);
+
+  // #then
+  expect(results).toEqual([undefined, undefined, undefined, undefined]);
 });
 
 test('a calibration session previews draft edits and cancel leaves the row unchanged', async () => {

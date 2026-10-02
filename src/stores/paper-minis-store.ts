@@ -15,6 +15,7 @@ import {
   type CalibrationLine,
   type CalibrationRange,
 } from '@/lib/paper-minis/calibration';
+import { canvasToPngBytes } from '@/lib/paper-minis/canvas';
 import {
   DEFAULT_FIGURE_MARGIN_MM,
   fitLimitWarning,
@@ -32,7 +33,6 @@ import {
 import type {
   Entry,
   HeightCalibration,
-  HeightSlot,
   MiniSize,
   PreparedArtwork,
 } from '@/lib/paper-minis/types';
@@ -82,6 +82,8 @@ export type CalibrationSession = {
 const storageKey = 'pmg-settings';
 const successMessage = 'PDF готов.';
 const failureMessage = 'Не удалось создать PDF. Попробуйте ещё раз или уменьшите изображения.';
+const exportSuccessMessage = 'Export готов.';
+const exportFailureMessage = 'Не удалось создать Export. Попробуйте ещё раз.';
 
 function parseNumericInput(text: string, accepts: (value: number) => boolean) {
   if (text.trim() === '') return { input: { text, valid: false } };
@@ -89,6 +91,61 @@ function parseNumericInput(text: string, accepts: (value: number) => boolean) {
   return Number.isFinite(value) && accepts(value)
     ? { input: { text, valid: true }, value }
     : { input: { text, valid: false } };
+}
+
+const nameSeparators = /[-_\s]+/;
+
+function exportName(row: MiniRow, index: number): string {
+  const name = row.name?.trim() ?? '';
+  const safe = name
+    .split(nameSeparators)
+    .filter((part) => part !== '')
+    .join('-');
+  return safe || `mini-${index + 1}`;
+}
+
+function exportSize(row: MiniRow): string {
+  if (row.heightSlot === 'custom') {
+    const width = row.customWidthMm ?? DEFAULT_CUSTOM_WIDTH_MM;
+    const height = row.customHeightMm ?? DEFAULT_CUSTOM_HEIGHT_MM;
+    return `custom-${width}x${height}`;
+  }
+  return row.heightSlot;
+}
+
+async function artworkAsPng(artwork: PreparedArtwork): Promise<Uint8Array> {
+  if (artwork.format === 'png') return artwork.bytes;
+  const bitmap = await createImageBitmap(new Blob([artwork.bytes as BlobPart], { type: 'image/jpeg' }));
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Could not get 2D canvas context');
+    ctx.drawImage(bitmap, 0, 0);
+    return canvasToPngBytes(canvas);
+  } finally {
+    bitmap.close();
+  }
+}
+
+async function reflectedArtworkAsPng(artwork: PreparedArtwork): Promise<Uint8Array> {
+  const bitmap = await createImageBitmap(
+    new Blob([(await artworkAsPng(artwork)) as BlobPart], { type: 'image/png' }),
+  );
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Could not get 2D canvas context');
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(bitmap, 0, 0);
+    return canvasToPngBytes(canvas);
+  } finally {
+    bitmap.close();
+  }
 }
 
 export function createPaperMinisStore({
@@ -246,7 +303,21 @@ export function createPaperMinisStore({
       cancelCalibration();
     changed();
   }
-  function addBlank({ name, heightSlot }: { name?: string; heightSlot?: HeightSlot } = {}) {
+  function addBlank({
+    name,
+    heightSlot,
+    customWidthMm,
+    customHeightMm,
+    count,
+    calibration,
+  }: {
+    name?: string;
+    heightSlot?: MiniSize;
+    customWidthMm?: number;
+    customHeightMm?: number;
+    count?: number;
+    calibration?: HeightCalibration;
+  } = {}) {
     if ($busy.get()) return;
     const row: MiniRow = {
       id: nextId++,
@@ -254,7 +325,10 @@ export function createPaperMinisStore({
       image: null,
       artwork: null,
       heightSlot: heightSlot ?? DEFAULT_HEIGHT_SLOT,
-      count: 1,
+      count: count ?? 1,
+      ...(customWidthMm === undefined ? {} : { customWidthMm }),
+      ...(customHeightMm === undefined ? {} : { customHeightMm }),
+      ...(calibration === undefined ? {} : { calibration }),
     };
     $rows.set([...$rows.get(), row]);
     $inputs.set({
@@ -262,9 +336,15 @@ export function createPaperMinisStore({
       rows: {
         ...$inputs.get().rows,
         [row.id]: {
-          count: { text: '1', valid: true },
-          customWidthMm: { text: '', valid: false },
-          customHeightMm: { text: '', valid: false },
+          count: { text: String(row.count), valid: true },
+          customWidthMm: {
+            text: customWidthMm === undefined ? '' : String(customWidthMm),
+            valid: customWidthMm !== undefined,
+          },
+          customHeightMm: {
+            text: customHeightMm === undefined ? '' : String(customHeightMm),
+            valid: customHeightMm !== undefined,
+          },
         },
       },
     });
@@ -437,7 +517,7 @@ export function createPaperMinisStore({
         : '',
     );
     for (const planned of planBatch(valid)) {
-      const id = addBlank({ name: planned.name, heightSlot: planned.heightSlot });
+      const id = addBlank(planned);
       if (id === undefined) continue;
       void setImage(id, planned.front);
       if (planned.back) void setImage(id, planned.back, true);
@@ -535,6 +615,45 @@ export function createPaperMinisStore({
       $busy.set(false);
     }
   }
+  async function exportZip() {
+    if ($busy.get() || $preparing.get()) return;
+    const layout = pack();
+    const rows = $rows.get();
+    const ready = rows
+      .map((row, index) => ({ row, index, status: layout.entries[index] }))
+      .filter(({ row, status }) => row.artwork && ['upright', 'rotated'].includes(status?.state));
+    if (!ready.length) return;
+    $busy.set(true);
+    $message.set('');
+    try {
+      const { zipSync } = await import('fflate');
+      const entries: Record<string, Uint8Array> = {};
+      const used = new Set<string>();
+      for (const { row, index } of ready) {
+        const sides = ['front', 'back'] as const;
+        const base = exportName(row, index);
+        const size = exportSize(row);
+        let suffix = 1;
+        let names = sides.map((side) => `${base}-${size}-${side}.png`);
+        while (names.some((name) => used.has(name))) {
+          suffix += 1;
+          names = sides.map((side) => `${base}-${suffix}-${size}-${side}.png`);
+        }
+        for (const name of names) used.add(name);
+        entries[names[0]] = await artworkAsPng(row.artwork!);
+        entries[names[1]] = row.backArtwork
+          ? await artworkAsPng(row.backArtwork)
+          : await reflectedArtworkAsPng(row.artwork!);
+      }
+      const bytes = zipSync(entries, { level: 0 });
+      $message.set(exportSuccessMessage);
+      return bytes;
+    } catch {
+      $message.set(exportFailureMessage);
+    } finally {
+      $busy.set(false);
+    }
+  }
   return {
     $rows,
     $settings,
@@ -572,6 +691,7 @@ export function createPaperMinisStore({
     async download() {
       return (await render())?.bytes;
     },
+    exportZip,
     async refreshPreview() {
       const preview = await render();
       if (preview) $preview.set(preview);
