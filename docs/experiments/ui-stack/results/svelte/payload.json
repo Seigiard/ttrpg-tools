@@ -1,18 +1,18 @@
 {
-  "generatedAt": "2026-10-02T13:54:41.359Z",
-  "method": "HTML is read from dist. Linked scripts, modulepreload links, stylesheets, Astro island component-url and renderer-url attributes are resolved. Static JS imports are counted as initial-load JS. Dynamic imports are counted as lazy JS. Library labels come from chunk filenames and content heuristics for React, Astro, Base UI, Nanostores, Lucide and pdf-lib.",
+  "generatedAt": "2026-10-02T14:31:24.167Z",
+  "method": "HTML is read from dist. Linked scripts, modulepreload links, stylesheets, Astro island component-url and renderer-url attributes are resolved. Static JS imports are counted as initial-load JS. Dynamic imports and their transitive JS dependencies are counted as lazy JS. Library labels come from chunk filenames and content heuristics for Preact, React, Astro, Base UI, Nanostores, Lucide and pdf-lib.",
   "routes": [
     {
       "route": "/",
       "html": {
         "raw": 3173,
-        "gzip": 1139,
-        "brotli": 838
+        "gzip": 1140,
+        "brotli": 840
       },
       "css": {
-        "raw": 43974,
-        "gzip": 8189,
-        "brotli": 7180
+        "raw": 44015,
+        "gzip": 8196,
+        "brotli": 7178
       },
       "externalJs": {
         "raw": 0,
@@ -41,18 +41,18 @@
           "kind": "html",
           "sizes": {
             "raw": 3173,
-            "gzip": 1139,
-            "brotli": 838
+            "gzip": 1140,
+            "brotli": 840
           },
           "libraries": []
         },
         {
-          "path": "_astro/Layout.CC3d8m6N.css",
+          "path": "_astro/Layout.D3AbGkAM.css",
           "kind": "css",
           "sizes": {
-            "raw": 43974,
-            "gzip": 8189,
-            "brotli": 7180
+            "raw": 44015,
+            "gzip": 8196,
+            "brotli": 7178
           },
           "libraries": []
         }
@@ -63,13 +63,13 @@
       "route": "/mausritter/encounters",
       "html": {
         "raw": 20711,
-        "gzip": 5471,
-        "brotli": 4503
+        "gzip": 5473,
+        "brotli": 4494
       },
       "css": {
-        "raw": 43974,
-        "gzip": 8189,
-        "brotli": 7180
+        "raw": 44015,
+        "gzip": 8196,
+        "brotli": 7178
       },
       "externalJs": {
         "raw": 92515,
@@ -98,8 +98,8 @@
           "kind": "html",
           "sizes": {
             "raw": 20711,
-            "gzip": 5471,
-            "brotli": 4503
+            "gzip": 5473,
+            "brotli": 4494
           },
           "libraries": []
         },
@@ -126,12 +126,12 @@
           ]
         },
         {
-          "path": "_astro/Layout.CC3d8m6N.css",
+          "path": "_astro/Layout.D3AbGkAM.css",
           "kind": "css",
           "sizes": {
-            "raw": 43974,
-            "gzip": 8189,
-            "brotli": 7180
+            "raw": 44015,
+            "gzip": 8196,
+            "brotli": 7178
           },
           "libraries": []
         },
@@ -273,13 +273,13 @@
       "route": "/mausritter/locations",
       "html": {
         "raw": 41177,
-        "gzip": 7866,
-        "brotli": 6414
+        "gzip": 7867,
+        "brotli": 6412
       },
       "css": {
-        "raw": 43974,
-        "gzip": 8189,
-        "brotli": 7180
+        "raw": 44015,
+        "gzip": 8196,
+        "brotli": 7178
       },
       "externalJs": {
         "raw": 98337,
@@ -308,8 +308,8 @@
           "kind": "html",
           "sizes": {
             "raw": 41177,
-            "gzip": 7866,
-            "brotli": 6414
+            "gzip": 7867,
+            "brotli": 6412
           },
           "libraries": []
         },
@@ -336,12 +336,12 @@
           ]
         },
         {
-          "path": "_astro/Layout.CC3d8m6N.css",
+          "path": "_astro/Layout.D3AbGkAM.css",
           "kind": "css",
           "sizes": {
-            "raw": 43974,
-            "gzip": 8189,
-            "brotli": 7180
+            "raw": 44015,
+            "gzip": 8196,
+            "brotli": 7178
           },
           "libraries": []
         },
@@ -483,13 +483,13 @@
       "route": "/mausritter/weather",
       "html": {
         "raw": 23999,
-        "gzip": 5621,
-        "brotli": 4613
+        "gzip": 5622,
+        "brotli": 4615
       },
       "css": {
-        "raw": 43974,
-        "gzip": 8189,
-        "brotli": 7180
+        "raw": 44015,
+        "gzip": 8196,
+        "brotli": 7178
       },
       "externalJs": {
         "raw": 94172,
@@ -518,8 +518,8 @@
           "kind": "html",
           "sizes": {
             "raw": 23999,
-            "gzip": 5621,
-            "brotli": 4613
+            "gzip": 5622,
+            "brotli": 4615
           },
           "libraries": []
         },
@@ -546,12 +546,12 @@
           ]
         },
         {
-          "path": "_astro/Layout.CC3d8m6N.css",
+          "path": "_astro/Layout.D3AbGkAM.css",
           "kind": "css",
           "sizes": {
-            "raw": 43974,
-            "gzip": 8189,
-            "brotli": 7180
+            "raw": 44015,
+            "gzip": 8196,
+            "brotli": 7178
           },
           "libraries": []
         },
@@ -694,17 +694,17 @@
       "html": {
         "raw": 15879,
         "gzip": 5406,
-        "brotli": 4341
+        "brotli": 4342
       },
       "css": {
-        "raw": 43974,
-        "gzip": 8189,
-        "brotli": 7180
+        "raw": 44015,
+        "gzip": 8196,
+        "brotli": 7178
       },
       "externalJs": {
-        "raw": 564437,
-        "gzip": 227851,
-        "brotli": 205724
+        "raw": 564768,
+        "gzip": 227940,
+        "brotli": 205903
       },
       "inlineJs": {
         "raw": 4510,
@@ -712,14 +712,14 @@
         "brotli": 1652
       },
       "initialJs": {
-        "raw": 564437,
-        "gzip": 227851,
-        "brotli": 205724
+        "raw": 564768,
+        "gzip": 227940,
+        "brotli": 205903
       },
       "lazyJs": {
-        "raw": 0,
-        "gzip": 0,
-        "brotli": 0
+        "raw": 12377,
+        "gzip": 6109,
+        "brotli": 5517
       },
       "requestCount": 7,
       "resources": [
@@ -729,7 +729,7 @@
           "sizes": {
             "raw": 15879,
             "gzip": 5406,
-            "brotli": 4341
+            "brotli": 4342
           },
           "libraries": []
         },
@@ -756,22 +756,22 @@
           ]
         },
         {
-          "path": "_astro/Layout.CC3d8m6N.css",
+          "path": "_astro/Layout.D3AbGkAM.css",
           "kind": "css",
           "sizes": {
-            "raw": 43974,
-            "gzip": 8189,
-            "brotli": 7180
+            "raw": 44015,
+            "gzip": 8196,
+            "brotli": 7178
           },
           "libraries": []
         },
         {
-          "path": "_astro/PaperMinisGenerator.BN7U_--g.js",
+          "path": "_astro/PaperMinisGenerator.tOuuAu5l.js",
           "kind": "external-js",
           "sizes": {
-            "raw": 481873,
-            "gzip": 197707,
-            "brotli": 178960
+            "raw": 482204,
+            "gzip": 197796,
+            "brotli": 179139
           },
           "libraries": [
             "pdf-lib"
@@ -814,18 +814,28 @@
             "raw": 889,
             "gzip": 499,
             "brotli": 438
+          },
+          "libraries": []
+        },
+        {
+          "path": "_astro/browser.B92hvlif.js",
+          "kind": "lazy-js",
+          "sizes": {
+            "raw": 12377,
+            "gzip": 6109,
+            "brotli": 5517
           },
           "libraries": []
         }
       ],
       "topChunks": [
         {
-          "path": "_astro/PaperMinisGenerator.BN7U_--g.js",
+          "path": "_astro/PaperMinisGenerator.tOuuAu5l.js",
           "kind": "external-js",
           "sizes": {
-            "raw": 481873,
-            "gzip": 197707,
-            "brotli": 178960
+            "raw": 482204,
+            "gzip": 197796,
+            "brotli": 179139
           },
           "libraries": [
             "pdf-lib"
@@ -852,22 +862,22 @@
           "libraries": []
         },
         {
+          "path": "_astro/browser.B92hvlif.js",
+          "kind": "lazy-js",
+          "sizes": {
+            "raw": 12377,
+            "gzip": 6109,
+            "brotli": 5517
+          },
+          "libraries": []
+        },
+        {
           "path": "_astro/computed.DgUiT7bu.js",
           "kind": "external-js",
           "sizes": {
             "raw": 1096,
             "gzip": 580,
             "brotli": 539
-          },
-          "libraries": []
-        },
-        {
-          "path": "_astro/client.svelte.CrE5ZjRE.js",
-          "kind": "external-js",
-          "sizes": {
-            "raw": 889,
-            "gzip": 499,
-            "brotli": 438
           },
           "libraries": []
         }
@@ -878,12 +888,12 @@
       "html": {
         "raw": 36158,
         "gzip": 6189,
-        "brotli": 4977
+        "brotli": 4989
       },
       "css": {
-        "raw": 43974,
-        "gzip": 8189,
-        "brotli": 7180
+        "raw": 44015,
+        "gzip": 8196,
+        "brotli": 7178
       },
       "externalJs": {
         "raw": 95384,
@@ -913,7 +923,7 @@
           "sizes": {
             "raw": 36158,
             "gzip": 6189,
-            "brotli": 4977
+            "brotli": 4989
           },
           "libraries": []
         },
@@ -940,12 +950,12 @@
           ]
         },
         {
-          "path": "_astro/Layout.CC3d8m6N.css",
+          "path": "_astro/Layout.D3AbGkAM.css",
           "kind": "css",
           "sizes": {
-            "raw": 43974,
-            "gzip": 8189,
-            "brotli": 7180
+            "raw": 44015,
+            "gzip": 8196,
+            "brotli": 7178
           },
           "libraries": []
         },
