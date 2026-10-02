@@ -14,5 +14,5 @@ Transferred bytes use Chrome DevTools Protocol Network.loadingFinished encodedDa
 | /mausritter/encounters/ | warm | 1686 | 10 | document: 127 B / 1<br>stylesheet: 127 B / 1<br>script: 1432 B / 8 |
 | /the-black-hack/prices/ | cold | 53607 | 9 | document: 6454 B / 1<br>stylesheet: 8483 B / 1<br>script: 38670 B / 7 |
 | /the-black-hack/prices/ | warm | 1507 | 9 | document: 127 B / 1<br>stylesheet: 127 B / 1<br>script: 1253 B / 7 |
-| /paper-minis/ | cold | 243602 | 7 | document: 5669 B / 1<br>stylesheet: 8483 B / 1<br>script: 229450 B / 5 |
+| /paper-minis/ | cold | 243616 | 7 | document: 5671 B / 1<br>stylesheet: 8483 B / 1<br>script: 229462 B / 5 |
 | /paper-minis/ | warm | 1149 | 7 | document: 127 B / 1<br>stylesheet: 127 B / 1<br>script: 895 B / 5 |

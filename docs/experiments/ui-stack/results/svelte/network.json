@@ -216,12 +216,12 @@
     "mode": "cold",
     "total": {
       "requests": 7,
-      "transferredBytes": 243602
+      "transferredBytes": 243616
     },
     "byType": {
       "document": {
         "requests": 1,
-        "transferredBytes": 5669
+        "transferredBytes": 5671
       },
       "stylesheet": {
         "requests": 1,
@@ -229,7 +229,7 @@
       },
       "script": {
         "requests": 5,
-        "transferredBytes": 229450
+        "transferredBytes": 229462
       }
     }
   },
