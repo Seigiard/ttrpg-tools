@@ -1,5 +1,6 @@
 <script lang="ts" generics="Row">
   import type { Snippet } from 'svelte';
+  import { referenceHitClass } from './reference-list';
 
   interface Props {
     title: string;
@@ -11,10 +12,6 @@
   }
 
   let { title, testId, rows, hitIndex, label, children }: Props = $props();
-
-  export function referenceHitClass(isHit: boolean): string {
-    return isHit ? 'border-l-2 border-primary bg-primary/10 text-text' : 'text-text-muted';
-  }
 </script>
 
 <section data-testid={testId}>

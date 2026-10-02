@@ -12,6 +12,14 @@
 
 No changes to `src/data`, `src/lib` or `src/stores` were needed.
 
+## S3 · Weather, locations, encounters and prices
+
+- Migrated the weather, locations, encounters and The Black Hack prices islands to Svelte and switched their Astro pages to `.svelte` imports.
+- Replaced the React component tests for those four islands with Svelte tests using `@testing-library/svelte`. Assertion intent is unchanged: deterministic first rolls, rerolls, tab switches, reference hit markers, skeleton wrappers and prices URL/localStorage sync.
+- Removed the replaced React generator components and the React `ReferenceList`; `PaperMinisGenerator.tsx` is still React and is left for S4.
+- Kept `src/data`, `src/lib` and `src/stores` unchanged. The Svelte islands bind nanostores via the Svelte store contract (`$store`).
+- Svelte warns when a prop is captured for store initialization; these islands intentionally treat table props as static Astro data and suppress that warning at the store construction line. If tables ever become live-updated props, the component should remount via `key` or rebuild the store explicitly.
+
 ## S2 · Svelte primitives, icons and ReferenceList
 
 - Added Svelte versions of `Button`, `Card`, `Skeleton`, `Tabs`, `Dialog` and `ReferenceList` beside the React files. Existing React islands still import the React files; production island migration starts in S3.
