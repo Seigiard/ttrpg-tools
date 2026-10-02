@@ -42,10 +42,18 @@ interface DialogContentProps extends DivProps {
 function DialogContent({ className, finalFocus, children, ...props }: DialogContentProps) {
   const context = useContext(DialogContext);
   const popupRef = useRef<HTMLDivElement>(null);
+  const setOpenRef = useRef<(open: boolean) => void>(() => {});
+  const finalFocusRef = useRef<RefObject<HTMLElement | null> | undefined>(undefined);
   if (!context) throw new Error('DialogContent must be used inside Dialog');
+  const { open, setOpen, titleId } = context;
 
   useEffect(() => {
-    if (!context.open) return;
+    setOpenRef.current = setOpen;
+    finalFocusRef.current = finalFocus;
+  });
+
+  useEffect(() => {
+    if (!open) return;
 
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const target = firstFocusable(popupRef.current) ?? popupRef.current;
@@ -54,7 +62,7 @@ function DialogContent({ className, finalFocus, children, ...props }: DialogCont
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        context.setOpen(false);
+        setOpenRef.current(false);
       }
       if (event.key === 'Tab') {
         trapFocus(event, popupRef.current);
@@ -64,22 +72,22 @@ function DialogContent({ className, finalFocus, children, ...props }: DialogCont
     document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('keydown', onKeyDown);
-      const restoreTarget = finalFocus?.current ?? previousFocus;
+      const restoreTarget = finalFocusRef.current?.current ?? previousFocus;
       restoreTarget?.focus();
     };
-  }, [context, finalFocus]);
+  }, [open]);
 
-  if (!context.open) return null;
+  if (!open) return null;
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-black/60" aria-hidden="true" onClick={() => context.setOpen(false)} />
+      <div className="fixed inset-0 z-50 bg-black/60" aria-hidden="true" onClick={() => setOpen(false)} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
           ref={popupRef}
           role="dialog"
           aria-modal="true"
-          aria-labelledby={context.titleId}
+          aria-labelledby={titleId}
           tabIndex={-1}
           className={cn(
             'max-h-[90vh] w-full max-w-3xl overflow-auto rounded-xl border border-border bg-surface p-4 shadow-xl',

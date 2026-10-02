@@ -25,6 +25,15 @@
 - The migrated islands use `@nanostores/preact`, `preact/hooks`, Preact primitives and `lucide-preact` via `icons.preact.ts`. They do not import React, `@nanostores/react`, `@testing-library/react` or `lucide-react`.
 - Known P2 Dialog defect is deferred to P4 because P3 does not migrate the paper-minis dialog user. The P4 fix should make the open/close effect depend on open-state transitions only. Native `<dialog>.showModal()` is a candidate because it gives top-layer modality and inert background behavior; validate it against SSR, happy-dom tests and existing styling before choosing it.
 
+## P4: Paper Minis
+
+- Migrated the Paper Minis island to `PaperMinisGenerator.preact.tsx` and switched `src/pages/paper-minis.astro` to the Preact island. The old React component and tests were removed from the working tree.
+- Kept the native Preact primitive direction: no `preact/compat`, no React hooks, no `@nanostores/react`, and icons still route through `icons.preact.ts`.
+- Ported the latest main Paper Minis behavior after rebase: draft input recovery, ZIP export, batch/back upload planning, calibration session state, PDF/preview failure reporting, and row/thumbnail calibration overlays.
+- Kept the custom div-based Dialog for P4. The dialog focus effect now runs on open-state transitions and uses refs for `setOpen` and final-focus restore, avoiding stale callback dependencies without changing the public primitive surface.
+- Test port notes: Preact + happy-dom needs explicit waits for nanostore-driven rerenders, and primary pointer-capture paths are stubbed in the Paper Minis component tests because happy-dom's pointer capture can keep the test process alive. Browser coverage still exercises the calibration user flow through Playwright.
+- Verification after P4: `bun run lint`, `bun run format:check`, `bun run typecheck`, `bun test`, `bun run build`, `bun run test:browser`, and `PORT=4401 bun run e2e` all pass. `lint` still reports existing warnings outside the P4 port.
+
 ## Compatibility Decisions
 
 - `@base-ui/react`: keep it only for unmigrated React islands. For Preact, use native primitives instead of routing Base UI through `preact/compat`.
