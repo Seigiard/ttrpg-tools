@@ -9,11 +9,11 @@ import { measureTimings, timingsMarkdown } from './timings';
 
 const routes = [
   '/',
-  '/mausritter/weather',
-  '/mausritter/locations',
-  '/mausritter/encounters',
-  '/the-black-hack/prices',
-  '/paper-minis',
+  '/mausritter/weather/',
+  '/mausritter/locations/',
+  '/mausritter/encounters/',
+  '/the-black-hack/prices/',
+  '/paper-minis/',
 ] as const;
 
 function arg(name: string, fallback?: string) {
@@ -30,7 +30,7 @@ async function run(command: string, args: string[]) {
 async function waitForPreview(baseUrl: string, proc: ChildProcess) {
   const started = Date.now();
   while (Date.now() - started < 60_000) {
-    if (proc.exitCode !== null) throw new Error(`astro preview exited with ${proc.exitCode}`);
+    if (proc.exitCode !== null) throw new Error(`vite preview exited with ${proc.exitCode}`);
     try {
       const response = await fetch(baseUrl);
       if (response.ok) return;
@@ -39,25 +39,23 @@ async function waitForPreview(baseUrl: string, proc: ChildProcess) {
     }
     await Bun.sleep(500);
   }
-  throw new Error('astro preview did not start within 60s');
+  throw new Error('vite preview did not start within 60s');
 }
 
 async function withPreview<T>(port: number, work: (baseUrl: string) => Promise<T>) {
+  // vite preview stays in the foreground, unlike astro preview, which detaches and is
+  // shared by every checkout; parallel worktrees would stop each other's servers.
   const proc = spawn(
-    'sh',
-    ['-c', `bunx astro preview --port ${port} && bunx astro preview logs --follow`],
-    {
-      stdio: ['ignore', 'inherit', 'inherit'],
-      env: { ...process.env, PORT: String(port) },
-    },
+    'bunx',
+    ['vite', 'preview', '--host', '127.0.0.1', '--port', String(port), '--strictPort'],
+    { stdio: ['ignore', 'inherit', 'inherit'] },
   );
-  const baseUrl = `http://localhost:${port}`;
+  const baseUrl = `http://127.0.0.1:${port}`;
   await waitForPreview(baseUrl, proc);
   try {
     return await work(baseUrl);
   } finally {
     proc.kill('SIGTERM');
-    await run('bunx', ['astro', 'preview', 'stop']);
   }
 }
 

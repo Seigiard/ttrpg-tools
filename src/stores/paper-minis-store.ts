@@ -5,16 +5,21 @@ import {
   type ArtworkPreparation,
   type PaperMinisArtwork,
 } from '@/lib/paper-minis/artwork';
+import { artworkMimeType } from '@/lib/paper-minis/artwork-formats';
 import { planBatch } from '@/lib/paper-minis/batch-plan';
+import { calibrationAfterChange } from '@/lib/paper-minis/calibration-reset-policy';
 import {
-  calibrationChanged,
   calibrationGap,
   calibrationRange,
-  DEFAULT_CALIBRATION,
-  setCalibrationLine as setLine,
+  calibrationSessionResult,
+  moveCalibrationLine as moveSessionLine,
+  openCalibrationSession,
+  setCalibrationLine as setSessionLine,
   type CalibrationLine,
   type CalibrationRange,
-} from '@/lib/paper-minis/calibration';
+  type CalibrationSession as CalibrationDraft,
+} from '@/lib/paper-minis/calibration-session';
+import { canvasToPngBytes } from '@/lib/paper-minis/canvas';
 import {
   DEFAULT_FIGURE_MARGIN_MM,
   entryStatusWarning,
@@ -31,7 +36,6 @@ import {
 import type {
   Entry,
   HeightCalibration,
-  HeightSlot,
   MiniSize,
   PreparedArtwork,
 } from '@/lib/paper-minis/types';
@@ -66,13 +70,10 @@ export type PaperMinisStoreDependencies = {
 };
 export type { ArtworkPreparation, PaperMinisArtwork };
 type Preview = { bytes: Uint8Array; revision: number };
-export type CalibrationSession = {
-  rowId: number;
+export type CalibrationSession = CalibrationDraft & {
   rowLabel: string;
   artwork: PreparedArtwork;
   backArtwork?: PreparedArtwork | null;
-  lines: HeightCalibration;
-  artworkHeight: number;
   ranges: Record<CalibrationLine, CalibrationRange>;
   slotHeightMm: number;
   printedHeightMm: number;
@@ -82,6 +83,37 @@ export type CalibrationSession = {
 const storageKey = 'pmg-settings';
 const successMessage = 'PDF готов.';
 const failureMessage = 'Не удалось создать PDF. Попробуйте ещё раз или уменьшите изображения.';
+const marginDraftError = 'Поля должны быть числом от 0 мм.';
+const rowDraftError = 'Количество должно быть целым числом от 1, размеры — больше 0 мм.';
+
+function inputsForRow(row: Pick<Entry, 'count' | 'customWidthMm' | 'customHeightMm'>) {
+  return {
+    count: { text: String(row.count), valid: true },
+    customWidthMm: {
+      text: row.customWidthMm === undefined ? '' : String(row.customWidthMm),
+      valid: row.customWidthMm !== undefined,
+    },
+    customHeightMm: {
+      text: row.customHeightMm === undefined ? '' : String(row.customHeightMm),
+      valid: row.customHeightMm !== undefined,
+    },
+  };
+}
+
+function marginInput(settings: Readonly<PaperMinisSettings>) {
+  return { text: String(settings.marginMm), valid: true };
+}
+const exportSuccessMessage = 'Архив готов.';
+const exportFailureMessage = 'Не удалось создать архив. Попробуйте ещё раз.';
+const unzipFailureMessage =
+  'Не удалось распаковать архив. Добавьте изображения вручную или попробуйте другой файл.';
+const skippedFilesMessage = 'Некоторые файлы пропущены: поддерживаются PNG, JPG и WebP.';
+const artworkTypesByExtension: Record<string, string> = {
+  jpg: artworkMimeType('jpg'),
+  jpeg: artworkMimeType('jpg'),
+  png: artworkMimeType('png'),
+  webp: artworkMimeType('webp'),
+};
 
 function parseNumericInput(text: string, accepts: (value: number) => boolean) {
   if (text.trim() === '') return { input: { text, valid: false } };
@@ -91,24 +123,104 @@ function parseNumericInput(text: string, accepts: (value: number) => boolean) {
     : { input: { text, valid: false } };
 }
 
+const nameSeparators = /[-_\s\\/:*?"<>|]+/;
+
+function exportName(row: MiniRow, index: number): string {
+  const name = row.name?.trim() ?? '';
+  const safe = name
+    .split(nameSeparators)
+    .filter((part) => part !== '')
+    .join('-');
+  return safe || `mini-${index + 1}`;
+}
+
+function exportSize(row: MiniRow): string {
+  if (row.heightSlot === 'custom') {
+    const width = row.customWidthMm ?? DEFAULT_CUSTOM_WIDTH_MM;
+    const height = row.customHeightMm ?? DEFAULT_CUSTOM_HEIGHT_MM;
+    return `custom-${width}x${height}`;
+  }
+  return row.heightSlot;
+}
+
+function exportCount(row: MiniRow): string {
+  return row.count > 1 ? `-x${row.count}` : '';
+}
+
+function exportCalibration(row: MiniRow): string {
+  const calibration = row.calibration;
+  if (!calibration || calibrationGap(calibration) === undefined) return '';
+  const head = String(Math.round(calibration.head * 1000)).padStart(3, '0');
+  const feet = String(Math.round(calibration.feet * 1000)).padStart(3, '0');
+  return `-h${head}-f${feet}`;
+}
+
+function fileExtension(name: string): string {
+  const dot = name.lastIndexOf('.');
+  return dot < 0 ? '' : name.slice(dot + 1).toLowerCase();
+}
+
+function flattenedFileName(path: string): string | undefined {
+  return path.split(/[\\/]/).findLast((part) => part !== '');
+}
+
+function isIgnoredZipEntry(path: string): boolean {
+  const name = flattenedFileName(path);
+  return (
+    path.endsWith('/') ||
+    path.startsWith('__MACOSX/') ||
+    name === undefined ||
+    name.startsWith('._') ||
+    name === '.DS_Store'
+  );
+}
+
+function isZipFile(file: File): boolean {
+  return file.type.toLowerCase() === 'application/zip' || fileExtension(file.name) === 'zip';
+}
+
+function artworkTypeFromName(name: string): string | undefined {
+  return artworkTypesByExtension[fileExtension(name)];
+}
+
+async function artworkAsPng(artwork: PreparedArtwork): Promise<Uint8Array> {
+  if (artwork.format === 'png') return artwork.bytes;
+  const bitmap = await createImageBitmap(new Blob([artwork.bytes as BlobPart], { type: artworkMimeType('jpg') }), {
+    imageOrientation: 'none',
+  });
+  const canvas = document.createElement('canvas');
+  try {
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Could not get 2D canvas context');
+    ctx.drawImage(bitmap, 0, 0);
+    return canvasToPngBytes(canvas);
+  } finally {
+    bitmap.close();
+    canvas.width = canvas.height = 0;
+  }
+}
+
 export function createPaperMinisStore({
   renderer = generatePDF,
   artwork = createCanvasArtwork(),
 }: PaperMinisStoreDependencies = {}) {
   const $rows = atom<MiniRow[]>([]);
-  const $settings = atom<PaperMinisSettings>({
+  const initialSettings: PaperMinisSettings = {
     pageSize: 'a4',
     marginMm: DEFAULT_FIGURE_MARGIN_MM,
     numberDuplicates: false,
     normalization: true,
-  });
+  };
+  const $settings = atom(initialSettings);
   const $inputs = atom<PaperMinisInputs>({
-    margin: { text: String(DEFAULT_FIGURE_MARGIN_MM), valid: true },
+    margin: marginInput(initialSettings),
     rows: {},
   });
-  const $inputsValid = computed([$inputs, $rows], (inputs, rows) => {
-    if (!inputs.margin.valid) return false;
-    return rows.every((row) => {
+  const $draftError = computed([$inputs, $rows], (inputs, rows) => {
+    if (!inputs.margin.valid) return marginDraftError;
+    const valid = rows.every((row) => {
       const rowInputs = inputs.rows[row.id];
       return (
         rowInputs?.count.valid === true &&
@@ -116,7 +228,9 @@ export function createPaperMinisStore({
           (rowInputs.customWidthMm.valid && rowInputs.customHeightMm.valid))
       );
     });
+    return valid ? '' : rowDraftError;
   });
+  const $inputsValid = computed($draftError, (error) => error === '');
   const $message = atom('');
   const $revision = atom(0);
   const $busy = atom(false);
@@ -140,15 +254,16 @@ export function createPaperMinisStore({
     (preview, revision) => preview !== undefined && preview.revision !== revision,
   );
   let nextId = 0;
+  let nextLoadId = 0;
   const loads = new Map<string, object>();
-  let initialCalibration: HeightCalibration | undefined;
 
   function calibrationSession(
     row: MiniRow,
-    lines: HeightCalibration,
+    draft: CalibrationDraft,
   ): CalibrationSession | undefined {
     if (!row.artwork) return undefined;
-    const calibration = calibrationChanged(lines, initialCalibration) ? lines : initialCalibration;
+    const result = calibrationSessionResult(draft);
+    const calibration = result.state === 'changed' ? result.calibration : row.calibration;
     // Every copy shares one geometry, so a single copy is enough to preview it.
     const resolved = resolveEntry(
       { ...row, calibration, count: 1 },
@@ -159,15 +274,13 @@ export function createPaperMinisStore({
     if (!mini) return undefined;
     const warning = entryStatusWarning(resolved.status);
     return {
-      rowId: row.id,
+      ...draft,
       rowLabel: row.name || 'Миниатюра',
       artwork: row.artwork,
       backArtwork: row.backArtwork,
-      lines,
-      artworkHeight: Math.max(row.artwork.height, row.backArtwork?.height ?? 0),
       ranges: {
-        head: calibrationRange(lines, 'head'),
-        feet: calibrationRange(lines, 'feet'),
+        head: calibrationRange(draft.lines, 'head'),
+        feet: calibrationRange(draft.lines, 'feet'),
       },
       slotHeightMm: resolveFigureHeightMm(row),
       printedHeightMm: mini.copies[0].imageHeightMm,
@@ -179,25 +292,28 @@ export function createPaperMinisStore({
   }
 
   function cancelCalibration() {
-    initialCalibration = undefined;
     $calibration.set(undefined);
   }
 
   function openCalibration(id: number) {
-    if ($busy.get()) return false;
+    // Only zip expansion blocks: its rows do not exist yet, and an open session would make
+    // the finished expansion drop them. A single image loading never touches a ready row.
+    if ($busy.get() || [...loads.keys()].some((key) => key.startsWith('zip:'))) return false;
     const row = $rows.get().find((candidate) => candidate.id === id);
-    if (!row) return false;
-    initialCalibration = calibrationGap(row.calibration) === undefined ? undefined : row.calibration;
-    const session = calibrationSession(row, { ...(initialCalibration ?? DEFAULT_CALIBRATION) });
-    if (!session) {
-      initialCalibration = undefined;
-      return false;
-    }
+    if (!row?.artwork) return false;
+    const draft = openCalibrationSession(
+      row.id,
+      row.calibration,
+      row.artwork.height,
+      row.backArtwork?.height,
+    );
+    const session = calibrationSession(row, draft);
+    if (!session) return false;
     $calibration.set(session);
     return true;
   }
 
-  function updateCalibration(line: CalibrationLine, fraction: number) {
+  function editCalibration(edit: (session: CalibrationSession) => CalibrationDraft) {
     const session = $calibration.get();
     if (!session) return;
     const row = $rows.get().find((candidate) => candidate.id === session.rowId);
@@ -205,18 +321,23 @@ export function createPaperMinisStore({
       cancelCalibration();
       return;
     }
-    const lines = setLine(session.lines, line, fraction);
-    if (lines === session.lines) return;
-    const next = calibrationSession(row, lines);
+    const draft = edit(session);
+    if (draft === session) return;
+    const next = calibrationSession(row, draft);
     if (next) $calibration.set(next);
     else cancelCalibration();
   }
 
+  function updateCalibration(line: CalibrationLine, fraction: number) {
+    editCalibration((session) => setSessionLine(session, line, fraction));
+  }
+
   function applyCalibration() {
     const session = $calibration.get();
-    if (!session || calibrationGap(session.lines) === undefined) return false;
-    const changedByValue = calibrationChanged(session.lines, initialCalibration);
-    if (changedByValue) updateRow(session.rowId, { calibration: session.lines });
+    if (!session) return false;
+    const result = calibrationSessionResult(session);
+    if (result.state === 'invalid') return false;
+    if (result.state === 'changed') updateRow(session.rowId, { calibration: result.calibration });
     cancelCalibration();
     return true;
   }
@@ -224,7 +345,7 @@ export function createPaperMinisStore({
   function resetCalibration(id: number) {
     const row = $rows.get().find((candidate) => candidate.id === id);
     if (!row?.calibration) return;
-    updateRow(id, { calibration: undefined });
+    updateRow(id, { calibration: calibrationAfterChange(row, 'reset') });
   }
 
   function changed() {
@@ -256,7 +377,21 @@ export function createPaperMinisStore({
       cancelCalibration();
     changed();
   }
-  function addBlank({ name, heightSlot }: { name?: string; heightSlot?: HeightSlot } = {}) {
+  function addBlank({
+    name,
+    heightSlot,
+    customWidthMm,
+    customHeightMm,
+    count,
+    calibration,
+  }: {
+    name?: string;
+    heightSlot?: MiniSize;
+    customWidthMm?: number;
+    customHeightMm?: number;
+    count?: number;
+    calibration?: HeightCalibration;
+  } = {}) {
     if ($busy.get()) return;
     const row: MiniRow = {
       id: nextId++,
@@ -264,18 +399,17 @@ export function createPaperMinisStore({
       image: null,
       artwork: null,
       heightSlot: heightSlot ?? DEFAULT_HEIGHT_SLOT,
-      count: 1,
+      count: count ?? 1,
+      ...(customWidthMm === undefined ? {} : { customWidthMm }),
+      ...(customHeightMm === undefined ? {} : { customHeightMm }),
+      ...(calibration === undefined ? {} : { calibration }),
     };
     $rows.set([...$rows.get(), row]);
     $inputs.set({
       ...$inputs.get(),
       rows: {
         ...$inputs.get().rows,
-        [row.id]: {
-          count: { text: '1', valid: true },
-          customWidthMm: { text: '', valid: false },
-          customHeightMm: { text: '', valid: false },
-        },
+        [row.id]: inputsForRow(row),
       },
     });
     changed();
@@ -291,23 +425,18 @@ export function createPaperMinisStore({
       size === 'custom'
         ? { heightSlot: size, customWidthMm, customHeightMm }
         : { heightSlot: size };
-    $rows.set(
-      $rows
-        .get()
-        .map((candidate) =>
-          candidate.id === id ? Object.assign({}, candidate, fields) : candidate,
-        ),
-    );
+    const nextRow = Object.assign({}, row, fields);
+    $rows.set($rows.get().map((candidate) => (candidate.id === id ? nextRow : candidate)));
     if (size === 'custom') {
       const inputs = $inputs.get();
+      const seeded = inputsForRow(nextRow);
       $inputs.set({
         ...inputs,
         rows: {
           ...inputs.rows,
           [id]: {
-            ...inputs.rows[id],
-            customWidthMm: { text: String(customWidthMm), valid: true },
-            customHeightMm: { text: String(customHeightMm), valid: true },
+            ...seeded,
+            count: inputs.rows[id]?.count ?? seeded.count,
           },
         },
       });
@@ -323,12 +452,17 @@ export function createPaperMinisStore({
         if (size !== 'custom') return Object.assign({}, row, { heightSlot: size });
         const customWidthMm = row.customWidthMm ?? DEFAULT_CUSTOM_WIDTH_MM;
         const customHeightMm = row.customHeightMm ?? DEFAULT_CUSTOM_HEIGHT_MM;
+        const nextRow = Object.assign({}, row, {
+          heightSlot: size,
+          customWidthMm,
+          customHeightMm,
+        });
+        const seeded = inputsForRow(nextRow);
         nextInputs[row.id] = {
-          ...nextInputs[row.id],
-          customWidthMm: { text: String(customWidthMm), valid: true },
-          customHeightMm: { text: String(customHeightMm), valid: true },
+          ...seeded,
+          count: nextInputs[row.id]?.count ?? seeded.count,
         };
-        return Object.assign({}, row, { heightSlot: size, customWidthMm, customHeightMm });
+        return nextRow;
       }),
     );
     if (size === 'custom') $inputs.set({ ...inputs, rows: nextInputs });
@@ -350,6 +484,13 @@ export function createPaperMinisStore({
       ),
     );
     changed();
+  }
+  function commitCount(id: number) {
+    if ($busy.get()) return;
+    const row = $rows.get().find((candidate) => candidate.id === id);
+    const input = $inputs.get().rows[id]?.count;
+    if (!row || input?.valid !== false) return;
+    setRowInput(id, { count: { text: String(row.count), valid: true } });
   }
   function setCustomDimensions(
     id: number,
@@ -377,6 +518,15 @@ export function createPaperMinisStore({
     $rows.set($rows.get().map((candidate) => (candidate.id === id ? next : candidate)));
     changed();
   }
+  function commitCustomDimension(id: number, dimension: 'width' | 'height') {
+    if ($busy.get()) return;
+    const row = $rows.get().find((candidate) => candidate.id === id);
+    const inputKey = dimension === 'width' ? 'customWidthMm' : 'customHeightMm';
+    const value = row?.[inputKey];
+    const input = $inputs.get().rows[id]?.[inputKey];
+    if (value === undefined || input?.valid !== false) return;
+    setRowInput(id, { [inputKey]: { text: String(value), valid: true } });
+  }
   async function setImage(id: number, file: File, back = false) {
     if (!$acceptsFiles.get()) return;
     if (!isSupportedArtwork(file)) {
@@ -389,20 +539,22 @@ export function createPaperMinisStore({
     $preparing.set(true);
     const normalization = $settings.get().normalization;
     const selectedRow = $rows.get().find((candidate) => candidate.id === id);
-    const replacing = back ? selectedRow?.backArtwork != null : selectedRow?.artwork != null;
+    const calibration = selectedRow
+      ? calibrationAfterChange(selectedRow, back ? 'select-back' : 'select-front')
+      : undefined;
     updateRow(
       id,
       back
         ? {
             backImage: file,
             backArtwork: null,
-            ...(replacing && { calibration: undefined }),
+            calibration,
             backWarning: undefined,
           }
         : {
             image: file,
             artwork: null,
-            ...(replacing && { calibration: undefined }),
+            calibration,
             normalizationWarning: undefined,
             frontError: undefined,
           },
@@ -438,16 +590,70 @@ export function createPaperMinisStore({
       $preparing.set(loads.size > 0);
     }
   }
-  function ingest(files: File[]) {
+  async function ingest(files: File[]) {
     if (!$acceptsFiles.get()) return;
-    const valid = files.filter(isSupportedArtwork);
-    $message.set(
-      valid.length < files.length
-        ? 'Некоторые файлы пропущены: поддерживаются PNG, JPG и WebP.'
-        : '',
-    );
-    for (const planned of planBatch(valid)) {
-      const id = addBlank({ name: planned.name, heightSlot: planned.heightSlot });
+    const hasZip = files.some(isZipFile);
+    if (!hasZip) {
+      const valid = files.filter(isSupportedArtwork);
+      $message.set(valid.length < files.length ? skippedFilesMessage : '');
+      ingestArtworkFiles(valid);
+      return;
+    }
+    const key = `zip:${nextLoadId++}`;
+    const token = {};
+    loads.set(key, token);
+    $preparing.set(true);
+    try {
+      const { unzipSync } = await import('fflate');
+      const expanded = await Promise.all(
+        files.map(async (file): Promise<{ files: File[]; skipped: boolean; failed: boolean }> => {
+          if (!isZipFile(file)) {
+            return isSupportedArtwork(file)
+              ? { files: [file], skipped: false, failed: false }
+              : { files: [], skipped: true, failed: false };
+          }
+          try {
+            const entries = unzipSync(new Uint8Array(await file.arrayBuffer()));
+            const extracted: File[] = [];
+            let skipped = false;
+            for (const [path, bytes] of Object.entries(entries)) {
+              if (isIgnoredZipEntry(path)) continue;
+              const name = flattenedFileName(path);
+              const type = name && artworkTypeFromName(name);
+              if (!name || !type) {
+                if (name) skipped = true;
+                continue;
+              }
+              extracted.push(new File([bytes], name, { type }));
+            }
+            return { files: extracted, skipped, failed: false };
+          } catch {
+            return { files: [], skipped: false, failed: true };
+          }
+        }),
+      );
+      if (!$acceptsFiles.get()) {
+        $message.set(unzipFailureMessage);
+        return;
+      }
+      const valid = expanded.flatMap((item) => item.files);
+      const failed = expanded.some((item) => item.failed);
+      const skipped = expanded.some((item) => item.skipped);
+      $message.set(failed ? unzipFailureMessage : skipped ? skippedFilesMessage : '');
+      ingestArtworkFiles(valid);
+    } catch {
+      if (!$acceptsFiles.get()) return;
+      const valid = files.filter((file) => !isZipFile(file) && isSupportedArtwork(file));
+      $message.set(unzipFailureMessage);
+      ingestArtworkFiles(valid);
+    } finally {
+      if (loads.get(key) === token) loads.delete(key);
+      $preparing.set(loads.size > 0);
+    }
+  }
+  function ingestArtworkFiles(files: File[]) {
+    for (const planned of planBatch(files)) {
+      const id = addBlank(planned);
       if (id === undefined) continue;
       void setImage(id, planned.front);
       if (planned.back) void setImage(id, planned.back, true);
@@ -469,6 +675,22 @@ export function createPaperMinisStore({
     if (typeof fields.normalization === 'boolean') next.normalization = fields.normalization;
     return next;
   }
+  function applyNormalizationChange() {
+    cancelCalibration();
+    $rows.set(
+      $rows
+        .get()
+        .map((row) =>
+          Object.assign({}, row, {
+            calibration: calibrationAfterChange(row, 'toggle-normalization'),
+          }),
+        ),
+    );
+    for (const row of $rows.get()) {
+      if (row.image) void setImage(row.id, row.image);
+      if (row.backImage) void setImage(row.id, row.backImage, true);
+    }
+  }
   function settings(fields: Partial<PaperMinisSettings>) {
     if ($busy.get()) return;
     const previous = $settings.get();
@@ -477,7 +699,7 @@ export function createPaperMinisStore({
     if (next.marginMm !== previous.marginMm)
       $inputs.set({
         ...$inputs.get(),
-        margin: { text: String(next.marginMm), valid: true },
+        margin: marginInput(next),
       });
     changed();
     try {
@@ -485,14 +707,7 @@ export function createPaperMinisStore({
     } catch {
       /* Storage is optional. */
     }
-    if (previous.normalization !== next.normalization) {
-      cancelCalibration();
-      $rows.set($rows.get().map((row) => Object.assign({}, row, { calibration: undefined })));
-      for (const row of $rows.get()) {
-        if (row.image) void setImage(row.id, row.image);
-        if (row.backImage) void setImage(row.id, row.backImage, true);
-      }
-    }
+    if (previous.normalization !== next.normalization) applyNormalizationChange();
   }
   function setMargin(text: string) {
     if ($busy.get()) return;
@@ -502,16 +717,25 @@ export function createPaperMinisStore({
     settings({ marginMm: value });
     $inputs.set({ ...$inputs.get(), margin: input });
   }
+  function commitMargin() {
+    if ($busy.get() || $inputs.get().margin.valid) return;
+    $inputs.set({
+      ...$inputs.get(),
+      margin: marginInput($settings.get()),
+    });
+  }
   function loadSettings() {
     if ($busy.get()) return;
     try {
       const value = JSON.parse(localStorage.getItem(storageKey) ?? 'null');
-      const next = validatedSettings(value, $settings.get());
+      const previous = $settings.get();
+      const next = validatedSettings(value, previous);
       $settings.set(next);
       $inputs.set({
         ...$inputs.get(),
-        margin: { text: String(next.marginMm), valid: true },
+        margin: marginInput(next),
       });
+      if (previous.normalization !== next.normalization) applyNormalizationChange();
     } catch {
       /* Use defaults when storage is unavailable. */
     }
@@ -534,12 +758,52 @@ export function createPaperMinisStore({
       $busy.set(false);
     }
   }
+  async function exportZip() {
+    if ($busy.get() || $preparing.get()) return;
+    const rows = $rows.get();
+    const ready = rows
+      .map((row, index) => ({ row, index }))
+      .filter(({ row }) => row.artwork);
+    if (!ready.length) return;
+    $busy.set(true);
+    $message.set('');
+    try {
+      const { zipSync } = await import('fflate');
+      const entries: Record<string, Uint8Array> = {};
+      const used = new Set<string>();
+      for (const { row, index } of ready) {
+        const sides = row.backArtwork ? (['front', 'back'] as const) : (['front'] as const);
+        const base = exportName(row, index);
+        const size = exportSize(row);
+        const count = exportCount(row);
+        const calibration = exportCalibration(row);
+        let suffix = 1;
+        let collisionKeys = sides.map((side) => `${base}-${size}-${side}.png`);
+        let names = sides.map((side) => `${base}-${size}-${side}${count}${calibration}.png`);
+        while (collisionKeys.some((name) => used.has(name.toLowerCase()))) {
+          suffix += 1;
+          collisionKeys = sides.map((side) => `${base}-${suffix}-${size}-${side}.png`);
+          names = sides.map((side) => `${base}-${suffix}-${size}-${side}${count}${calibration}.png`);
+        }
+        for (const name of collisionKeys) used.add(name.toLowerCase());
+        entries[names[0]] = await artworkAsPng(row.artwork!);
+        if (row.backArtwork) entries[names[1]] = await artworkAsPng(row.backArtwork);
+      }
+      const bytes = zipSync(entries, { level: 0 });
+      $message.set(exportSuccessMessage);
+      return bytes;
+    } catch {
+      $message.set(exportFailureMessage);
+    } finally {
+      $busy.set(false);
+    }
+  }
   return {
-    // ADR-0002's all-images-removed test still needs direct row mutation until calibration is reworked.
-    $rows,
+    $rows: readonlyType($rows),
     $settings: readonlyType($settings),
     $inputs: readonlyType($inputs),
     $inputsValid,
+    $draftError,
     $message: readonlyType($message),
     $revision: readonlyType($revision),
     $busy: readonlyType($busy),
@@ -554,18 +818,19 @@ export function createPaperMinisStore({
     setSize,
     setAllSizes,
     setCount,
+    commitCount,
     setCustomDimensions,
+    commitCustomDimension,
     setImage,
     ingest,
     settings,
     setMargin,
+    commitMargin,
     loadSettings,
     openCalibration,
     setCalibrationLine: updateCalibration,
     moveCalibrationLine(line: CalibrationLine, pixels: number) {
-      const session = $calibration.get();
-      if (!session || session.artworkHeight <= 0) return;
-      updateCalibration(line, session.lines[line] + pixels / session.artworkHeight);
+      editCalibration((session) => moveSessionLine(session, line, pixels));
     },
     applyCalibration,
     cancelCalibration,
@@ -573,9 +838,13 @@ export function createPaperMinisStore({
     reportPdfFailure() {
       $message.set(failureMessage);
     },
+    reportExportFailure() {
+      $message.set(exportFailureMessage);
+    },
     async download() {
       return (await render())?.bytes;
     },
+    exportZip,
     async refreshPreview() {
       const preview = await render();
       if (preview) $preview.set(preview);
@@ -583,10 +852,11 @@ export function createPaperMinisStore({
     clearBack(id: number) {
       if ($busy.get()) return;
       loads.delete(`${id}:true`);
+      const row = $rows.get().find((candidate) => candidate.id === id);
       updateRow(id, {
         backImage: null,
         backArtwork: null,
-        ...(!$rows.get().find((row) => row.id === id)?.image && { calibration: undefined }),
+        calibration: row ? calibrationAfterChange(row, 'clear-back') : undefined,
         backWarning: undefined,
       });
       $preparing.set(loads.size > 0);
@@ -616,17 +886,7 @@ export function createPaperMinisStore({
         ...inputs,
         rows: {
           ...inputs.rows,
-          [copy.id]: {
-            count: { text: String(copy.count), valid: true },
-            customWidthMm: {
-              text: copy.customWidthMm === undefined ? '' : String(copy.customWidthMm),
-              valid: copy.customWidthMm !== undefined,
-            },
-            customHeightMm: {
-              text: copy.customHeightMm === undefined ? '' : String(copy.customHeightMm),
-              valid: copy.customHeightMm !== undefined,
-            },
-          },
+          [copy.id]: inputsForRow(copy),
         },
       });
       changed();

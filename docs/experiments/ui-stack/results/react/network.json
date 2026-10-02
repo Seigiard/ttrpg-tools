@@ -36,7 +36,7 @@
     }
   },
   {
-    "route": "/mausritter/weather",
+    "route": "/mausritter/weather/",
     "mode": "cold",
     "total": {
       "requests": 12,
@@ -58,7 +58,7 @@
     }
   },
   {
-    "route": "/mausritter/weather",
+    "route": "/mausritter/weather/",
     "mode": "warm",
     "total": {
       "requests": 12,
@@ -80,7 +80,7 @@
     }
   },
   {
-    "route": "/mausritter/locations",
+    "route": "/mausritter/locations/",
     "mode": "cold",
     "total": {
       "requests": 11,
@@ -102,7 +102,7 @@
     }
   },
   {
-    "route": "/mausritter/locations",
+    "route": "/mausritter/locations/",
     "mode": "warm",
     "total": {
       "requests": 11,
@@ -124,7 +124,7 @@
     }
   },
   {
-    "route": "/mausritter/encounters",
+    "route": "/mausritter/encounters/",
     "mode": "cold",
     "total": {
       "requests": 10,
@@ -146,7 +146,7 @@
     }
   },
   {
-    "route": "/mausritter/encounters",
+    "route": "/mausritter/encounters/",
     "mode": "warm",
     "total": {
       "requests": 10,
@@ -168,7 +168,7 @@
     }
   },
   {
-    "route": "/the-black-hack/prices",
+    "route": "/the-black-hack/prices/",
     "mode": "cold",
     "total": {
       "requests": 11,
@@ -190,7 +190,7 @@
     }
   },
   {
-    "route": "/the-black-hack/prices",
+    "route": "/the-black-hack/prices/",
     "mode": "warm",
     "total": {
       "requests": 11,
@@ -212,16 +212,16 @@
     }
   },
   {
-    "route": "/paper-minis",
+    "route": "/paper-minis/",
     "mode": "cold",
     "total": {
       "requests": 9,
-      "transferredBytes": 309719
+      "transferredBytes": 312146
     },
     "byType": {
       "document": {
         "requests": 1,
-        "transferredBytes": 5575
+        "transferredBytes": 5622
       },
       "stylesheet": {
         "requests": 1,
@@ -229,12 +229,12 @@
       },
       "script": {
         "requests": 7,
-        "transferredBytes": 295228
+        "transferredBytes": 297608
       }
     }
   },
   {
-    "route": "/paper-minis",
+    "route": "/paper-minis/",
     "mode": "warm",
     "total": {
       "requests": 9,

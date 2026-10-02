@@ -15,6 +15,7 @@
 - [Prettier + prettier-plugin-astro](https://github.com/withastro/prettier-plugin-astro) — форматирование `.astro` файлов.
 - `bun` — менеджер пакетов и test runner.
 - [happy-dom](https://github.com/capricorn86/happy-dom) для DOM в тестах.
+- [Playwright](https://playwright.dev/) с Chromium для browser-тестов Canvas API.
 
 ## Разработка
 
@@ -24,6 +25,7 @@ bun run dev        # http://localhost:4321
 bun run build      # сборка в dist/
 bun run preview    # просмотр сборки
 bun test           # быстрые unit-тесты
+bun run test:browser # browser-тесты Paper minis
 bun run lint       # oxlint
 bun run lint:fix   # oxlint --fix
 bun run format     # oxfmt
@@ -31,6 +33,8 @@ bun run format:check
 bun run format:astro
 bun run typecheck  # astro check
 ```
+
+Перед первым локальным запуском browser-тестов установите Chromium: `bunx playwright install chromium`.
 
 ## Деплой
 
@@ -62,7 +66,7 @@ bun run deploy   # build + wrangler deploy
 
 **Если что-то отвалится:** проверь в Cloudflare → Project → Build logs. Чаще всего — несовместимость версий Node/Bun или забытый `BUN_VERSION`.
 
-CI на GitHub Actions проверяет lint + format + unit + typecheck + build на PR (`.github/workflows/ci.yml`) — Cloudflare сам деплоит, GA только страхует от слома `main`.
+CI на GitHub Actions проверяет lint + format + unit + browser + typecheck + build на PR (`.github/workflows/ci.yml`) — Cloudflare сам деплоит, GA только страхует от слома `main`.
 
 ## Документация
 

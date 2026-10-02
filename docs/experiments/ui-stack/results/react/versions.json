@@ -10,6 +10,7 @@
       "astro": "^7.3.5",
       "class-variance-authority": "^0.7.1",
       "clsx": "^2.1.1",
+      "fflate": "^0.8.3",
       "lucide-react": "^1.49.0",
       "nanostores": "^1.5.4",
       "pdf-lib": "^1.17.1",
@@ -23,7 +24,7 @@
     "devDependencies": {
       "@astrojs/check": "^0.9.10",
       "@happy-dom/global-registrator": "^20.14.5",
-      "@playwright/test": "1.63.0",
+      "@playwright/test": "^1.63.0",
       "@testing-library/dom": "^10.4.2",
       "@testing-library/react": "^16.3.3",
       "@types/bun": "^1.4.2",
@@ -73,7 +74,7 @@
       "    \"nanostores\": [\"nanostores@1.5.4\", \"\", {}, \"sha512-4UXY7OAJEK0Y6V3SudBU7cXjAzTDc189R78dDOh0Xbm19gpKYto6WizSg58LJf12lTsRxKSLGyE117OiLpM4DQ==\"],"
     ],
     "@playwright/test": [
-      "        \"@playwright/test\": \"1.63.0\",",
+      "        \"@playwright/test\": \"^1.63.0\",",
       "    \"@playwright/test\": [\"@playwright/test@1.63.0\", \"\", { \"dependencies\": { \"playwright\": \"1.63.0\" }, \"bin\": { \"playwright\": \"cli.js\" } }, \"sha512-oxMK4vllB9RK5NQ2l1pq1IfOf2AvnEuj/vYGDj0H2nMtmtZpKtCwt/l00GEO6xjGfpBNAvjovvYdCm50dRQkpQ==\"],"
     ],
     "pdf-lib": [

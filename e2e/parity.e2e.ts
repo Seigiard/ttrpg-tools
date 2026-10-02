@@ -4,11 +4,11 @@ import { readFile } from 'node:fs/promises';
 
 const routes = [
   '/',
-  '/mausritter/weather',
-  '/mausritter/locations',
-  '/mausritter/encounters',
-  '/the-black-hack/prices',
-  '/paper-minis',
+  '/mausritter/weather/',
+  '/mausritter/locations/',
+  '/mausritter/encounters/',
+  '/the-black-hack/prices/',
+  '/paper-minis/',
 ] as const;
 
 test.beforeEach(({ page }) => {
@@ -68,7 +68,7 @@ test('every route renders static content and attribution without JavaScript', as
 test('weather hydrates, rolls, switches season columns, and supports tab arrows', async ({
   page,
 }) => {
-  await openHydrated(page, '/mausritter/weather');
+  await openHydrated(page, '/mausritter/weather/');
   await expect(page.getByTestId('result-weather')).not.toContainText('Погода');
   await expectRollChanges(page, /Бросить погоду/, 'result-weather');
 
@@ -83,7 +83,7 @@ test('weather hydrates, rolls, switches season columns, and supports tab arrows'
 });
 
 test('locations rolls all, rerolls each part, and switches biome tabs', async ({ page }) => {
-  await openHydrated(page, '/mausritter/locations');
+  await openHydrated(page, '/mausritter/locations/');
   await expect(page.getByTestId('result-landmark')).not.toContainText('Ориентир d20 = 0');
   await expectRollChanges(page, /Бросить локацию/, 'result-card');
   await expectRollChanges(page, /Перебросить ориентир/, 'result-landmark');
@@ -97,7 +97,7 @@ test('locations rolls all, rerolls each part, and switches biome tabs', async ({
 test('encounters roll check and reaction independently and mark reference hits', async ({
   page,
 }) => {
-  await openHydrated(page, '/mausritter/encounters');
+  await openHydrated(page, '/mausritter/encounters/');
   await expect(page.getByTestId('check-result')).not.toContainText('Проверка');
   await expect(page.getByTestId('reaction-result')).not.toContainText('Реакция');
 
@@ -115,7 +115,7 @@ test('encounters roll check and reaction independently and mark reference hits',
 test('prices sync URL state, restore reloads, and prefer URL over localStorage', async ({
   page,
 }) => {
-  await openHydrated(page, '/the-black-hack/prices');
+  await openHydrated(page, '/the-black-hack/prices/');
   await expect(page).toHaveURL(/\?s=[^&]+&r=[^&]+/);
   const firstUrl = new URL(page.url());
   const firstState = firstUrl.search;
@@ -125,7 +125,7 @@ test('prices sync URL state, restore reloads, and prefer URL over localStorage',
   await waitForHydration(page);
   await expect(page.getByTestId('item-price').first()).toHaveText(firstPrice);
   await page.evaluate(() => localStorage.setItem('the-black-hack:prices', 's=village&r=1'));
-  await openHydrated(page, `/the-black-hack/prices${firstState}`);
+  await openHydrated(page, `/the-black-hack/prices/${firstState}`);
   await expect(page).toHaveURL(firstUrl.toString());
   await expect(page.getByTestId('item-price').first()).toHaveText(firstPrice);
 
@@ -137,7 +137,7 @@ test('prices sync URL state, restore reloads, and prefer URL over localStorage',
 test('paper minis upload, edit, calibrate by keyboard, preview, and download PDF', async ({
   page,
 }) => {
-  await openHydrated(page, '/paper-minis');
+  await openHydrated(page, '/paper-minis/');
   const addFiles = page.getByLabel('Добавить изображения');
   await addFiles.setInputFiles('e2e/fixtures/mini.png');
   const row = page.getByRole('article', { name: /Миниатюра 1|mini/ });
