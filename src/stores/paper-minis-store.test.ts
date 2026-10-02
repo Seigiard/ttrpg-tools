@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'bun:test';
-import { unzipSync } from 'fflate';
+import { unzipSync, zipSync } from 'fflate';
 import {
   DEFAULT_CUSTOM_HEIGHT_MM,
   DEFAULT_CUSTOM_WIDTH_MM,
@@ -29,6 +29,9 @@ function artworkFile(width: number, height: number, name = 'front.png') {
   const file = new File([png], name, { type: 'image/png' }) as ControlledFile;
   file[preparation] = Promise.resolve({ artwork: preparedArtwork(width, height) });
   return file;
+}
+function zipFile(entries: Record<string, Uint8Array>, name = 'paper-minis.zip') {
+  return new File([zipSync(entries)], name, { type: 'application/zip' });
 }
 function fakeArtwork(): PaperMinisArtwork {
   return {
@@ -335,6 +338,111 @@ test('export zip restores names, sizes and sides through batch ingest', async ()
         back: 'Goblin-2-small-back.png',
       },
     ],
+  });
+});
+
+test('export zip bytes can be dropped straight onto a fresh store', async () => {
+  // #given
+  const store = setup();
+  const goblin = store.addBlank({ name: 'Goblin', heightSlot: 'small' })!;
+  await store.setImage(goblin, artworkFile(10, 20, 'goblin-front.png'));
+  await store.setImage(goblin, artworkFile(11, 20, 'goblin-back.png'), true);
+  const empty = store.addBlank({ name: '', heightSlot: 'large' })!;
+  await store.setImage(empty, artworkFile(12, 20, 'empty.png'));
+
+  // #when
+  const bytes = await store.exportZip();
+  const restored = setup();
+  await restored.ingest([new File([bytes!], 'paper-minis.zip', { type: 'application/zip' })]);
+
+  // #then
+  expect(
+    restored.$rows.get().map((row) => ({
+      name: row.name,
+      heightSlot: row.heightSlot,
+      front: row.image?.name,
+      back: row.backImage?.name,
+    })),
+  ).toEqual([
+    {
+      name: 'Goblin',
+      heightSlot: 'small',
+      front: 'Goblin-small-front.png',
+      back: 'Goblin-small-back.png',
+    },
+    {
+      name: 'Mini 2',
+      heightSlot: 'large',
+      front: 'mini-2-large-front.png',
+      back: undefined,
+    },
+  ]);
+});
+
+test('a zip and loose images are flattened into one batch plan', async () => {
+  // #given
+  const store = setup();
+  const zip = zipFile({ 'nested/goblin-back.png': Uint8Array.from(png) });
+  const front = new File([png], 'goblin-front.png', { type: 'image/png' });
+
+  // #when
+  await store.ingest([zip, front]);
+
+  // #then
+  expect(
+    store.$rows.get().map((row) => ({
+      name: row.name,
+      front: row.image?.name,
+      back: row.backImage?.name,
+    })),
+  ).toEqual([{ name: 'Goblin', front: 'goblin-front.png', back: 'goblin-back.png' }]);
+});
+
+test('a zip with a non-image entry reports skipped files', async () => {
+  // #given
+  const store = setup();
+  const zip = zipFile({
+    'goblin.png': Uint8Array.from(png),
+    'notes.txt': Uint8Array.from([110, 111, 116, 101, 115]),
+  });
+
+  // #when
+  await store.ingest([zip]);
+
+  // #then
+  expect({
+    message: store.$message.get(),
+    rows: store.$rows.get().map((row) => row.image?.name),
+  }).toEqual({
+    message: 'Некоторые файлы пропущены: поддерживаются PNG, JPG и WebP.',
+    rows: ['goblin.png'],
+  });
+});
+
+test('zip folders and macOS metadata entries are ignored silently', async () => {
+  // #given
+  const store = setup();
+  const zip = zipFile({
+    'folder/': Uint8Array.from([]),
+    '__MACOSX/._goblin-small-front.png': Uint8Array.from([1, 2, 3]),
+    '.DS_Store': Uint8Array.from([1, 2, 3]),
+    'folder/goblin-small-front.png': Uint8Array.from(png),
+  });
+
+  // #when
+  await store.ingest([zip]);
+
+  // #then
+  expect({
+    message: store.$message.get(),
+    rows: store.$rows.get().map((row) => ({
+      name: row.name,
+      heightSlot: row.heightSlot,
+      front: row.image?.name,
+    })),
+  }).toEqual({
+    message: '',
+    rows: [{ name: 'Goblin', heightSlot: 'small', front: 'goblin-small-front.png' }],
   });
 });
 

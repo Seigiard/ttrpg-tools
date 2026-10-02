@@ -84,6 +84,13 @@ const successMessage = 'PDF готов.';
 const failureMessage = 'Не удалось создать PDF. Попробуйте ещё раз или уменьшите изображения.';
 const exportSuccessMessage = 'Архив готов.';
 export const exportFailureMessage = 'Не удалось создать архив. Попробуйте ещё раз.';
+const skippedFilesMessage = 'Некоторые файлы пропущены: поддерживаются PNG, JPG и WebP.';
+const artworkTypesByExtension: Record<string, string> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+};
 
 function parseNumericInput(text: string, accepts: (value: number) => boolean) {
   if (text.trim() === '') return { input: { text, valid: false } };
@@ -119,6 +126,34 @@ function exportCalibration(row: MiniRow): string {
   const head = String(Math.round(calibration.head * 1000)).padStart(3, '0');
   const feet = String(Math.round(calibration.feet * 1000)).padStart(3, '0');
   return `-h${head}-f${feet}`;
+}
+
+function fileExtension(name: string): string {
+  const dot = name.lastIndexOf('.');
+  return dot < 0 ? '' : name.slice(dot + 1).toLowerCase();
+}
+
+function flattenedFileName(path: string): string | undefined {
+  return path.split(/[\\/]/).findLast((part) => part !== '');
+}
+
+function isIgnoredZipEntry(path: string): boolean {
+  const name = flattenedFileName(path);
+  return (
+    path.endsWith('/') ||
+    path.startsWith('__MACOSX/') ||
+    name === undefined ||
+    name.startsWith('._') ||
+    name === '.DS_Store'
+  );
+}
+
+function isZipFile(file: File): boolean {
+  return file.type.toLowerCase() === 'application/zip' || fileExtension(file.name) === 'zip';
+}
+
+function artworkTypeFromName(name: string): string | undefined {
+  return artworkTypesByExtension[fileExtension(name)];
 }
 
 async function artworkAsPng(artwork: PreparedArtwork): Promise<Uint8Array> {
@@ -497,15 +532,50 @@ export function createPaperMinisStore({
       $preparing.set(loads.size > 0);
     }
   }
-  function ingest(files: File[]) {
+  async function ingest(files: File[]) {
     if (!$acceptsFiles.get()) return;
-    const valid = files.filter(isSupportedArtwork);
-    $message.set(
-      valid.length < files.length
-        ? 'Некоторые файлы пропущены: поддерживаются PNG, JPG и WebP.'
-        : '',
+    const hasZip = files.some(isZipFile);
+    if (!hasZip) {
+      const valid = files.filter(isSupportedArtwork);
+      $message.set(valid.length < files.length ? skippedFilesMessage : '');
+      ingestArtworkFiles(valid);
+      return;
+    }
+    const { unzipSync } = await import('fflate');
+    const expanded = await Promise.all(
+      files.map(async (file): Promise<{ files: File[]; skipped: boolean }> => {
+        if (!isZipFile(file)) {
+          return isSupportedArtwork(file)
+            ? { files: [file], skipped: false }
+            : { files: [], skipped: true };
+        }
+        try {
+          const entries = unzipSync(new Uint8Array(await file.arrayBuffer()));
+          const extracted: File[] = [];
+          let skipped = false;
+          for (const [path, bytes] of Object.entries(entries)) {
+            if (isIgnoredZipEntry(path)) continue;
+            const name = flattenedFileName(path);
+            const type = name && artworkTypeFromName(name);
+            if (!name || !type) {
+              if (name) skipped = true;
+              continue;
+            }
+            extracted.push(new File([bytes], name, { type }));
+          }
+          return { files: extracted, skipped };
+        } catch {
+          return { files: [], skipped: true };
+        }
+      }),
     );
-    for (const planned of planBatch(valid)) {
+    const valid = expanded.flatMap((item) => item.files);
+    const skipped = expanded.some((item) => item.skipped);
+    $message.set(skipped ? skippedFilesMessage : '');
+    ingestArtworkFiles(valid);
+  }
+  function ingestArtworkFiles(files: File[]) {
+    for (const planned of planBatch(files)) {
       const id = addBlank(planned);
       if (id === undefined) continue;
       void setImage(id, planned.front);
