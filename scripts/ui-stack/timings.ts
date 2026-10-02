@@ -1,4 +1,5 @@
 import type { Browser, Page } from '@playwright/test';
+import { blackHackPrices } from '../../src/data/the-black-hack/prices';
 
 export interface TimingSummary {
   name: string;
@@ -62,12 +63,30 @@ export async function measureTimings(browser: Browser, baseUrl: string) {
         'prices tab switch',
         10,
         async (page) => {
-          const before = page.url();
+          await page
+            .getByRole('tab', { selected: true })
+            .filter({ hasText: /Сельская/ })
+            .waitFor();
           await page.getByRole('tab').last().click();
-          await page.waitForFunction((url) => location.href !== url, before);
+          await page.waitForFunction(
+            () => new URLSearchParams(location.search).get('s') === 'city',
+          );
         },
         async (page) => {
-          await page.goto(new URL('/the-black-hack/prices/', baseUrl).toString());
+          await page.goto(
+            new URL(
+              `/the-black-hack/prices/?s=rural&r=1.${blackHackPrices.version}`,
+              baseUrl,
+            ).toString(),
+          );
+          await page.waitForFunction(() =>
+            [...document.querySelectorAll('astro-island')].every(
+              (island) => !island.hasAttribute('ssr'),
+            ),
+          );
+          await page.waitForFunction(
+            () => new URLSearchParams(location.search).get('s') === 'rural',
+          );
         },
       ),
     );
