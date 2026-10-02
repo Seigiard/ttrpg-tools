@@ -1151,7 +1151,7 @@ test('a calibration session replaces an oversized warning when edited geometry f
       warning: 'Не помещается на лист. Уменьшите размер или поля. Эта миниатюра не попадёт в PDF.',
     },
     edited: {
-      printedHeightMm: 118.13499999999999,
+      printedHeightMm: 123.13499999999999,
       warning: 'Миниатюра уменьшена: лимит ширины, размер листа.',
     },
   });

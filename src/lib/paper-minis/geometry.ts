@@ -44,9 +44,18 @@ export function usableAreaMm(opts: Pick<PackOptions, 'pageSize' | 'printerScale'
   widthMm: number;
   heightMm: number;
 } {
+  const full = fullPageAreaMm(opts);
+  return { widthMm: full.widthMm, heightMm: full.heightMm - SCALE_BAR_BAND_MM };
+}
+
+// Later sheets have no scale bar, so minis may use their complete scaled height.
+export function fullPageAreaMm(opts: Pick<PackOptions, 'pageSize' | 'printerScale'>): {
+  widthMm: number;
+  heightMm: number;
+} {
   const scale = printerScale(opts);
   const { w, h } = PAGE_SIZES_MM[opts.pageSize];
-  return { widthMm: w * scale, heightMm: h * scale - SCALE_BAR_BAND_MM };
+  return { widthMm: w * scale, heightMm: h * scale };
 }
 
 export const CUT_MARK_ARM_MM = 1.5;
@@ -122,7 +131,7 @@ export function footprintMm(
 }
 
 function miniOrientation(mini: PackedMini, opts: PackOptions): MiniOrientation {
-  const usable = usableAreaMm(opts);
+  const usable = fullPageAreaMm(opts);
   const fits = ({ widthMm, heightMm }: { widthMm: number; heightMm: number }) =>
     widthMm <= usable.widthMm && heightMm <= usable.heightMm;
   if (fits(footprintMm(mini, false))) return 'upright';
@@ -204,7 +213,7 @@ function fitMiniFaces(
   opts: PackOptions,
 ): { front: FigureFitMm; back?: FigureFitMm } {
   const dimensions = resolveSizeDimensionsMm(e);
-  const { widthMm: usableWidthMm, heightMm: usableHeightMm } = usableAreaMm(opts);
+  const { widthMm: usableWidthMm, heightMm: usableHeightMm } = fullPageAreaMm(opts);
   const marginMm = opts.marginMm ?? DEFAULT_FIGURE_MARGIN_MM;
   const imageSpaceMm = (usableHeightMm - marginMm * 2 - resolveTabHeightMm(e) * 4) / 2;
   const calibrated = calibrationGap(e.calibration);

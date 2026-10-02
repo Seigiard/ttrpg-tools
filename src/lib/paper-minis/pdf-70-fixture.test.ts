@@ -26,7 +26,7 @@ for (const reconstruction of reconstructions) {
           oversized: result.entries.some(({ state }) => state === 'oversized'),
         },
         {
-          pages: pageSize === 'a4' ? 3 : 5,
+          pages: 3,
           copies: Array.from({ length: 25 }, (_, index) => [index, 0]),
           placed: 25,
           oversized: false,

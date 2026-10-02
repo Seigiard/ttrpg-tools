@@ -5,13 +5,14 @@ import {
   type PackedMini,
   type ResolvedMini,
   footprintMm,
+  fullPageAreaMm,
   usableAreaMm,
   resolveMini,
 } from './geometry.ts';
 
 export type Placement = {
   mini: PackedMini;
-  // Millimetres from the top-left of the packable area, below the scale bar.
+  // Millimetres from the top-left of this page's packable area.
   xMm: number;
   yMm: number;
   rotated: boolean;
@@ -95,8 +96,9 @@ export function packMinis(entries: PackingEntry[], opts: PackOptions): PackResul
 
 function packResolvedEntries(entries: ResolvedEntry[], opts: PackOptions): PackResult {
   const resolved = entries.flatMap(({ mini }) => (mini ? [mini] : []));
-  const { widthMm, heightMm } = usableAreaMm(opts);
-  const pages = packGuillotine(resolved, widthMm, heightMm);
+  const { widthMm, heightMm: firstPageHeightMm } = usableAreaMm(opts);
+  const { heightMm: laterPageHeightMm } = fullPageAreaMm(opts);
+  const pages = packGuillotine(resolved, widthMm, firstPageHeightMm, laterPageHeightMm);
   return {
     pages,
     pageCount: pages.length,
@@ -117,7 +119,12 @@ type Strip = {
 };
 type LayoutSheet = { strips: Strip[]; usedHeightMm: number; placements: Placement[] };
 
-function packGuillotine(minis: ResolvedMini[], widthMm: number, heightMm: number): PackedPage[] {
+function packGuillotine(
+  minis: ResolvedMini[],
+  widthMm: number,
+  firstPageHeightMm: number,
+  laterPageHeightMm: number,
+): PackedPage[] {
   const candidates = placeableCopies(minis)
     .map(({ mini, rotated }) => {
       const footprint = footprintMm(mini, rotated);
@@ -128,7 +135,8 @@ function packGuillotine(minis: ResolvedMini[], widthMm: number, heightMm: number
   for (const candidate of candidates) {
     const { mini, rotated } = candidate;
     let placed = false;
-    for (const sheet of sheets) {
+    for (const [sheetIndex, sheet] of sheets.entries()) {
+      const heightMm = sheetIndex === 0 ? firstPageHeightMm : laterPageHeightMm;
       // Finish searching stacks before considering a new column on this sheet.
       for (const strip of sheet.strips) {
         if (rotated || strip.dedicated) continue;
@@ -168,6 +176,11 @@ function packGuillotine(minis: ResolvedMini[], widthMm: number, heightMm: number
       }
     }
     if (!placed) {
+      // A mini that only fits below the scale-bar band's bottom starts on page
+      // two. Keep page one in the layout so the PDF still prints its scale bar.
+      if (sheets.length === 0 && candidate.heightMm > firstPageHeightMm) {
+        sheets.push({ strips: [], usedHeightMm: 0, placements: [] });
+      }
       const sheet: LayoutSheet = { strips: [], usedHeightMm: 0, placements: [] };
       addStrip(sheet, mini, 0, rotated);
       sheets.push(sheet);

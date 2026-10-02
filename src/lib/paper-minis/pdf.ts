@@ -35,9 +35,9 @@ const mm = (v: number) => v * MM_TO_PT;
 
 const MARK_GREY = 0.5;
 
-// The scale check occupies a reserved band above the packed layout. A print
-// dialog shrinks the whole sheet by a few per cent, which no amount of care in
-// the layout can undo, so the sheet has to let the user see it happen.
+// The first sheet's scale check occupies a reserved band above the packed layout.
+// A print dialog shrinks the whole sheet by a few per cent, which no amount of
+// care in the layout can undo, so the sheet has to let the user see it happen.
 // 100 mm makes a 3% shrink a 3 mm shortfall, visible against any ruler.
 export const SCALE_BAR_MM = 100;
 const SCALE_BAR_Y_FROM_TOP_MM = 5.5;
@@ -46,7 +46,8 @@ const SCALE_TICK_MM = 1.5;
 const SCALE_MAJOR_TICK_MM = 2.5;
 const SCALE_TICK_WIDTH_MM = 0.3;
 const SCALE_TEXT_PT = 7;
-export const SCALE_BAR_NOTE = 'Print with Scale to Fit. Measure again if this is not 100 mm.';
+export const SCALE_BAR_NOTE =
+  'Print with Scale to Fit. This bar should be 100 mm; if not, reprint the printer test sheet.';
 const TEST_SHEET_INSTRUCTION =
   'Print with Scale to Fit, measure the ruler, then enter the measured length.';
 const TEST_SHEET_TICK_WIDTH_MM = 0.2;
@@ -94,9 +95,10 @@ export async function generatePDF(
   const { w: pageWmm, h: pageHmm } = PAGE_SIZES_MM[opts.pageSize];
   const scale = printerScale(opts);
   const scaledPageHmm = pageHmm * scale;
-  for (const page of layout.pages) {
+  for (const [pageIndex, page] of layout.pages.entries()) {
     const pdfPage = pdf.addPage([mm(pageWmm), mm(pageHmm)]);
     pdfPage.pushOperators(pushGraphicsState(), concatTransformationMatrix(1 / scale, 0, 0, 1 / scale, 0, 0));
+    const layoutTopMm = scaledPageHmm - (pageIndex === 0 ? SCALE_BAR_BAND_MM : 0);
     for (const { mini, xMm, yMm, rotated } of page.placements) {
       if (rotated) {
         // Turn the whole local drawing clockwise about the footprint's top-left.
@@ -108,7 +110,7 @@ export async function generatePDF(
             1,
             0,
             mm(xMm),
-            mm(scaledPageHmm - SCALE_BAR_BAND_MM - yMm),
+            mm(layoutTopMm - yMm),
           ),
         );
         drawMini(pdfPage, mini, faces.get(mini.entryIndex)!, 0, mini.totalHeightMm, font);
@@ -120,11 +122,11 @@ export async function generatePDF(
         mini,
         faces.get(mini.entryIndex)!,
         xMm,
-        scaledPageHmm - SCALE_BAR_BAND_MM - yMm,
+        layoutTopMm - yMm,
         font,
       );
     }
-    drawScaleBar(pdfPage, scaledPageHmm, noteFont);
+    if (pageIndex === 0) drawScaleBar(pdfPage, scaledPageHmm, noteFont);
     pdfPage.pushOperators(popGraphicsState());
   }
 
@@ -316,7 +318,7 @@ function drawScaleBar(pdfPage: PDFPage, pageHmm: number, font: PDFFont) {
     });
   }
   pdfPage.drawText(SCALE_BAR_NOTE, {
-    x: mm(SCALE_BAR_MM + 3),
+    x: 0,
     y: mm(barY - SCALE_MAJOR_TICK_MM),
     size: SCALE_TEXT_PT,
     font,

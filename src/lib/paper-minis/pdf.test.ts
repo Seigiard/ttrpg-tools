@@ -1,5 +1,13 @@
 import assert from 'node:assert/strict';
-import { PDFDocument, PDFArray, PDFDict, PDFName, PDFRawStream, decodePDFRawStream } from 'pdf-lib';
+import {
+  PDFDocument,
+  PDFArray,
+  PDFDict,
+  PDFName,
+  PDFRawStream,
+  StandardFonts,
+  decodePDFRawStream,
+} from 'pdf-lib';
 import { generatePDF as renderPDF, generatePrinterScaleTestSheet } from './pdf.ts';
 import { packEntries } from './packing.ts';
 import type { MiniLevels, PackOptions } from './geometry.ts';
@@ -55,6 +63,7 @@ type Text = {
 type Mirror = { x: boolean; y: boolean };
 type Segment = [Point, Point];
 type Shape = {
+  page: number;
   role: Role;
   flipped: boolean;
   box: Box;
@@ -73,6 +82,7 @@ type Face = { image: Box; mirror: Mirror; xobject: string; badge?: Box; text?: T
 // `inward` says every arm stays on the piece, so neighbours can share an edge.
 type Level = { y: number; kind: 'corner' | 'tick' };
 type Mini = {
+  page: number;
   extent: Box;
   marks: Box;
   levels: Level[];
@@ -134,14 +144,16 @@ async function read(bytes: Uint8Array, readUprightMinis = true) {
           path.push(end);
         }
         if (op === 'f') scaleBar.marks.push(bounds(path));
-        if (op === 'S') shapes.push({ role: 'marks', flipped, box: bounds(path), segments });
-        if (op === 'B') shapes.push({ role: 'badge', flipped, box: bounds(path) });
+        if (op === 'S')
+          shapes.push({ page: pageIndex, role: 'marks', flipped, box: bounds(path), segments });
+        if (op === 'B') shapes.push({ page: pageIndex, role: 'badge', flipped, box: bounds(path) });
         if (op === 'f' || op === 'S' || op === 'B') {
           path = [];
           segments = [];
         }
         if (op === 'Do')
           shapes.push({
+            page: pageIndex,
             role: 'image',
             flipped,
             box: bounds([
@@ -172,7 +184,7 @@ async function read(bytes: Uint8Array, readUprightMinis = true) {
             position,
           };
           if (baseFont === '/Helvetica') scaleBar.notes.push(text);
-          else shapes.push({ role: 'text', flipped, box: bounds([position]), text });
+          else shapes.push({ page: pageIndex, role: 'text', flipped, box: bounds([position]), text });
         }
       }
     }
@@ -234,6 +246,7 @@ function minis(shapes: Shape[]): Mini[] {
       text: pick('text', flipped)?.text,
     });
     return {
+      page: marks.page,
       extent: { left, right, bottom: ys[0], top: ys[ys.length - 1] },
       marks: marks.box,
       levels,
@@ -732,25 +745,32 @@ t('the badge marks the base, a fixed step inside it', async () => {
 
 // A print dialog on "Fit to page" shrinks the sheet by a few per cent. The bar
 // is how the user finds out before cutting, so it has to be a true 100 mm.
-t('every sheet carries a 100 mm scale bar starting at the page edge', async () => {
-  // #given  nine Medium squares fit one A4 sheet with shared cut lines
-  const copies: Entry = { ...entry, heightSlot: 'medium', count: 9 };
+t('only the first sheet carries a 100 mm scale bar starting at the page edge', async () => {
+  // #given  a final 28 mm strip fits only after the full-height second page's rows
+  const copies: Entry[] = [
+    { ...entry, heightSlot: 'custom', customWidthMm: 2, customHeightMm: 10, count: 3 },
+    { ...entry, heightSlot: 'custom', customWidthMm: 2, customHeightMm: 56, count: 12 },
+  ];
   // #when
   const sheet = await read(
-    await generatePDF([copies], { pageSize: 'a4', numberDuplicates: false }),
+    await generatePDF(copies, { pageSize: 'a4', numberDuplicates: false, printerScale: 0.91 }),
   );
-  // #then  the bar spans exactly 100 mm, and no tick reaches past its ends
+  // #then  the first bar spans exactly 100 mm after printing, and later pages have none
   assert.deepEqual(
     sheet.scaleBars.map(({ page, marks }) => {
+      if (marks.length === 0) return { page, bars: 0 };
       const span = bounds(
         marks.flatMap((box) => [
           { x: box.left, y: box.bottom },
           { x: box.right, y: box.top },
         ]),
       );
-      return { page, left: asMm(span.left), length: widthMm(span) };
+      return { page, bars: 1, left: asMm(span.left), length: widthMm(span) };
     }),
-    [{ page: 0, left: 0, length: 100 }],
+    [
+      { page: 0, bars: 1, left: 0, length: 109.89011 },
+      { page: 1, bars: 0 },
+    ],
   );
 });
 
@@ -853,11 +873,11 @@ t('the scale bar tells the player to print with Scale to Fit', async () => {
   // #then
   assert.deepEqual(
     sheet.scaleBars.map((bar) => bar.notes.map((note) => note.label)),
-    [['Print with Scale to Fit. Measure again if this is not 100 mm.']],
+    [['Print with Scale to Fit. This bar should be 100 mm; if not, reprint the printer test sheet.']],
   );
 });
 
-t('the scale bar sits in its reserved band, clear of the first row, on both pages', async () => {
+t('the scale bar sits in its reserved band, clear of the first row, on both page sizes', async () => {
   // #given  a tall mini, so the first row starts at the reserved band's edge
   const tall: Entry = { ...entry, heightSlot: 'large' };
   // #when
@@ -866,21 +886,67 @@ t('the scale bar sits in its reserved band, clear of the first row, on both page
       read(await generatePDF([tall], { pageSize, numberDuplicates: false })),
     ),
   );
-  // #then  every mark and the note sit above the mini's own cut marks, and
-  //        the note starts after the bar ends
+  // #then  every mark and the note sit above the mini's own cut marks
   assert.deepEqual(
     sheets.map(({ scaleBars: [bar], minis: [mini] }) => {
-      const barRight = Math.max(...bar.marks.map((box) => box.right));
       return {
         marksAboveRow: bar.marks.every((box) => box.bottom > mini.marks.top),
         noteAboveRow: bar.notes.every((note) => note.position.y > mini.marks.top),
-        noteAfterBar: bar.notes.every((note) => note.position.x > barRight),
+        noteInsidePage: bar.notes.every((note) => note.position.x >= 0),
       };
     }),
     [
-      { marksAboveRow: true, noteAboveRow: true, noteAfterBar: true },
-      { marksAboveRow: true, noteAboveRow: true, noteAfterBar: true },
+      { marksAboveRow: true, noteAboveRow: true, noteInsidePage: true },
+      { marksAboveRow: true, noteAboveRow: true, noteInsidePage: true },
     ],
+  );
+});
+
+t('the scale bar note stays inside A4 and Letter at the default and full printer scales', async () => {
+  // #given  the selected pages and the two supported scale states
+  const options = (['a4', 'letter'] as const).flatMap((pageSize) =>
+    [0.91, 1].map((printerScale) => ({ pageSize, printerScale })),
+  );
+  const fontDocument = await PDFDocument.create();
+  const font = await fontDocument.embedFont(StandardFonts.Helvetica);
+  // #when
+  const sheets = await Promise.all(
+    options.map(async ({ pageSize, printerScale }) =>
+      read(await generatePDF([entry], { pageSize, numberDuplicates: false, printerScale })),
+    ),
+  );
+  // #then  the physical PDF text's right edge stays inside its paper width
+  assert.equal(
+    sheets.every(({ pageSizes: [page], scaleBars: [bar] }, i) => {
+      const note = bar.notes[0];
+      return (
+        note.position.x + font.widthOfTextAtSize(note.label, note.size) / options[i].printerScale <=
+        page.width
+      );
+    }),
+    true,
+  );
+});
+
+t('the first sheet keeps minis below the scale bar and later sheets use the scaled top edge', async () => {
+  // #given  a layout that fills the short first sheet and the full-height second sheet
+  const copies: Entry[] = [
+    { ...entry, heightSlot: 'custom', customWidthMm: 2, customHeightMm: 10, count: 3 },
+    { ...entry, heightSlot: 'custom', customWidthMm: 2, customHeightMm: 56, count: 12 },
+  ];
+  // #when
+  const sheet = await read(
+    await generatePDF(copies, { pageSize: 'a4', numberDuplicates: false, printerScale: 0.91 }),
+  );
+  // #then  first-page marks stop below the reserved band, while page two reaches its top edge
+  const firstPageMarks = sheet.minis.filter((mini) => mini.page === 0).map((mini) => mini.marks.top);
+  const secondPageTops = sheet.minis.filter((mini) => mini.page === 1).map((mini) => mini.extent.top);
+  assert.deepEqual(
+    [
+      Math.max(...firstPageMarks) < 287 * PT_PER_MM,
+      Math.abs(asMm(Math.max(...secondPageTops)) - 297) < 0.001,
+    ],
+    [true, true],
   );
 });
 

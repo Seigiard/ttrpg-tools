@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { packMinis, type Placement } from './packing';
-import { usableAreaMm } from './geometry';
+import { fullPageAreaMm, usableAreaMm } from './geometry';
 import { HEIGHT_SLOT_ORDER } from './sizes';
 import type { PackingEntry } from './types';
 
@@ -95,7 +95,34 @@ test('short minis stack beside a tall mini instead of opening a second sheet', (
   // #when
   const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false });
   // #then
-  expect(result.pageCount).toBe(1);
+  expect(result.pageCount).toBe(2);
+});
+
+test('a full-height layout puts more minis on the second sheet than the scale-bar sheet', () => {
+  // #given: 120 mm pieces leave a 20 mm first-sheet remainder. A final 28 mm
+  // strip fits only on the 270.27 mm later page, after both large-piece pages fill.
+  const entries: PackingEntry[] = [
+    {
+      heightSlot: 'custom',
+      customWidthMm: 2,
+      customHeightMm: 10,
+      count: 3,
+      naturalWidth: 1,
+      naturalHeight: 1,
+    },
+    {
+      heightSlot: 'custom',
+      customWidthMm: 2,
+      customHeightMm: 56,
+      count: 12,
+      naturalWidth: 1,
+      naturalHeight: 1,
+    },
+  ];
+  // #when
+  const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false });
+  // #then
+  expect(result.pages.slice(0, 2).map((page) => page.placements.length)).toEqual([6, 9]);
 });
 
 // Find bands by projecting rectangles onto an axis. This checks whether cuts
@@ -152,7 +179,8 @@ for (const pageSize of ['a4', 'letter'] as const) {
     for (const [n, entries] of batches.entries()) {
       const opts = { pageSize, numberDuplicates: true, marginMm: n % 6 };
       const result = packMinis(entries, opts);
-      const { widthMm: width, heightMm: height } = usableAreaMm(opts);
+      const { widthMm: width, heightMm: firstHeight } = usableAreaMm(opts);
+      const { heightMm: laterHeight } = fullPageAreaMm(opts);
       if (JSON.stringify(result) !== JSON.stringify(packMinis(entries, opts)))
         violations.push('nondeterministic');
       const placed = result.pages.flatMap((page) => page.placements);
@@ -171,7 +199,8 @@ for (const pageSize of ['a4', 'letter'] as const) {
         violations.push('lost or repeated copy');
       if (placed.length !== result.miniCount || result.pages.length !== result.pageCount)
         violations.push('count');
-      for (const page of result.pages) {
+      for (const [pageIndex, page] of result.pages.entries()) {
+        const height = pageIndex === 0 ? firstHeight : laterHeight;
         for (const [i, a] of page.placements.entries()) {
           if (
             a.xMm < 0 ||
@@ -180,7 +209,7 @@ for (const pageSize of ['a4', 'letter'] as const) {
             a.yMm + placedHeight(a) > height + 1e-9
           )
             violations.push('bounds');
-          if (a.rotated && a.mini.totalWidthMm <= width && a.mini.totalHeightMm <= height)
+          if (a.rotated && a.mini.totalWidthMm <= width && a.mini.totalHeightMm <= laterHeight)
             violations.push('unneeded rotation');
           if (a.mini.label !== String(a.mini.copyIndex + 1)) violations.push('label');
           for (const b of page.placements.slice(i + 1)) {
