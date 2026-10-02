@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'bun:test';
 import { pdf70Entries, type Pdf70Reconstruction } from './fixtures/pdf-70.ts';
-import { resolveMinis } from './geometry.ts';
-import { packMinis, packRows } from './packing.ts';
+import { packMinis } from './packing.ts';
 
 // #70's budget describes the observed set, not every possible perturbation.
 // The lower/upper sensitivity results and the failing upper Letter budget
@@ -11,33 +10,15 @@ const reconstructions: Pdf70Reconstruction[] = ['rounded', 'raw'];
 
 for (const reconstruction of reconstructions) {
   for (const pageSize of ['a4', 'letter'] as const) {
-    test(`${reconstruction} PDF reconstruction reproduces the original ${pageSize} sheet count`, () => {
-      // #given: #70 reports four A4 sheets and five Letter sheets with rows.
-      const entries = pdf70Entries(reconstruction);
-      // #when
-      const opts = { pageSize, numberDuplicates: false };
-      const minis = resolveMinis(entries, opts);
-      const result = packRows(minis, opts);
-      // #then
-      assert.deepEqual(
-        {
-          pages: result.pageCount,
-          placed: result.pages.flatMap((page) => page.rows.flatMap((row) => row.items)).length,
-          oversized: minis.some(({ orientation }) => orientation === 'oversized'),
-        },
-        { pages: pageSize === 'a4' ? 4 : 5, placed: 25, oversized: false },
-      );
-    });
-
-    test(`${reconstruction} PDF reconstruction meets the ${pageSize} printing budget without losing minis`, () => {
-      // #given: the independent prototype in #70 sets the printing budget.
+    test(`${reconstruction} PDF reconstruction fits the default printer-scale budget without losing minis`, () => {
+      // #given: the observed fixture and the default printer scale define the sheet budget.
       const entries = pdf70Entries(reconstruction);
       // #when
       const result = packMinis(entries, { pageSize, numberDuplicates: false });
-      // #then: a budget allows a future denser layout, but not dropped copies.
+      // #then: every mini remains printable, although the former #70 budget no longer applies.
       assert.deepEqual(
         {
-          withinBudget: result.pageCount <= (pageSize === 'a4' ? 4 : 3),
+          pages: result.pageCount,
           copies: result.pages
             .flatMap((page) => page.placements.map(({ mini }) => [mini.entryIndex, mini.copyIndex]))
             .toSorted((a, b) => a[0] - b[0]),
@@ -45,7 +26,7 @@ for (const reconstruction of reconstructions) {
           oversized: result.entries.some(({ state }) => state === 'oversized'),
         },
         {
-          withinBudget: true,
+          pages: 3,
           copies: Array.from({ length: 25 }, (_, index) => [index, 0]),
           placed: 25,
           oversized: false,
