@@ -151,7 +151,18 @@ function setupPaperMinis(baseUrl: string) {
       .locator('input[aria-label="Добавить изображения"]')
       .setInputFiles('e2e/fixtures/mini.png');
     await page.getByRole('article').first().waitFor({ state: 'visible' });
+    await waitForEnabledButton(page, 'Предпросмотр PDF');
+    await waitForEnabledButton(page, 'Скачать PDF');
   };
+}
+
+async function waitForEnabledButton(page: Page, name: string) {
+  await page.getByRole('button', { name }).waitFor({ state: 'visible' });
+  await page.waitForFunction((buttonName) => {
+    return [...document.querySelectorAll('button')].some(
+      (button) => button.textContent?.includes(buttonName) && !button.disabled,
+    );
+  }, name);
 }
 
 async function waitForHydratedIslands(page: Page) {

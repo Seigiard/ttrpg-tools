@@ -3,6 +3,14 @@ import { measureTimings } from './timings';
 
 type Event = { type: string; target?: string };
 
+const expectedScenarios = [
+  'weather click-to-result',
+  'prices tab switch',
+  'paper-minis upload-to-row',
+  'paper-minis preview ready',
+  'paper-minis PDF generation',
+];
+
 class FakeLocator {
   constructor(
     private readonly events: Event[],
@@ -56,8 +64,10 @@ class FakePage {
     this.events.push({ type: 'addInitScript' });
   }
 
-  getByRole(role: string) {
-    return new FakeLocator(this.events, role, () => {
+  getByRole(role: string, options: { name?: string | RegExp } = {}) {
+    const name = options.name instanceof RegExp ? options.name.source : options.name;
+    const target = name ? `${role}:${name}` : role;
+    return new FakeLocator(this.events, target, () => {
       this.finishDownload?.();
       this.finishDownload = null;
     });
@@ -112,9 +122,16 @@ describe('measureTimings', () => {
     };
 
     // #when
-    await measureTimings(browser as never, 'http://127.0.0.1:4410');
+    const summaries = await measureTimings(browser as never, 'http://127.0.0.1:4410');
 
     // #then
+    expect(summaries.map((summary) => summary.name)).toEqual(expectedScenarios);
+    for (const summary of summaries) {
+      expect(summary.repeats).toBe(10);
+      expect(summary.samplesMs).toHaveLength(10);
+    }
+    expect(context.pages).toHaveLength(expectedScenarios.length * 10);
+
     for (const page of context.pages) {
       const firstInteraction = page.events.findIndex(
         (event) => event.type === 'click' || event.type === 'setInputFiles',
@@ -142,6 +159,21 @@ describe('measureTimings', () => {
         );
         expect(observedEffect).toBe(true);
       }
+
+      const pdfClick = page.events.findIndex(
+        (event) =>
+          event.type === 'click' &&
+          (event.target === 'button:Предпросмотр PDF' || event.target === 'button:Скачать PDF'),
+      );
+      if (pdfClick === -1) continue;
+      const pdfButtonReady = page.events
+        .slice(0, pdfClick)
+        .some(
+          (event) =>
+            event.type === 'waitFor' &&
+            (event.target === 'button:Предпросмотр PDF' || event.target === 'button:Скачать PDF'),
+        );
+      expect(pdfButtonReady).toBe(true);
     }
   });
 });
