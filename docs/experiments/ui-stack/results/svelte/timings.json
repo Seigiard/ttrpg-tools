@@ -9,58 +9,58 @@
     {
       "name": "weather click-to-result",
       "repeats": 10,
-      "minMs": 52,
-      "medianMs": 56,
-      "maxMs": 69,
+      "minMs": 56,
+      "medianMs": 58,
+      "maxMs": 87,
       "samplesMs": [
-        69,
-        55,
-        56,
+        87,
+        58,
+        57,
+        57,
+        59,
         57,
         56,
-        56,
+        60,
         59,
-        52,
-        56,
-        53
+        58
       ]
     },
     {
       "name": "prices tab switch",
       "repeats": 10,
-      "minMs": 62,
-      "medianMs": 74,
+      "minMs": 59,
+      "medianMs": 69,
       "maxMs": 79,
       "samplesMs": [
-        67,
-        79,
-        74,
-        79,
+        69,
+        76,
+        69,
         64,
-        79,
-        62,
-        64,
-        63,
-        76
+        77,
+        75,
+        65,
+        65,
+        59,
+        79
       ]
     },
     {
       "name": "paper-minis upload-to-row",
       "repeats": 10,
-      "minMs": 41,
-      "medianMs": 45,
-      "maxMs": 49,
+      "minMs": 43,
+      "medianMs": 43,
+      "maxMs": 48,
       "samplesMs": [
-        47,
-        49,
+        48,
+        44,
+        43,
         43,
         45,
-        44,
-        47,
-        45,
-        42,
-        47,
-        41
+        43,
+        43,
+        43,
+        43,
+        43
       ]
     },
     {
@@ -68,37 +68,37 @@
       "repeats": 10,
       "minMs": 71,
       "medianMs": 74,
-      "maxMs": 81,
+      "maxMs": 83,
       "samplesMs": [
-        73,
+        82,
+        81,
+        72,
         74,
+        73,
+        71,
+        83,
         77,
         73,
-        72,
-        80,
-        71,
-        81,
-        73,
-        74
+        71
       ]
     },
     {
       "name": "paper-minis PDF generation",
       "repeats": 10,
-      "minMs": 67,
-      "medianMs": 71,
-      "maxMs": 77,
+      "minMs": 68,
+      "medianMs": 74,
+      "maxMs": 79,
       "samplesMs": [
-        67,
         74,
+        79,
+        70,
         69,
+        75,
+        70,
         68,
         71,
-        71,
-        71,
-        77,
-        70,
-        69
+        76,
+        78
       ]
     }
   ]

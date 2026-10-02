@@ -7,13 +7,13 @@
       "transferredBytes": 10395
     },
     "byType": {
-      "document": {
-        "requests": 1,
-        "transferredBytes": 1419
-      },
       "stylesheet": {
         "requests": 1,
         "transferredBytes": 8976
+      },
+      "document": {
+        "requests": 1,
+        "transferredBytes": 1419
       }
     }
   },
@@ -109,11 +109,11 @@
       "transferredBytes": 1686
     },
     "byType": {
-      "document": {
+      "stylesheet": {
         "requests": 1,
         "transferredBytes": 127
       },
-      "stylesheet": {
+      "document": {
         "requests": 1,
         "transferredBytes": 127
       },

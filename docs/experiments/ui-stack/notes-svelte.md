@@ -11,7 +11,7 @@
 - Final CI-equivalent check passed: `bun run lint && bun run format:check && bun run typecheck && bun run test && bun run build`. Unit evidence: `523 pass / 0 fail`. Build evidence: 6 pages built. Existing non-blocking warnings remain: oxlint warnings in legacy loops/sorts/shadowing and one `svelte-check` warning in `src/components/ui/dialog.svelte` about the initial `open` value capture.
 - Required browser suite passed: `PORT=4402 bun run test:browser` -> `11 passed`.
 - Required measurement passed: `PORT=4412 bun run measure -- --out docs/experiments/ui-stack/results/svelte`. It generated `payload`, `network`, `timings`, `versions` and screenshots under `docs/experiments/ui-stack/results/svelte/`.
-- Measurement highlights: payload external JS gzip is `/` 0 B, weather 2584 B, locations 4083 B, encounters 2279 B, prices 4146 B and paper minis 198206 B. Cold transferred bytes are `/` 10395 B, weather 53590 B, locations 57449 B, encounters 52206 B, prices 54100 B and paper minis 243842 B.
+- Measurement highlights: see `results/svelte/SUMMARY.md`. External JS gzip per route: weather 35301 B, locations 36878 B, encounters 33950 B, prices 35891 B, paper minis 227851 B. An earlier static report undercounted shared chunks; the harness fix in `scripts/ui-stack/payload.ts` corrected it.
 - React-runtime grep evidence after the measurement rebuild: `rg -n "react-dom|react\.production|jsx-runtime" dist` produced no output, so the built `dist/` contains none of those strings.
 - Remaining React words are historical docs/React baseline measurement records or the payload script's detection heuristic. They are not runtime dependencies or imports.
 
