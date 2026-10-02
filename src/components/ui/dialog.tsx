@@ -13,6 +13,8 @@ interface DialogContextValue {
 }
 
 const DialogContext = createContext<DialogContextValue | null>(null);
+let scrollLockDepth = 0;
+let previousBodyOverflow = '';
 
 interface DialogProps {
   open?: boolean;
@@ -57,6 +59,11 @@ function DialogContent({ className, finalFocus, children, ...props }: DialogCont
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const target = firstFocusable(popupRef.current) ?? popupRef.current;
     target?.focus();
+    if (scrollLockDepth === 0) {
+      previousBodyOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+    }
+    scrollLockDepth += 1;
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -71,6 +78,8 @@ function DialogContent({ className, finalFocus, children, ...props }: DialogCont
     document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('keydown', onKeyDown);
+      scrollLockDepth -= 1;
+      if (scrollLockDepth === 0) document.body.style.overflow = previousBodyOverflow;
       const restoreTarget = finalFocusRef.current?.current ?? previousFocus;
       restoreTarget?.focus();
     };

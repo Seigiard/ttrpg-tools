@@ -4,7 +4,10 @@ import { createRef } from 'preact';
 import { Dialog, DialogContent, DialogTitle } from './dialog';
 
 describe('Preact Dialog', () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    document.body.style.overflow = '';
+  });
 
   test('renders an accessible modal dialog with its title wired as the label', async () => {
     // #given an open calibration dialog
@@ -72,6 +75,32 @@ describe('Preact Dialog', () => {
     // #then the dialog is removed
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: 'Задать рост' })).toBeNull();
+    });
+  });
+
+  test('locks document scrolling while the dialog is open', async () => {
+    // #given a scrollable page behind an open dialog
+    render(
+      <Dialog defaultOpen>
+        <DialogContent>
+          <DialogTitle>Задать рост</DialogTitle>
+          <button type="button">Применить</button>
+        </DialogContent>
+      </Dialog>,
+    );
+
+    // #when the dialog mounts
+    await screen.findByRole('dialog', { name: 'Задать рост' });
+    const lockedOverflow = document.body.style.overflow;
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Задать рост' })).toBeNull();
+    });
+
+    // #then page scrolling is blocked only for the open modal lifetime
+    expect({ lockedOverflow, restoredOverflow: document.body.style.overflow }).toEqual({
+      lockedOverflow: 'hidden',
+      restoredOverflow: '',
     });
   });
 });

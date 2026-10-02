@@ -726,7 +726,15 @@ test('front height dialog applies calibration and row reset clears it', async ()
   await addFront();
   // #when
   const dialog = await openCalibrationDialog();
-  currentStore.setCalibrationLine('head', 0.9);
+  const head = dialog.getByRole('slider', { name: 'Голова' });
+  const area = dialog.getByTestId('height-calibration-artwork');
+  Object.defineProperty(dialog.getByTestId('calibration-artworks'), 'getBoundingClientRect', {
+    value: () => ({ top: 0, height: 100 }),
+    configurable: true,
+  });
+  fireEvent.pointerDown(head, { button: 0, pointerId: 1, clientY: 25 });
+  fireEvent.pointerMove(area, { pointerId: 1, clientY: 90 });
+  fireEvent.pointerUp(area, { pointerId: 1 });
   await waitFor(() => expect(dialog.getByRole('slider', { name: 'Голова' }).getAttribute('aria-valuenow')).toBe('90'));
   fireEvent.click(dialog.getByRole('button', { name: 'Применить' }));
   await waitFor(() => expect(currentStore.$rows.get()[0]?.calibration).toBeTruthy());
@@ -834,7 +842,7 @@ test.each(['pointerCancel', 'lostPointerCapture'] as const)(
     fireEvent[end](area, { pointerId: 1 });
     fireEvent.pointerMove(area, { pointerId: 1, clientY: 50 });
     // #then
-    expect(head.getAttribute('aria-valuenow')).toBe('25');
+    expect(currentStore.$calibration.get()?.lines.head).toBe(0.25);
     fireEvent.click(dialog.getByRole('button', { name: 'Отмена' }));
   },
 );
@@ -861,8 +869,12 @@ test.each([{ button: 2 }, { button: 0, ctrlKey: true }])(
       clientY: 50,
     });
     fireEvent.click(dialog.getByRole('button', { name: 'Применить' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Задать рост' })).toBeNull());
     // #then
-    expect(screen.queryByText('Рост задан вручную') !== null).toBe(false);
+    expect({ session: currentStore.$calibration.get(), calibration: currentStore.$rows.get()[0]?.calibration }).toEqual({
+      session: undefined,
+      calibration: undefined,
+    });
   },
 );
 
@@ -892,10 +904,9 @@ test('Apply after returning lines to their starting values keeps the calibration
     fireEvent.keyDown(head, { key: 'ArrowDown' });
     fireEvent.keyDown(head, { key: 'ArrowUp' });
     fireEvent.click(screen.getByRole('button', { name: 'Применить' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Задать рост' })).toBeNull());
     // #then
-    expect(screen.queryByText('Настройки или изображения изменились. Обновите предпросмотр.')).toBe(
-      null,
-    );
+    expect(currentStore.$previewStale.get()).toBe(false);
   } finally {
     generate.mockRestore();
     objectUrl.mockRestore();
