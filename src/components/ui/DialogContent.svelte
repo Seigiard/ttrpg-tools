@@ -23,6 +23,33 @@
     '[tabindex]:not([tabindex="-1"])',
   ].join(',');
 
+  let unlockScroll: (() => void) | null = null;
+
+  function lockPageScroll() {
+    if (unlockScroll) return;
+
+    const scrollY = window.scrollY;
+    const { overflow, position, top, width } = document.body.style;
+
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
+
+    unlockScroll = () => {
+      document.body.style.overflow = overflow;
+      document.body.style.position = position;
+      document.body.style.top = top;
+      document.body.style.width = width;
+      window.scrollTo(0, scrollY);
+      unlockScroll = null;
+    };
+  }
+
+  function unlockPageScroll() {
+    unlockScroll?.();
+  }
+
   function restoreFocus() {
     const target = finalFocus ?? dialog.previouslyFocused;
     dialog.previouslyFocused = null;
@@ -31,6 +58,7 @@
 
   function close() {
     if (element?.open) element.close();
+    unlockPageScroll();
     dialog.setOpen(false);
     restoreFocus();
   }
@@ -68,6 +96,7 @@
   $effect(() => {
     if (!element) return;
     if (dialog.open && !element.open) {
+      lockPageScroll();
       element.showModal();
       const current = element;
       tick().then(() => {
@@ -75,12 +104,14 @@
         target.focus();
       });
       return () => {
-        if (!dialog.open || !current.open) return;
+        if (!current.open) return;
         current.close();
+        unlockPageScroll();
         restoreFocus();
       };
     } else if (!dialog.open && element.open) {
       element.close();
+      unlockPageScroll();
       restoreFocus();
     }
   });

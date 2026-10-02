@@ -4,6 +4,7 @@ import PrimitiveTestBed from './PrimitiveTestBed.svelte';
 
 beforeEach(() => {
   cleanup();
+  document.body.removeAttribute('style');
   HTMLDialogElement.prototype.showModal = function showModal() {
     this.open = true;
     this.setAttribute('open', '');
@@ -155,6 +156,55 @@ test('Svelte Dialog traps Tab, closes on Escape and restores focus', async () =>
     }),
   );
   expect(first.isConnected).toBe(false);
+});
+
+test('Svelte Dialog locks page scroll while open and restores it after close', async () => {
+  // #given a scrolled page and existing caller-owned body styles
+  let scrollY = 180;
+  const scrollYDescriptor = Object.getOwnPropertyDescriptor(window, 'scrollY');
+  const originalScrollTo = window.scrollTo;
+  Object.defineProperty(window, 'scrollY', { configurable: true, get: () => scrollY });
+  window.scrollTo = ((xOrOptions?: number | ScrollToOptions, y?: number) => {
+    scrollY = typeof xOrOptions === 'object' ? (xOrOptions.top ?? scrollY) : (y ?? scrollY);
+  }) as typeof window.scrollTo;
+  document.body.style.position = 'relative';
+  document.body.style.width = 'auto';
+
+  try {
+    render(PrimitiveTestBed, { mode: 'dialog' });
+    // #when the dialog opens and then closes
+    await fireEvent.click(screen.getByTestId('dialog-opener'));
+    await screen.findByTestId('first-action');
+    const locked = {
+      overflow: document.body.style.overflow,
+      position: document.body.style.position,
+      top: document.body.style.top,
+      width: document.body.style.width,
+    };
+    await fireEvent.keyDown(document.querySelector('dialog')!, { key: 'Escape' });
+    // #then page scroll is locked only during the modal lifetime
+    await waitFor(() =>
+      expect({
+        locked,
+        restored: {
+          overflow: document.body.style.overflow,
+          position: document.body.style.position,
+          top: document.body.style.top,
+          width: document.body.style.width,
+        },
+        scrollY,
+      }).toEqual({
+        locked: { overflow: 'hidden', position: 'fixed', top: '-180px', width: '100%' },
+        restored: { overflow: '', position: 'relative', top: '', width: 'auto' },
+        scrollY: 180,
+      }),
+    );
+  } finally {
+    window.scrollTo = originalScrollTo;
+    if (scrollYDescriptor) {
+      Object.defineProperty(window, 'scrollY', scrollYDescriptor);
+    }
+  }
 });
 
 test('Svelte icon export renders an SVG icon', () => {
