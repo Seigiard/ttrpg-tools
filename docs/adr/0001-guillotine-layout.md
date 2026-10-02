@@ -4,6 +4,8 @@ We use full-width strips, columns and stacks, with first fit across sheets. This
 
 The packer returns positions measured from the usable area's top-left corner. The PDF writer draws those placements rather than calculating its own layout. The live counter and PDF therefore share one layout decision.
 
+Geometry also owns the internal layout of each mini. It resolves the Floor strip, Tabs, Faces, Fold, cut-mark levels and back badge offset in millimetres, and derives the mini's total height from those levels. The PDF writer converts the resolved values to points and draws them without rebuilding the vertical stack.
+
 ## Trade-offs
 
 - MaxRects can fill irregular holes but does not preserve straight cuts across each piece. Easy cutting matters more than those extra packing opportunities.

@@ -10,7 +10,7 @@ import {
 } from 'pdf-lib';
 import { generatePDF as renderPDF } from './pdf.ts';
 import { packEntries } from './packing.ts';
-import type { PackOptions } from './geometry.ts';
+import type { MiniLevels, PackOptions } from './geometry.ts';
 import type { Entry } from './types.ts';
 
 import { test as t } from 'bun:test';
@@ -607,22 +607,28 @@ t('a height slot prints one figure height for artworks of different proportions'
   );
 });
 
-// The stand folds as _||_: each face stands on a tab half its base deep, and
-// a floor strip two tabs deep folds under and is glued to both. Printed, that
-// is six lines across the piece, and the marks name each one.
-t('a Medium unfolds into floor, tabs, faces and fold at half-base steps', async () => {
+t('the drawer places images and cut marks at the resolved levels', async () => {
+  // #given  a synthetic resolved layout whose levels differ from the Medium formula
+  const options = { pageSize: 'a4', numberDuplicates: false, marginMm: 2 } as const;
+  const entries = [{ ...entry, heightSlot: 'medium' as const }];
+  const layout = packEntries(entries, options);
+  const placement = layout.pages[0].placements[0];
+  const levels = {
+    floorStripTopMm: 20,
+    frontTabTopMm: 30,
+    frontFaceTopMm: 65,
+    foldMm: 70,
+    backFaceBottomMm: 75,
+    backFaceTopMm: 110,
+    topMm: 125,
+    cutMarks: { crossesMm: [0, 70, 125], halvesMm: [20, 30, 110] },
+  } satisfies MiniLevels;
+  placement.mini = { ...placement.mini, levels, totalHeightMm: levels.topMm };
   // #when
   const {
     minis: [mini],
-  } = await read(
-    await generatePDF([{ ...entry, heightSlot: 'medium' }], {
-      pageSize: 'a4',
-      numberDuplicates: false,
-      marginMm: 2,
-    }),
-  );
-  // #then  25 mm base: 25 mm floor, 12.5 mm tabs, 35 mm faces, 2 mm either
-  //        side of the fold, and the faces stand straight on their tabs
+  } = await read(await renderPDF(entries, layout, options));
+  // #then
   assert.deepEqual(
     {
       ...unfold(mini),
@@ -630,10 +636,10 @@ t('a Medium unfolds into floor, tabs, faces and fold at half-base steps', async 
       backUnderTab: asMm(mini.back.image.top - mini.extent.bottom),
     },
     {
-      levels: [0, 25, 37.5, 74.5, 111.5, 124],
+      levels: [0, 20, 30, 70, 110, 125],
       kinds: ['cross', 'half', 'half', 'cross', 'half', 'cross'],
-      frontOnTab: 37.5,
-      backUnderTab: 111.5,
+      frontOnTab: 30,
+      backUnderTab: 110,
     },
   );
 });
