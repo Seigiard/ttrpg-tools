@@ -19,7 +19,8 @@ import type { PreparedArtwork, Entry } from './types';
 import { hasPackableDimensions } from './sizes.ts';
 import {
   CUT_MARK_ARM_MM,
-  GAP_MM,
+  CUT_MARK_EXTENT_MM,
+  CUT_MARK_STROKE_MM,
   MARGIN_MM,
   PAGE_SIZES_MM,
   isBackArtworkLoading,
@@ -35,7 +36,6 @@ export type { PageSizeKey };
 const MM_TO_PT = 72 / 25.4;
 const mm = (v: number) => v * MM_TO_PT;
 
-const STROKE_MM = 0.2;
 const MARK_GREY = 0.5;
 
 // The scale check printed in each sheet's top margin. A print dialog left on
@@ -102,14 +102,33 @@ export async function generatePDF(entries: Entry[], opts: GenerateOptions): Prom
   const { w: pageWmm, h: pageHmm } = PAGE_SIZES_MM[opts.pageSize];
   for (const page of pages) {
     const pdfPage = pdf.addPage([mm(pageWmm), mm(pageHmm)]);
-    let yTopMm = pageHmm - MARGIN_MM;
-    for (const row of page.rows) {
-      let xMm = MARGIN_MM;
-      for (const mini of row.items) {
-        drawMini(pdfPage, mini, faces[mini.entryIndex], xMm, yTopMm, font);
-        xMm += mini.totalWidthMm + GAP_MM;
+    for (const { mini, xMm, yMm, rotated } of page.placements) {
+      if (rotated) {
+        // Turn the whole local drawing clockwise. The reserved footprint
+        // includes the corner arms, so inset the cut-out without scaling it.
+        pdfPage.pushOperators(
+          pushGraphicsState(),
+          concatTransformationMatrix(
+            0,
+            -1,
+            1,
+            0,
+            mm(MARGIN_MM + xMm + CUT_MARK_EXTENT_MM),
+            mm(pageHmm - MARGIN_MM - yMm - CUT_MARK_EXTENT_MM),
+          ),
+        );
+        drawMini(pdfPage, mini, faces[mini.entryIndex], 0, mini.totalHeightMm, font);
+        pdfPage.pushOperators(popGraphicsState());
+        continue;
       }
-      yTopMm -= row.heightMm + GAP_MM;
+      drawMini(
+        pdfPage,
+        mini,
+        faces[mini.entryIndex],
+        MARGIN_MM + xMm,
+        pageHmm - MARGIN_MM - yMm,
+        font,
+      );
     }
     drawScaleBar(pdfPage, pageHmm, noteFont);
   }
@@ -224,7 +243,7 @@ function drawCutMarks(pdfPage: PDFPage, mini: PackedMini, x: number, yBottom: nu
 
   const ops = [
     pushGraphicsState(),
-    setLineWidth(mm(STROKE_MM)),
+    setLineWidth(mm(CUT_MARK_STROKE_MM)),
     setStrokingGrayscaleColor(MARK_GREY),
   ];
   const segment = (x1: number, y1: number, x2: number, y2: number) =>

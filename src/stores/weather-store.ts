@@ -7,21 +7,15 @@
  */
 
 import { atom, type ReadableAtom } from 'nanostores';
+import type { RangePick } from '@/data/range-table';
 import type { Season, WeatherTable } from '@/data/types';
 import { pickWeather } from '@/data/weather-table';
-
-export interface WeatherRoll {
-  /** Сумма 2d6. */
-  sum: number;
-  /** Индекс выпавшей строки в `table.rows`. */
-  rowIndex: number;
-}
 
 export interface WeatherStore {
   /** Активный сезон — выбран пользователем. */
   $season: ReadableAtom<Season>;
   /** Текущий roll или null до первого броска. */
-  $roll: ReadableAtom<WeatherRoll | null>;
+  $roll: ReadableAtom<RangePick | null>;
 
   /** Сменить сезон — бросок сохраняется, меняется только читаемая колонка. */
   setSeason(season: Season): void;
@@ -32,11 +26,10 @@ export interface WeatherStore {
 export function createWeatherStore(table: WeatherTable): WeatherStore {
   const firstSeason = table.seasons[0] as Season;
   const $season = atom<Season>(firstSeason);
-  const $roll = atom<WeatherRoll | null>(null);
+  const $roll = atom<RangePick | null>(null);
 
   const rollWeather = () => {
-    const pick = pickWeather(table);
-    $roll.set({ sum: pick.sum, rowIndex: pick.rowIndex });
+    $roll.set(pickWeather(table));
   };
 
   const setSeason = (season: Season) => {

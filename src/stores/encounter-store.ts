@@ -8,21 +8,14 @@
  */
 
 import { atom, type ReadableAtom } from 'nanostores';
-import { pickRange } from '@/data/range-table';
+import { pickRange, type RangePick } from '@/data/range-table';
 import type { EncounterTable } from '@/data/types';
-
-export interface RangeRoll {
-  /** Сумма броска. */
-  sum: number;
-  /** Индекс выпавшей строки. */
-  rowIndex: number;
-}
 
 export interface EncounterStore {
   /** Результат проверки столкновения (d6) или null до первого броска. */
-  $check: ReadableAtom<RangeRoll | null>;
+  $check: ReadableAtom<RangePick | null>;
   /** Результат броска реакции (2d6) или null до первого броска. */
-  $reaction: ReadableAtom<RangeRoll | null>;
+  $reaction: ReadableAtom<RangePick | null>;
 
   /** Перебросить проверку столкновения. */
   rollCheck(): void;
@@ -31,8 +24,8 @@ export interface EncounterStore {
 }
 
 export function createEncounterStore(table: EncounterTable): EncounterStore {
-  const $check = atom<RangeRoll | null>(null);
-  const $reaction = atom<RangeRoll | null>(null);
+  const $check = atom<RangePick | null>(null);
+  const $reaction = atom<RangePick | null>(null);
 
   const rollCheck = () => {
     $check.set(pickRange(table.check.rows, table.check.roll));

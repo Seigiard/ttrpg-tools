@@ -1,15 +1,12 @@
 import { useStore } from '@nanostores/react';
 import { useEffect, useMemo } from 'react';
+import { ReferenceList } from '@/components/ReferenceList';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import type {
-  EncounterCheckOutcome,
-  EncounterCheckRow,
-  EncounterTable,
-  ReactionRow,
-} from '@/data/types';
-import { createEncounterStore, type RangeRoll } from '@/stores/encounter-store';
+import { formatRangeLabel, type RangePick } from '@/data/range-table';
+import type { EncounterCheckOutcome, EncounterTable } from '@/data/types';
+import { createEncounterStore } from '@/stores/encounter-store';
 
 interface Props {
   table: EncounterTable;
@@ -44,7 +41,7 @@ export function EncounterGenerator({ table }: Props) {
 
 interface SectionProps {
   table: EncounterTable;
-  roll: RangeRoll | null;
+  roll: RangePick | null;
   onRoll: () => void;
 }
 
@@ -86,7 +83,19 @@ function CheckSection({ table, roll, onRoll }: SectionProps) {
         </CardContent>
       </Card>
 
-      <CheckReference rows={rows} hitRow={roll ? roll.rowIndex : null} />
+      <ReferenceList
+        title="Исходы · d6"
+        testId="check-reference"
+        rows={rows}
+        hitIndex={roll ? roll.rowIndex : null}
+        label={formatRangeLabel}
+      >
+        {(referenceRow) => (
+          <>
+            <span className="font-semibold text-text">{referenceRow.ru}.</span> {referenceRow.hint}
+          </>
+        )}
+      </ReferenceList>
     </section>
   );
 }
@@ -127,78 +136,20 @@ function ReactionSection({ table, roll, onRoll }: SectionProps) {
         </CardContent>
       </Card>
 
-      <ReactionReference rows={rows} hitRow={roll ? roll.rowIndex : null} />
-    </section>
-  );
-}
-
-interface CheckReferenceProps {
-  rows: readonly EncounterCheckRow[];
-  hitRow: number | null;
-}
-
-function CheckReference({ rows, hitRow }: CheckReferenceProps) {
-  return (
-    <section data-testid="check-reference">
-      <h3 className="font-mono text-xs uppercase tracking-wider text-text-muted">Исходы · d6</h3>
-      <ul className="mt-3 divide-y divide-border">
-        {rows.map((row, i) => {
-          const label = row.min === row.max ? String(row.min) : `${row.min}–${row.max}`;
-          const isHit = i === hitRow;
-          return (
-            <li
-              key={label}
-              data-row-index={i}
-              data-hit={isHit ? 'true' : undefined}
-              className={`flex gap-3 px-2 py-1.5 ${
-                isHit ? 'border-l-2 border-primary bg-primary/10 text-text' : 'text-text-muted'
-              }`}
-            >
-              <span className="w-8 font-mono text-xs">{label}</span>
-              <span className="flex-1 text-sm">
-                <span className="font-semibold text-text">{row.ru}.</span> {row.hint}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
-  );
-}
-
-interface ReactionReferenceProps {
-  rows: readonly ReactionRow[];
-  hitRow: number | null;
-}
-
-function ReactionReference({ rows, hitRow }: ReactionReferenceProps) {
-  return (
-    <section data-testid="reaction-reference">
-      <h3 className="font-mono text-xs uppercase tracking-wider text-text-muted">
-        Отношение · 2d6
-      </h3>
-      <ul className="mt-3 divide-y divide-border">
-        {rows.map((row, i) => {
-          const label = row.min === row.max ? String(row.min) : `${row.min}–${row.max}`;
-          const isHit = i === hitRow;
-          return (
-            <li
-              key={label}
-              data-row-index={i}
-              data-hit={isHit ? 'true' : undefined}
-              className={`flex gap-3 px-2 py-1.5 ${
-                isHit ? 'border-l-2 border-primary bg-primary/10 text-text' : 'text-text-muted'
-              }`}
-            >
-              <span className="w-12 font-mono text-xs">{label}</span>
-              <span className="flex-1 text-sm">
-                <span className="font-semibold text-text">{row.ru}.</span>{' '}
-                <span className="italic">{row.question}</span>
-              </span>
-            </li>
-          );
-        })}
-      </ul>
+      <ReferenceList
+        title="Отношение · 2d6"
+        testId="reaction-reference"
+        rows={rows}
+        hitIndex={roll ? roll.rowIndex : null}
+        label={formatRangeLabel}
+      >
+        {(referenceRow) => (
+          <>
+            <span className="font-semibold text-text">{referenceRow.ru}.</span>{' '}
+            <span className="italic">{referenceRow.question}</span>
+          </>
+        )}
+      </ReferenceList>
     </section>
   );
 }

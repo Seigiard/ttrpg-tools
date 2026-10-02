@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
-import { packMinis, GAP_MM, MARGIN_MM, PAGE_SIZES_MM } from './packing.ts';
+import { packMinis, packRows, GAP_MM, MARGIN_MM, PAGE_SIZES_MM } from './packing.ts';
 import { HEIGHT_SLOT_ORDER, slotGeometryLabel } from './sizes.ts';
 import type { PackingEntry as Entry } from './types.ts';
 
 import { test as t } from 'bun:test';
+
+// Covers the row candidate and calibrated geometry through the chosen layout.
+// layout.test.ts covers placement decisions.
 
 // Helper: build an entry with square art at a given size/count.
 const entry = (over: Partial<Entry>): Entry => ({
@@ -22,7 +25,7 @@ t('default margin reserves paper around both faces without shrinking the figure'
   // #given
   const entries = [entry({})];
   // #when
-  const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false });
+  const result = packRows(entries, { pageSize: 'a4', numberDuplicates: false });
   const mini = result.pages[0].rows[0].items[0];
   // #then
   assert.deepEqual(
@@ -46,7 +49,7 @@ t('front calibration scales the artwork height from the marked creature height',
   ];
   // #when
   const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 });
-  const mini = result.pages[0].rows[0].items[0];
+  const mini = result.pages[0].placements[0].mini;
   // #then
   assert.deepEqual(
     [
@@ -74,7 +77,7 @@ t('front calibration uses a custom figure height as its target', () => {
   ];
   // #when
   const mini = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 }).pages[0]
-    .rows[0].items[0];
+    .placements[0].mini;
   // #then
   assert.deepEqual([mini.imageWidthMm, mini.imageHeightMm], [30, 60]);
 });
@@ -86,7 +89,7 @@ t('front calibration past twice the slot height is scaled down and reported', ()
   ];
   // #when
   const mini = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 }).pages[0]
-    .rows[0].items[0];
+    .placements[0].mini;
   // #then
   assert.deepEqual(
     [mini.imageWidthMm, mini.imageHeightMm, mini.imageWidthMm / mini.imageHeightMm, mini.fitLimits],
@@ -101,7 +104,7 @@ t('front calibration that hits the width cap scales down whole and reports width
   ];
   // #when
   const mini = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 }).pages[0]
-    .rows[0].items[0];
+    .placements[0].mini;
   // #then
   assert.deepEqual(
     [mini.imageWidthMm, mini.imageHeightMm, mini.imageWidthMm / mini.imageHeightMm, mini.fitLimits],
@@ -125,7 +128,7 @@ t(
     ];
     // #when
     const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 });
-    const mini = result.pages[0].rows[0].items[0];
+    const mini = result.pages[0].placements[0].mini;
     // #then
     assert.deepEqual(
       [
@@ -154,7 +157,7 @@ t('back calibration scales the back artwork height from its own marked creature 
   ];
   // #when
   const mini = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 }).pages[0]
-    .rows[0].items[0];
+    .placements[0].mini;
   // #then
   assert.deepEqual(
     [mini.imageHeightMm, mini.back?.imageWidthMm, mini.back?.imageHeightMm],
@@ -175,7 +178,7 @@ t('an inherited square back shrinks both faces together at its width cap', () =>
   ];
   // #when
   const mini = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 }).pages[0]
-    .rows[0].items[0];
+    .placements[0].mini;
   // #then
   assert.deepEqual(
     [
@@ -202,7 +205,7 @@ t('an inherited wide back stays printable with matching heights and unchanged pr
   ];
   // #when
   const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false });
-  const mini = result.pages[0]?.rows[0].items[0];
+  const mini = result.pages[0]?.placements[0].mini;
   // #then
   assert.deepEqual(
     {
@@ -236,7 +239,7 @@ t('back-only calibration is capped to the page and reports every active limit', 
   ];
   // #when
   const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 });
-  const mini = result.pages[0]?.rows[0].items[0];
+  const mini = result.pages[0]?.placements[0].mini;
   // #then
   assert.deepEqual(
     {
@@ -272,7 +275,7 @@ t('back-only calibration fits an oversized custom front and back onto the page',
   ];
   // #when
   const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 });
-  const mini = result.pages[0]?.rows[0].items[0];
+  const mini = result.pages[0]?.placements[0].mini;
   // #then
   assert.deepEqual(
     {
@@ -329,8 +332,7 @@ t('calibrated slots keep their height order with the same marked lines', () => {
   // #when
   const bySlot = Object.fromEntries(
     packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 }).pages.flatMap(
-      (page) =>
-        page.rows.flatMap((row) => row.items.map((mini) => [mini.heightSlot, mini.imageHeightMm])),
+      (page) => page.placements.map(({ mini }) => [mini.heightSlot, mini.imageHeightMm]),
     ),
   );
   // #then
@@ -340,19 +342,19 @@ t('calibrated slots keep their height order with the same marked lines', () => {
 // --- counting & expansion ---
 
 t('empty input yields zero pages and zero minis', () => {
-  const r = packMinis([], { pageSize: 'a4', numberDuplicates: false });
+  const r = packRows([], { pageSize: 'a4', numberDuplicates: false });
   assert.equal(r.pageCount, 0);
   assert.equal(r.miniCount, 0);
   assert.equal(r.pages.length, 0);
 });
 
 t('count expands into that many placed minis', () => {
-  const r = packMinis([entry({ count: 5 })], { pageSize: 'a4', numberDuplicates: false });
+  const r = packRows([entry({ count: 5 })], { pageSize: 'a4', numberDuplicates: false });
   assert.equal(r.miniCount, 5);
 });
 
 t('entries without natural dimensions are not packed', () => {
-  const r = packMinis([entry({ naturalWidth: undefined, naturalHeight: undefined })], {
+  const r = packRows([entry({ naturalWidth: undefined, naturalHeight: undefined })], {
     pageSize: 'a4',
     numberDuplicates: false,
   });
@@ -361,7 +363,7 @@ t('entries without natural dimensions are not packed', () => {
 });
 
 t('custom entry without a valid width is not packed', () => {
-  const r = packMinis([entry({ heightSlot: 'custom', customWidthMm: undefined })], {
+  const r = packRows([entry({ heightSlot: 'custom', customWidthMm: undefined })], {
     pageSize: 'a4',
     numberDuplicates: false,
   });
@@ -375,7 +377,7 @@ t('medium squares at zero margin pack 4 per row, 2 rows per A4 page', () => {
   // width 35, totalHeight = 35*2 + four 12.5mm tabs = 120mm.
   // width: 4*35 + 3*4 = 152 <= 190; 5 would be 191 > 190.
   // height: 2 rows = 120+4+120 = 244 <= 277; a 3rd = 368 > 277.
-  const r = packMinis([entry({ count: 8 })], {
+  const r = packRows([entry({ count: 8 })], {
     pageSize: 'a4',
     numberDuplicates: false,
     marginMm: 0,
@@ -392,7 +394,7 @@ t('medium squares at zero margin pack 4 per row, 2 rows per A4 page', () => {
 });
 
 t('no row exceeds usable width and no page exceeds usable height', () => {
-  const r = packMinis([entry({ count: 100 })], { pageSize: 'a4', numberDuplicates: false });
+  const r = packRows([entry({ count: 100 })], { pageSize: 'a4', numberDuplicates: false });
   for (const page of r.pages) {
     let totalH = 0;
     page.rows.forEach((row, i) => {
@@ -404,7 +406,7 @@ t('no row exceeds usable width and no page exceeds usable height', () => {
 });
 
 t('9 medium squares spill onto a second page', () => {
-  const r = packMinis([entry({ count: 9 })], {
+  const r = packRows([entry({ count: 9 })], {
     pageSize: 'a4',
     numberDuplicates: false,
     marginMm: 0,
@@ -415,7 +417,7 @@ t('9 medium squares spill onto a second page', () => {
 // --- oversized reporting ---
 
 t('mini wider than the page is reported as skipped, not silently dropped', () => {
-  const r = packMinis(
+  const r = packRows(
     // 200 mm base, 204 mm including margins > 190 usable width
     [entry({ heightSlot: 'custom', customWidthMm: 200, customHeightMm: 30 })],
     { pageSize: 'a4', numberDuplicates: false },
@@ -429,7 +431,7 @@ t('mini wider than the page is reported as skipped, not silently dropped', () =>
 
 t('mini taller than the page is reported as skipped', () => {
   // custom 140mm base and 140mm figure: image 140x140, totalHeight = 140*2 + 2*2 + 4*70 = 564 > 277.
-  const r = packMinis([entry({ heightSlot: 'custom', customWidthMm: 140, customHeightMm: 140 })], {
+  const r = packRows([entry({ heightSlot: 'custom', customWidthMm: 140, customHeightMm: 140 })], {
     pageSize: 'a4',
     numberDuplicates: false,
   });
@@ -439,7 +441,7 @@ t('mini taller than the page is reported as skipped', () => {
 });
 
 t('oversized entry is skipped while a fitting entry in the same batch is placed', () => {
-  const r = packMinis(
+  const r = packRows(
     [
       entry({ count: 2 }),
       entry({ heightSlot: 'custom', customWidthMm: 300, customHeightMm: 30 }),
@@ -457,7 +459,7 @@ t('a row exactly filling usable width packs as one row', () => {
   // Widths that exactly hit the boundary: a 44.5mm base under a short figure,
   // 4 of them: 4*44.5 + 3*4 = 190. Landscape art is capped at 30 x 10mm, well
   // inside the base.
-  const r = packMinis(
+  const r = packRows(
     [
       entry({
         heightSlot: 'custom',
@@ -477,7 +479,7 @@ t('a row exactly filling usable width packs as one row', () => {
 
 t('half a mm over the boundary wraps to a second row on the same page', () => {
   // custom 45mm: 4*45 + 3*4 = 192 > 190 => the fourth wraps.
-  const r = packMinis(
+  const r = packRows(
     [
       entry({
         heightSlot: 'custom',
@@ -498,13 +500,13 @@ t('half a mm over the boundary wraps to a second row on the same page', () => {
 // --- labels ---
 
 t('numberDuplicates labels copies 1..N per entry', () => {
-  const r = packMinis([entry({ count: 3 })], { pageSize: 'a4', numberDuplicates: true });
+  const r = packRows([entry({ count: 3 })], { pageSize: 'a4', numberDuplicates: true });
   const labels = r.pages[0].rows.flatMap((row) => row.items.map((m) => m.label));
   assert.deepEqual([...labels].sort(), ['1', '2', '3']);
 });
 
 t('no labels when numberDuplicates is off', () => {
-  const r = packMinis([entry({ count: 3 })], { pageSize: 'a4', numberDuplicates: false });
+  const r = packRows([entry({ count: 3 })], { pageSize: 'a4', numberDuplicates: false });
   const anyLabel = r.pages[0].rows.some((row) => row.items.some((m) => m.label != null));
   assert.equal(anyLabel, false);
 });
@@ -514,7 +516,7 @@ t('a Medium unfolds to both faces, two margins and four half-base tabs', () => {
   //         25 mm floor strip, two tabs deep, under the front one
   const entries = [entry({ heightSlot: 'medium' })];
   // #when
-  const m = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 2 }).pages[0]
+  const m = packRows(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 2 }).pages[0]
     .rows[0].items[0];
   // #then  35*2 + 2*2 + 12.5*4
   assert.deepEqual([m.totalHeightMm, m.tabHeightMm], [124, 12.5]);
@@ -524,7 +526,7 @@ t('2 mm margins fit 8 medium squares per A4 sheet with 4 mm gaps', () => {
   // #given
   const entries = [entry({ count: 9 })];
   // #when
-  const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 2 });
+  const result = packRows(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 2 });
   // #then
   assert.deepEqual(
     result.pages.map((page) => ({
@@ -554,7 +556,7 @@ t('margin alone can make a mini too wide or too tall for A4', () => {
     entry({ heightSlot: 'custom', customWidthMm: 69, customHeightMm: 69 }),
   ];
   // #when
-  const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 2 });
+  const result = packRows(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 2 });
   // #then
   assert.deepEqual(
     [result.pageCount, result.miniCount, result.oversizedEntryIndices],
@@ -569,7 +571,7 @@ t('fractional margins count on both axes and push minis onto more pages', () => 
     entry({ heightSlot: 'custom', customWidthMm: 59, customHeightMm: 59, count: 7 }),
   ];
   // #when
-  const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 1.5 });
+  const result = packRows(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 1.5 });
   // #then
   assert.deepEqual(
     result.pages.map((page) => ({
@@ -593,7 +595,7 @@ t('shared tall artwork keeps each size centred within the same margin', () => {
     entry({ ...artwork, heightSlot: 'large' }),
   ];
   // #when
-  const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 3 });
+  const result = packRows(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 3 });
   // #then
   assert.deepEqual(
     result.pages.flatMap((page) =>
@@ -620,7 +622,7 @@ t('a numbered mini at zero margin centres its base under the figure', () => {
   // #given  square art at Medium prints 35 mm tall, overhanging its 25 mm base
   const entries = [entry({})];
   // #when
-  const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: true, marginMm: 0 });
+  const result = packRows(entries, { pageSize: 'a4', numberDuplicates: true, marginMm: 0 });
   // #then
   assert.deepEqual(result.pages, [
     {
@@ -663,7 +665,7 @@ t('a mini reserves the greater of figure width and base width, plus margins', ()
     entry({ naturalWidth: 100, naturalHeight: 350 }),
   ];
   // #when
-  const result = packMinis(entries, { ...sheetOpts, marginMm: 2 });
+  const result = packRows(entries, { ...sheetOpts, marginMm: 2 });
   // #then
   assert.deepEqual(
     result.pages[0].rows[0].items.map((mini) => [
@@ -684,8 +686,8 @@ t('overhanging figures never overlap their neighbours', () => {
   // #given  four wide Medium figures, each overhanging its base
   const entries = [entry({ naturalWidth: 150, naturalHeight: 100, count: 4 })];
   // #when
-  const result = packMinis(entries, { ...sheetOpts, marginMm: 2 });
-  // #then  walk each row the way the PDF drawer does
+  const result = packRows(entries, { ...sheetOpts, marginMm: 2 });
+  // #then  walk each row as the row candidate lays it out
   const rows = result.pages
     .flatMap((page) => page.rows)
     .map((row) => {
@@ -712,7 +714,7 @@ t('a custom entry without a figure height is not packable', () => {
   // #given  a base width alone does not say how tall the figure prints
   const entries = [entry({ heightSlot: 'custom', customWidthMm: 30 })];
   // #when
-  const result = packMinis(entries, sheetOpts);
+  const result = packRows(entries, sheetOpts);
   // #then
   assert.deepEqual([result.miniCount, result.pageCount], [0, 0]);
 });
@@ -724,7 +726,7 @@ t('minis are placed sorted by reserved width descending', () => {
     entry({ heightSlot: 'large', naturalWidth: 100, naturalHeight: 300 }),
   ];
   // #when
-  const result = packMinis(entries, { ...sheetOpts, marginMm: 2 });
+  const result = packRows(entries, { ...sheetOpts, marginMm: 2 });
   // #then
   const widths = result.pages[0].rows.flatMap((row) => row.items.map((mini) => mini.totalWidthMm));
   assert.deepEqual(
@@ -743,7 +745,7 @@ t('a tab is half its base, until the page cuts Huge and Gargantuan short', () =>
     entry({ heightSlot, naturalWidth: 100, naturalHeight: 200 }),
   );
   // #when
-  const minis = packMinis(entries, { ...sheetOpts, marginMm: 2 }).pages.flatMap((page) =>
+  const minis = packRows(entries, { ...sheetOpts, marginMm: 2 }).pages.flatMap((page) =>
     page.rows.flatMap((row) => row.items),
   );
   // #then
@@ -776,7 +778,7 @@ t('every slot’s unfolded mini fits both supported pages at the default margin'
   );
   // #when
   const results = (['a4', 'letter'] as const).map((pageSize) =>
-    packMinis(entries, { pageSize, numberDuplicates: false }),
+    packRows(entries, { pageSize, numberDuplicates: false }),
   );
   // #then  the tallest slot is cut to the paper, so none of them is skipped
   assert.deepEqual(
@@ -799,7 +801,7 @@ t('no slot is lost when the figure margin is raised to 5 mm', () => {
   );
   // #when  on the smaller page as well as the larger one
   const results = (['a4', 'letter'] as const).map((pageSize) =>
-    packMinis(entries, { pageSize, numberDuplicates: false, marginMm: 5 }),
+    packRows(entries, { pageSize, numberDuplicates: false, marginMm: 5 }),
   );
   // #then
   assert.deepEqual(
@@ -812,8 +814,7 @@ t('no slot is lost when the figure margin is raised to 5 mm', () => {
 });
 
 // The dropdown's tooltip is a promise about paper, and it reaches the user
-// through the resolvers while the mini reaches it through the whole pack path.
-// Nothing else would catch the two drifting apart.
+// through the resolvers; the row candidate resolves the mini's geometry.
 t('the tooltip promises the millimetres the packer actually produces', () => {
   // #given  every slot on artwork too tall to reach the width cap, so each
   //         figure prints at its slot's own height
@@ -821,7 +822,7 @@ t('the tooltip promises the millimetres the packer actually produces', () => {
     entry({ heightSlot, naturalWidth: 100, naturalHeight: 200 }),
   );
   // #when
-  const minis = packMinis(entries, { ...sheetOpts, marginMm: 2 }).pages.flatMap((page) =>
+  const minis = packRows(entries, { ...sheetOpts, marginMm: 2 }).pages.flatMap((page) =>
     page.rows.flatMap((row) => row.items),
   );
   // #then
@@ -840,7 +841,7 @@ t('a back artwork wider than its front sets the cut width and centres the front'
   // #given  a square front at Medium prints 35 mm wide; a 3:2 back prints 52.5
   const entries = [entry({ backNaturalWidth: 150, backNaturalHeight: 100 })];
   // #when
-  const m = packMinis(entries, { ...sheetOpts, marginMm: 2 }).pages[0].rows[0].items[0];
+  const m = packRows(entries, { ...sheetOpts, marginMm: 2 }).pages[0].rows[0].items[0];
   // #then
   assert.deepEqual(
     {
@@ -862,7 +863,7 @@ t('a back artwork the width cap shortens still stands on a full-height face', ()
   // #given  a 4:1 back hits the cap and prints 52.5 x 13.125 behind a 35 mm front
   const entries = [entry({ backNaturalWidth: 400, backNaturalHeight: 100 })];
   // #when
-  const m = packMinis(entries, { ...sheetOpts, marginMm: 2 }).pages[0].rows[0].items[0];
+  const m = packRows(entries, { ...sheetOpts, marginMm: 2 }).pages[0].rows[0].items[0];
   // #then  both halves keep the taller face, so the tabs still meet the floor
   assert.deepEqual([m.faceHeightMm, m.back!.imageHeightMm, m.totalHeightMm], [35, 13.125, 124]);
 });
@@ -873,14 +874,14 @@ t('a back taller than its capped front sets the face height either way round', (
     entry({ naturalWidth: 400, naturalHeight: 100, backNaturalWidth: 100, backNaturalHeight: 100 }),
   ];
   // #when
-  const m = packMinis(entries, { ...sheetOpts, marginMm: 2 }).pages[0].rows[0].items[0];
+  const m = packRows(entries, { ...sheetOpts, marginMm: 2 }).pages[0].rows[0].items[0];
   // #then
   assert.deepEqual([m.faceHeightMm, m.imageHeightMm, m.totalHeightMm], [35, 13.125, 124]);
 });
 
 t('a mini without a back artwork carries no back face geometry', () => {
   // #when
-  const m = packMinis([entry({})], sheetOpts).pages[0].rows[0].items[0];
+  const m = packRows([entry({})], sheetOpts).pages[0].rows[0].items[0];
   // #then
   assert.deepEqual([m.back, m.faceHeightMm], [undefined, m.imageHeightMm]);
 });
