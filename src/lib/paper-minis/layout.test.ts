@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { packMinis, type Placement } from './packing';
-import { packableAreaMm } from './geometry';
+import { usableAreaMm } from './geometry';
 import { HEIGHT_SLOT_ORDER } from './sizes';
 import type { PackingEntry } from './types';
 
@@ -152,7 +152,7 @@ for (const pageSize of ['a4', 'letter'] as const) {
     for (const [n, entries] of batches.entries()) {
       const opts = { pageSize, numberDuplicates: true, marginMm: n % 6 };
       const result = packMinis(entries, opts);
-      const { widthMm: width, heightMm: height } = packableAreaMm(opts);
+      const { widthMm: width, heightMm: height } = usableAreaMm(opts);
       if (JSON.stringify(result) !== JSON.stringify(packMinis(entries, opts)))
         violations.push('nondeterministic');
       const placed = result.pages.flatMap((page) => page.placements);

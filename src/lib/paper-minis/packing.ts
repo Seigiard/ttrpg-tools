@@ -5,7 +5,7 @@ import {
   type PackedMini,
   type ResolvedMini,
   footprintMm,
-  packableAreaMm,
+  usableAreaMm,
   resolveMini,
 } from './geometry.ts';
 
@@ -95,7 +95,7 @@ export function packMinis(entries: PackingEntry[], opts: PackOptions): PackResul
 
 function packResolvedEntries(entries: ResolvedEntry[], opts: PackOptions): PackResult {
   const resolved = entries.flatMap(({ mini }) => (mini ? [mini] : []));
-  const { widthMm, heightMm } = packableAreaMm(opts);
+  const { widthMm, heightMm } = usableAreaMm(opts);
   const pages = packGuillotine(resolved, widthMm, heightMm);
   return {
     pages,

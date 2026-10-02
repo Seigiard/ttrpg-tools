@@ -52,13 +52,6 @@ export function usableAreaMm(opts: Pick<PackOptions, 'pageSize' | 'printerScale'
 export const CUT_MARK_ARM_MM = 1.5;
 export const CUT_MARK_STROKE_MM = 0.2;
 
-export function packableAreaMm(opts: Pick<PackOptions, 'pageSize' | 'printerScale'>): {
-  widthMm: number;
-  heightMm: number;
-} {
-  return usableAreaMm(opts);
-}
-
 export type MiniLevels = {
   floorStripTopMm: number;
   frontTabTopMm: number;
@@ -129,7 +122,7 @@ export function footprintMm(
 }
 
 function miniOrientation(mini: PackedMini, opts: PackOptions): MiniOrientation {
-  const usable = packableAreaMm(opts);
+  const usable = usableAreaMm(opts);
   const fits = ({ widthMm, heightMm }: { widthMm: number; heightMm: number }) =>
     widthMm <= usable.widthMm && heightMm <= usable.heightMm;
   if (fits(footprintMm(mini, false))) return 'upright';
@@ -211,7 +204,7 @@ function fitMiniFaces(
   opts: PackOptions,
 ): { front: FigureFitMm; back?: FigureFitMm } {
   const dimensions = resolveSizeDimensionsMm(e);
-  const { widthMm: usableWidthMm, heightMm: usableHeightMm } = packableAreaMm(opts);
+  const { widthMm: usableWidthMm, heightMm: usableHeightMm } = usableAreaMm(opts);
   const marginMm = opts.marginMm ?? DEFAULT_FIGURE_MARGIN_MM;
   const imageSpaceMm = (usableHeightMm - marginMm * 2 - resolveTabHeightMm(e) * 4) / 2;
   const calibrated = calibrationGap(e.calibration);

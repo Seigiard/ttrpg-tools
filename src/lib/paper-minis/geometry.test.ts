@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { fitFigure, packableAreaMm, resolveMini } from './geometry.ts';
+import { fitFigure, usableAreaMm, resolveMini } from './geometry.ts';
 import { type PackResult, packMinis } from './packing.ts';
 import {
   HEIGHT_SLOTS,
@@ -127,7 +127,7 @@ const placedMinis = (result: PackResult) =>
     .flatMap((page) => page.placements.map(({ mini }) => mini))
     .toSorted((a, b) => a.entryIndex - b.entryIndex || a.copyIndex - b.copyIndex);
 
-const usableH = packableAreaMm({ pageSize: 'a4' }).heightMm;
+const usableH = usableAreaMm({ pageSize: 'a4' }).heightMm;
 const sheetOpts = { pageSize: 'a4', numberDuplicates: false } as const;
 
 t('default margin reserves paper around both faces without shrinking the figure', () => {
