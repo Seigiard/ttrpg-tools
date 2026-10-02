@@ -7,8 +7,6 @@ import { isSupportedArtwork } from '@/lib/paper-minis/artwork';
 import { buildFilename } from '@/lib/paper-minis/pdf';
 import { fitMiniFaces } from '@/lib/paper-minis/packing';
 import {
-  DEFAULT_CUSTOM_HEIGHT_MM,
-  DEFAULT_CUSTOM_WIDTH_MM,
   HEIGHT_SLOT_ORDER,
   MIN_CALIBRATION_GAP,
   type FigureFitLimit,
@@ -407,8 +405,9 @@ export default function PaperMinisGenerator() {
   const store = useMemo(() => createPaperMinisStore(), []);
   const rows = useStore(store.$rows);
   const settings = useStore(store.$settings);
+  const inputs = useStore(store.$inputs);
+  const inputsValid = useStore(store.$inputsValid);
   const message = useStore(store.$message);
-  const [margin, setMargin] = useState(String(settings.marginMm));
   const busy = useStore(store.$busy);
   const preparing = useStore(store.$preparing);
   const preview = useStore(store.$preview);
@@ -419,13 +418,10 @@ export default function PaperMinisGenerator() {
   const [dragging, setDragging] = useState(false);
   const files = useRef<HTMLInputElement>(null);
   const packed = useMemo(() => store.pack(), [store, rows, settings]);
-  const marginValid =
-    margin.trim() !== '' && Number.isFinite(Number(margin)) && Number(margin) >= 0;
   const calibratingRow = rows.find((row) => row.id === calibratingId && row.artwork);
 
   useEffect(() => {
     store.loadSettings();
-    setMargin(String(store.$settings.get().marginMm));
   }, [store]);
   useEffect(() => {
     if (!preview) {
@@ -546,13 +542,12 @@ export default function PaperMinisGenerator() {
                   min="0"
                   step="any"
                   required
-                  value={margin}
-                  aria-invalid={!marginValid}
-                  onChange={(event) => {
-                    if (store.$busy.get()) return;
-                    setMargin(event.target.value);
-                    const n = event.target.valueAsNumber;
-                    if (Number.isFinite(n) && n >= 0) store.settings({ marginMm: n });
+                  value={inputs.margin.text}
+                  aria-invalid={!inputs.margin.valid}
+                  onChange={(event) => store.setMargin(event.target.value)}
+                  onBlur={() => {
+                    if (!store.$inputs.get().margin.valid)
+                      store.setMargin(String(store.$settings.get().marginMm));
                   }}
                 />
               </label>
@@ -562,10 +557,7 @@ export default function PaperMinisGenerator() {
                   <select
                     className={field}
                     value=""
-                    onChange={(event) => {
-                      for (const row of rows)
-                        store.patch(row.id, { heightSlot: event.target.value as MiniSize });
-                    }}
+                    onChange={(event) => store.setAllSizes(event.target.value as MiniSize)}
                   >
                     <option value="" disabled>
                       Выберите…
@@ -611,15 +603,20 @@ export default function PaperMinisGenerator() {
                       ? 'Обрабатываем изображения. PDF будет доступен после завершения.'
                       : ''}
                 </p>
-                {!marginValid && (
+                {!inputs.margin.valid && (
                   <p role="status" className="text-sm text-danger">
                     Поля должны быть числом от 0 мм.
+                  </p>
+                )}
+                {!inputsValid && inputs.margin.valid && (
+                  <p role="status" className="text-sm text-danger">
+                    Количество должно быть целым числом от 1, размеры — больше 0 мм.
                   </p>
                 )}
                 <div className="space-y-2">
                   <Button
                     className="min-h-11 w-full"
-                    disabled={busy || preparing || !packed.miniCount || !marginValid}
+                    disabled={busy || preparing || !packed.miniCount || !inputsValid}
                     onClick={() => void download()}
                   >
                     {busy ? 'Подготовка PDF…' : 'Скачать PDF'}
@@ -627,7 +624,7 @@ export default function PaperMinisGenerator() {
                   <Button
                     variant="outline"
                     className="min-h-11 w-full"
-                    disabled={busy || preparing || !packed.miniCount || !marginValid}
+                    disabled={busy || preparing || !packed.miniCount || !inputsValid}
                     onClick={() => void store.refreshPreview()}
                   >
                     {preview ? 'Обновить предпросмотр' : 'Предпросмотр PDF'}
@@ -672,6 +669,17 @@ export default function PaperMinisGenerator() {
                   packed.limitedEntryFitLimits.find((warning) => warning.entryIndex === index)
                     ?.limits ?? [],
                 );
+                const rowInputs = inputs.rows[row.id] ?? {
+                  count: { text: String(row.count), valid: true },
+                  customWidthMm: {
+                    text: row.customWidthMm === undefined ? '' : String(row.customWidthMm),
+                    valid: row.customWidthMm !== undefined,
+                  },
+                  customHeightMm: {
+                    text: row.customHeightMm === undefined ? '' : String(row.customHeightMm),
+                    valid: row.customHeightMm !== undefined,
+                  },
+                };
                 return (
                   <article
                     key={row.id}
@@ -770,11 +778,7 @@ export default function PaperMinisGenerator() {
                           value={row.heightSlot}
                           title={slotGeometryLabel(row.heightSlot)}
                           onChange={(event) =>
-                            store.patch(row.id, {
-                              heightSlot: event.target.value as MiniSize,
-                              customHeightMm: row.customHeightMm ?? DEFAULT_CUSTOM_HEIGHT_MM,
-                              customWidthMm: row.customWidthMm ?? DEFAULT_CUSTOM_WIDTH_MM,
-                            })
+                            store.setSize(row.id, event.target.value as MiniSize)
                           }
                         >
                           <SizeOptions custom />
@@ -787,40 +791,45 @@ export default function PaperMinisGenerator() {
                           type="number"
                           min="1"
                           step="1"
-                          defaultValue={row.count}
-                          onChange={(event) =>
-                            store.patch(row.id, {
-                              count: Math.max(1, Math.floor(event.target.valueAsNumber) || 1),
-                            })
-                          }
-                          onBlur={(event) => {
-                            event.currentTarget.value = String(row.count);
+                          required
+                          value={rowInputs.count.text}
+                          aria-invalid={!rowInputs.count.valid}
+                          onChange={(event) => store.setCount(row.id, event.target.value)}
+                          onBlur={() => {
+                            if (!store.$inputs.get().rows[row.id]?.count.valid)
+                              store.setCount(row.id, String(row.count));
                           }}
                         />
                       </label>
                       {row.heightSlot === 'custom' && (
                         <div className="grid grid-cols-2 gap-2 sm:col-span-2">
-                          {(['customWidthMm', 'customHeightMm'] as const).map((key, i) => (
-                            <label key={key} className="text-sm">
-                              {i === 0 ? 'Основание, мм' : 'Фигурка, мм'}
-                              <input
-                                className={field}
-                                type="number"
-                                min="1"
-                                step="0.5"
-                                value={row[key] ?? ''}
-                                onChange={(event) =>
-                                  store.patch(row.id, {
-                                    [key]:
-                                      Number.isFinite(event.target.valueAsNumber) &&
-                                      event.target.valueAsNumber > 0
-                                        ? event.target.valueAsNumber
-                                        : undefined,
-                                  })
-                                }
-                              />
-                            </label>
-                          ))}
+                          {(['customWidthMm', 'customHeightMm'] as const).map((key, i) => {
+                            const dimension = i === 0 ? 'width' : 'height';
+                            return (
+                              <label key={key} className="text-sm">
+                                {i === 0 ? 'Основание, мм' : 'Фигурка, мм'}
+                                <input
+                                  className={field}
+                                  type="number"
+                                  step="any"
+                                  required
+                                  value={rowInputs[key].text}
+                                  aria-invalid={!rowInputs[key].valid}
+                                  onChange={(event) =>
+                                    store.setCustomDimensions(row.id, {
+                                      [dimension]: event.target.value,
+                                    })
+                                  }
+                                  onBlur={() => {
+                                    if (!store.$inputs.get().rows[row.id]?.[key].valid)
+                                      store.setCustomDimensions(row.id, {
+                                        [dimension]: String(row[key]),
+                                      });
+                                  }}
+                                />
+                              </label>
+                            );
+                          })}
                         </div>
                       )}
                     </div>

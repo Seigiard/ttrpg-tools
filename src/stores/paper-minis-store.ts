@@ -9,8 +9,12 @@ import {
   type PackResult,
   type PageSizeKey,
 } from '@/lib/paper-minis/packing';
-import { DEFAULT_HEIGHT_SLOT } from '@/lib/paper-minis/sizes';
-import type { Entry, HeightCalibration, HeightSlot } from '@/lib/paper-minis/types';
+import {
+  DEFAULT_CUSTOM_HEIGHT_MM,
+  DEFAULT_CUSTOM_WIDTH_MM,
+  DEFAULT_HEIGHT_SLOT,
+} from '@/lib/paper-minis/sizes';
+import type { Entry, HeightCalibration, HeightSlot, MiniSize } from '@/lib/paper-minis/types';
 
 export type MiniRow = Entry & { id: number; frontError?: string };
 export type PaperMinisSettings = {
@@ -18,6 +22,18 @@ export type PaperMinisSettings = {
   marginMm: number;
   numberDuplicates: boolean;
   normalization: boolean;
+};
+export type NumericInput = { text: string; valid: boolean };
+export type PaperMinisInputs = {
+  margin: NumericInput;
+  rows: Record<
+    number,
+    {
+      count: NumericInput;
+      customWidthMm: NumericInput;
+      customHeightMm: NumericInput;
+    }
+  >;
 };
 export type PaperMinisRenderer = (
   rows: readonly MiniRow[],
@@ -29,6 +45,14 @@ const storageKey = 'pmg-settings';
 const successMessage = 'PDF готов.';
 const failureMessage = 'Не удалось создать PDF. Попробуйте ещё раз или уменьшите изображения.';
 
+function parseNumericInput(text: string, accepts: (value: number) => boolean) {
+  if (text.trim() === '') return { input: { text, valid: false } };
+  const value = Number(text);
+  return Number.isFinite(value) && accepts(value)
+    ? { input: { text, valid: true }, value }
+    : { input: { text, valid: false } };
+}
+
 export function createPaperMinisStore(renderer: PaperMinisRenderer = generatePDF) {
   const $rows = atom<MiniRow[]>([]);
   const $settings = atom<PaperMinisSettings>({
@@ -36,6 +60,21 @@ export function createPaperMinisStore(renderer: PaperMinisRenderer = generatePDF
     marginMm: DEFAULT_FIGURE_MARGIN_MM,
     numberDuplicates: false,
     normalization: true,
+  });
+  const $inputs = atom<PaperMinisInputs>({
+    margin: { text: String(DEFAULT_FIGURE_MARGIN_MM), valid: true },
+    rows: {},
+  });
+  const $inputsValid = computed([$inputs, $rows], (inputs, rows) => {
+    if (!inputs.margin.valid) return false;
+    return rows.every((row) => {
+      const rowInputs = inputs.rows[row.id];
+      return (
+        rowInputs?.count.valid === true &&
+        (row.heightSlot !== 'custom' ||
+          (rowInputs.customWidthMm.valid && rowInputs.customHeightMm.valid))
+      );
+    });
   });
   const $message = atom('');
   const $revision = atom(0);
@@ -55,7 +94,19 @@ export function createPaperMinisStore(renderer: PaperMinisRenderer = generatePDF
   function changed() {
     $revision.set($revision.get() + 1);
   }
-  function patch(id: number, fields: Partial<Entry> & { frontError?: string }) {
+  function setRowInput(
+    id: number,
+    fields: Partial<PaperMinisInputs['rows'][number]>,
+  ) {
+    const inputs = $inputs.get();
+    const row = inputs.rows[id];
+    if (!row) return;
+    $inputs.set({
+      ...inputs,
+      rows: { ...inputs.rows, [id]: { ...row, ...fields } },
+    });
+  }
+  function updateRow(id: number, fields: Partial<Entry> & { frontError?: string }) {
     if ($busy.get()) return;
     $rows.set($rows.get().map((row) => (row.id === id ? { ...row, ...fields } : row)));
     changed();
@@ -71,8 +122,115 @@ export function createPaperMinisStore(renderer: PaperMinisRenderer = generatePDF
       count: 1,
     };
     $rows.set([...$rows.get(), row]);
+    $inputs.set({
+      ...$inputs.get(),
+      rows: {
+        ...$inputs.get().rows,
+        [row.id]: {
+          count: { text: '1', valid: true },
+          customWidthMm: { text: '', valid: false },
+          customHeightMm: { text: '', valid: false },
+        },
+      },
+    });
     changed();
     return row.id;
+  }
+  function setSize(id: number, size: MiniSize) {
+    if ($busy.get()) return;
+    const row = $rows.get().find((candidate) => candidate.id === id);
+    if (!row) return;
+    const customWidthMm = row.customWidthMm ?? DEFAULT_CUSTOM_WIDTH_MM;
+    const customHeightMm = row.customHeightMm ?? DEFAULT_CUSTOM_HEIGHT_MM;
+    const fields =
+      size === 'custom'
+        ? { heightSlot: size, customWidthMm, customHeightMm }
+        : { heightSlot: size };
+    $rows.set(
+      $rows
+        .get()
+        .map((candidate) =>
+          candidate.id === id ? Object.assign({}, candidate, fields) : candidate,
+        ),
+    );
+    if (size === 'custom') {
+      const inputs = $inputs.get();
+      $inputs.set({
+        ...inputs,
+        rows: {
+          ...inputs.rows,
+          [id]: {
+            ...inputs.rows[id],
+            customWidthMm: { text: String(customWidthMm), valid: true },
+            customHeightMm: { text: String(customHeightMm), valid: true },
+          },
+        },
+      });
+    }
+    changed();
+  }
+  function setAllSizes(size: MiniSize) {
+    if ($busy.get() || !$rows.get().length) return;
+    const inputs = $inputs.get();
+    const nextInputs = { ...inputs.rows };
+    $rows.set(
+      $rows.get().map((row) => {
+        if (size !== 'custom') return Object.assign({}, row, { heightSlot: size });
+        const customWidthMm = row.customWidthMm ?? DEFAULT_CUSTOM_WIDTH_MM;
+        const customHeightMm = row.customHeightMm ?? DEFAULT_CUSTOM_HEIGHT_MM;
+        nextInputs[row.id] = {
+          ...nextInputs[row.id],
+          customWidthMm: { text: String(customWidthMm), valid: true },
+          customHeightMm: { text: String(customHeightMm), valid: true },
+        };
+        return Object.assign({}, row, { heightSlot: size, customWidthMm, customHeightMm });
+      }),
+    );
+    if (size === 'custom') $inputs.set({ ...inputs, rows: nextInputs });
+    changed();
+  }
+  function setCount(id: number, text: string) {
+    if ($busy.get()) return;
+    const row = $rows.get().find((candidate) => candidate.id === id);
+    if (!row) return;
+    const { input, value } = parseNumericInput(
+      text,
+      (candidate) => Number.isInteger(candidate) && candidate >= 1,
+    );
+    setRowInput(id, { count: input });
+    if (value === undefined || value === row.count) return;
+    $rows.set(
+      $rows.get().map((candidate) =>
+        candidate.id === id ? Object.assign({}, candidate, { count: value }) : candidate,
+      ),
+    );
+    changed();
+  }
+  function setCustomDimensions(
+    id: number,
+    fields: { width?: string; height?: string },
+  ) {
+    if ($busy.get()) return;
+    const row = $rows.get().find((candidate) => candidate.id === id);
+    if (!row) return;
+    let next = row;
+    const inputs: Partial<PaperMinisInputs['rows'][number]> = {};
+    if (fields.width !== undefined) {
+      const { input, value } = parseNumericInput(fields.width, (candidate) => candidate > 0);
+      inputs.customWidthMm = input;
+      if (value !== undefined && value !== next.customWidthMm)
+        next = { ...next, customWidthMm: value };
+    }
+    if (fields.height !== undefined) {
+      const { input, value } = parseNumericInput(fields.height, (candidate) => candidate > 0);
+      inputs.customHeightMm = input;
+      if (value !== undefined && value !== next.customHeightMm)
+        next = { ...next, customHeightMm: value };
+    }
+    setRowInput(id, inputs);
+    if (next === row) return;
+    $rows.set($rows.get().map((candidate) => (candidate.id === id ? next : candidate)));
+    changed();
   }
   async function setImage(id: number, file: File, back = false) {
     if ($busy.get()) return;
@@ -87,7 +245,7 @@ export function createPaperMinisStore(renderer: PaperMinisRenderer = generatePDF
     const normalization = $settings.get().normalization;
     const selectedRow = $rows.get().find((candidate) => candidate.id === id);
     const replacing = back ? selectedRow?.backArtwork != null : selectedRow?.artwork != null;
-    patch(
+    updateRow(
       id,
       back
         ? {
@@ -112,7 +270,7 @@ export function createPaperMinisStore(renderer: PaperMinisRenderer = generatePDF
         ? await normalizeArtwork(original)
         : { artwork: original, warning: undefined };
       if (!current()) return;
-      patch(
+      updateRow(
         id,
         back
           ? {
@@ -123,7 +281,7 @@ export function createPaperMinisStore(renderer: PaperMinisRenderer = generatePDF
       );
     } catch {
       if (!current()) return;
-      patch(
+      updateRow(
         id,
         back
           ? {
@@ -154,11 +312,32 @@ export function createPaperMinisStore(renderer: PaperMinisRenderer = generatePDF
       if (planned.back) void setImage(id, planned.back, true);
     }
   }
+  function validatedSettings(value: unknown, previous: PaperMinisSettings) {
+    if (!value || typeof value !== 'object') return previous;
+    const fields = value as Record<string, unknown>;
+    const next = { ...previous };
+    if (fields.pageSize === 'a4' || fields.pageSize === 'letter') next.pageSize = fields.pageSize;
+    if (
+      typeof fields.marginMm === 'number' &&
+      Number.isFinite(fields.marginMm) &&
+      fields.marginMm >= 0
+    )
+      next.marginMm = fields.marginMm;
+    if (typeof fields.numberDuplicates === 'boolean')
+      next.numberDuplicates = fields.numberDuplicates;
+    if (typeof fields.normalization === 'boolean') next.normalization = fields.normalization;
+    return next;
+  }
   function settings(fields: Partial<PaperMinisSettings>) {
     if ($busy.get()) return;
     const previous = $settings.get();
-    const next = { ...previous, ...fields };
+    const next = validatedSettings(fields, previous);
     $settings.set(next);
+    if (next.marginMm !== previous.marginMm)
+      $inputs.set({
+        ...$inputs.get(),
+        margin: { text: String(next.marginMm), valid: true },
+      });
     changed();
     try {
       localStorage.setItem(storageKey, JSON.stringify(next));
@@ -173,23 +352,24 @@ export function createPaperMinisStore(renderer: PaperMinisRenderer = generatePDF
       }
     }
   }
+  function setMargin(text: string) {
+    if ($busy.get()) return;
+    const { input, value } = parseNumericInput(text, (candidate) => candidate >= 0);
+    $inputs.set({ ...$inputs.get(), margin: input });
+    if (value === undefined || value === $settings.get().marginMm) return;
+    settings({ marginMm: value });
+    $inputs.set({ ...$inputs.get(), margin: input });
+  }
   function loadSettings() {
     if ($busy.get()) return;
     try {
       const value = JSON.parse(localStorage.getItem(storageKey) ?? 'null');
-      if (!value || typeof value !== 'object') return;
-      const next = { ...$settings.get() };
-      if (value.pageSize === 'a4' || value.pageSize === 'letter') next.pageSize = value.pageSize;
-      if (
-        typeof value.marginMm === 'number' &&
-        Number.isFinite(value.marginMm) &&
-        value.marginMm >= 0
-      )
-        next.marginMm = value.marginMm;
-      if (typeof value.numberDuplicates === 'boolean')
-        next.numberDuplicates = value.numberDuplicates;
-      if (typeof value.normalization === 'boolean') next.normalization = value.normalization;
+      const next = validatedSettings(value, $settings.get());
       $settings.set(next);
+      $inputs.set({
+        ...$inputs.get(),
+        margin: { text: String(next.marginMm), valid: true },
+      });
     } catch {
       /* Use defaults when storage is unavailable. */
     }
@@ -226,23 +406,29 @@ export function createPaperMinisStore(renderer: PaperMinisRenderer = generatePDF
   return {
     $rows,
     $settings,
+    $inputs,
+    $inputsValid,
     $message,
     $revision,
     $busy,
     $preparing,
     $preview,
     $previewStale,
-    patch,
     addBlank,
+    setSize,
+    setAllSizes,
+    setCount,
+    setCustomDimensions,
     setImage,
     ingest,
     settings,
+    setMargin,
     loadSettings,
     setCalibration(id: number, calibration: HeightCalibration) {
-      patch(id, { calibration });
+      updateRow(id, { calibration });
     },
     clearCalibration(id: number) {
-      patch(id, { calibration: undefined });
+      updateRow(id, { calibration: undefined });
     },
     pack,
     async download() {
@@ -255,7 +441,7 @@ export function createPaperMinisStore(renderer: PaperMinisRenderer = generatePDF
     clearBack(id: number) {
       if ($busy.get()) return;
       loads.delete(`${id}:true`);
-      patch(id, {
+      updateRow(id, {
         backImage: null,
         backArtwork: null,
         ...(!$rows.get().find((row) => row.id === id)?.image && { calibration: undefined }),
@@ -268,6 +454,10 @@ export function createPaperMinisStore(renderer: PaperMinisRenderer = generatePDF
       loads.delete(`${id}:true`);
       loads.delete(`${id}:false`);
       $rows.set($rows.get().filter((row) => row.id !== id));
+      const inputs = $inputs.get();
+      const rows = { ...inputs.rows };
+      delete rows[id];
+      $inputs.set({ ...inputs, rows });
       changed();
       $preparing.set(loads.size > 0);
     },
@@ -278,6 +468,24 @@ export function createPaperMinisStore(renderer: PaperMinisRenderer = generatePDF
       if (index < 0) return;
       const copy = { ...rows[index], id: nextId++ };
       $rows.set([...rows.slice(0, index + 1), copy, ...rows.slice(index + 1)]);
+      const inputs = $inputs.get();
+      $inputs.set({
+        ...inputs,
+        rows: {
+          ...inputs.rows,
+          [copy.id]: {
+            count: { text: String(copy.count), valid: true },
+            customWidthMm: {
+              text: copy.customWidthMm === undefined ? '' : String(copy.customWidthMm),
+              valid: copy.customWidthMm !== undefined,
+            },
+            customHeightMm: {
+              text: copy.customHeightMm === undefined ? '' : String(copy.customHeightMm),
+              valid: copy.customHeightMm !== undefined,
+            },
+          },
+        },
+      });
       changed();
       if (copy.image && !copy.artwork) void setImage(copy.id, copy.image);
       if (copy.backImage && !copy.backArtwork) void setImage(copy.id, copy.backImage, true);
