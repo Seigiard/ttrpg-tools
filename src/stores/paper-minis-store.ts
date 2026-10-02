@@ -1,4 +1,4 @@
-import { atom, computed } from 'nanostores';
+import { atom, computed, readonlyType } from 'nanostores';
 import {
   createCanvasArtwork,
   isSupportedArtwork,
@@ -84,7 +84,7 @@ const storageKey = 'pmg-settings';
 const successMessage = 'PDF готов.';
 const failureMessage = 'Не удалось создать PDF. Попробуйте ещё раз или уменьшите изображения.';
 const exportSuccessMessage = 'Архив готов.';
-export const exportFailureMessage = 'Не удалось создать архив. Попробуйте ещё раз.';
+const exportFailureMessage = 'Не удалось создать архив. Попробуйте ещё раз.';
 const unzipFailureMessage =
   'Не удалось распаковать архив. Добавьте изображения вручную или попробуйте другой файл.';
 const skippedFilesMessage = 'Некоторые файлы пропущены: поддерживаются PNG, JPG и WebP.';
@@ -214,6 +214,14 @@ export function createPaperMinisStore({
   const $preparing = atom(false);
   const $preview = atom<Preview | undefined>(undefined);
   const $calibration = atom<CalibrationSession | undefined>(undefined);
+  const $layout = computed([$rows, $settings], (rows, currentSettings) =>
+    packEntries(rows, currentSettings),
+  );
+  const $canGenerate = computed(
+    [$busy, $preparing, $layout, $inputsValid],
+    (busy, preparing, layout, inputsValid) =>
+      !busy && !preparing && layout.miniCount > 0 && inputsValid,
+  );
   const $acceptsFiles = computed(
     [$busy, $calibration],
     (busy, calibration) => !busy && calibration === undefined,
@@ -225,9 +233,6 @@ export function createPaperMinisStore({
   let nextId = 0;
   let nextLoadId = 0;
   const loads = new Map<string, object>();
-  let packedRows: MiniRow[] | undefined;
-  let packedSettings: PaperMinisSettings | undefined;
-  let packed: PackResult | undefined;
   let initialCalibration: HeightCalibration | undefined;
 
   function calibrationSession(
@@ -682,20 +687,9 @@ export function createPaperMinisStore({
       /* Use defaults when storage is unavailable. */
     }
   }
-  function pack() {
-    const rows = $rows.get();
-    const currentSettings = $settings.get();
-    if (rows !== packedRows || currentSettings !== packedSettings || !packed) {
-      packedRows = rows;
-      packedSettings = currentSettings;
-      packed = packEntries(rows, currentSettings);
-    }
-    return packed;
-  }
   async function render() {
-    if ($busy.get() || $preparing.get()) return;
-    const layout = pack();
-    if (!layout.miniCount) return;
+    if (!$canGenerate.get()) return;
+    const layout = $layout.get();
     $busy.set(true);
     $message.set('');
     const rows = $rows.get().map((row) => Object.assign({}, row));
@@ -752,18 +746,21 @@ export function createPaperMinisStore({
     }
   }
   return {
+    // ADR-0002's all-images-removed test still needs direct row mutation until calibration is reworked.
     $rows,
-    $settings,
-    $inputs,
+    $settings: readonlyType($settings),
+    $inputs: readonlyType($inputs),
     $inputsValid,
-    $message,
-    $revision,
-    $busy,
-    $preparing,
-    $preview,
+    $message: readonlyType($message),
+    $revision: readonlyType($revision),
+    $busy: readonlyType($busy),
+    $preparing: readonlyType($preparing),
+    $preview: readonlyType($preview),
     $previewStale,
-    $calibration,
+    $calibration: readonlyType($calibration),
     $acceptsFiles,
+    $layout,
+    $canGenerate,
     addBlank,
     setSize,
     setAllSizes,
@@ -784,7 +781,12 @@ export function createPaperMinisStore({
     applyCalibration,
     cancelCalibration,
     resetCalibration,
-    pack,
+    reportPdfFailure() {
+      $message.set(failureMessage);
+    },
+    reportExportFailure() {
+      $message.set(exportFailureMessage);
+    },
     async download() {
       return (await render())?.bytes;
     },

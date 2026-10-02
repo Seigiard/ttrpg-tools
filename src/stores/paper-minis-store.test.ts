@@ -266,7 +266,7 @@ test('download renders the layout shown by the counter and returns the renderer 
   const id = store.addBlank()!;
   const file = new File([png], 'front.png', { type: 'image/png' });
   await store.setImage(id, file);
-  const counterLayout = store.pack();
+  const counterLayout = store.$layout.get();
   // #when
   const result = await store.download();
   // #then
@@ -737,6 +737,107 @@ test('export zip does nothing while locked, preparing, or without a ready mini',
   expect(results).toEqual([undefined, undefined, undefined, undefined]);
 });
 
+test.each([
+  [
+    'copy count',
+    (store: ReturnType<typeof createPaperMinisStore>, id: number) => store.setCount(id, ''),
+    (store: ReturnType<typeof createPaperMinisStore>, id: number) => store.setCount(id, '1'),
+  ],
+  [
+    'custom width',
+    (store: ReturnType<typeof createPaperMinisStore>, id: number) => {
+      store.setSize(id, 'custom');
+      store.setCustomDimensions(id, { width: '' });
+    },
+    (store: ReturnType<typeof createPaperMinisStore>, id: number) =>
+      store.setCustomDimensions(id, { width: String(DEFAULT_CUSTOM_WIDTH_MM) }),
+  ],
+  [
+    'custom height',
+    (store: ReturnType<typeof createPaperMinisStore>, id: number) => {
+      store.setSize(id, 'custom');
+      store.setCustomDimensions(id, { height: '' });
+    },
+    (store: ReturnType<typeof createPaperMinisStore>, id: number) =>
+      store.setCustomDimensions(id, { height: String(DEFAULT_CUSTOM_HEIGHT_MM) }),
+  ],
+  [
+    'figure margin',
+    (store: ReturnType<typeof createPaperMinisStore>) => store.setMargin(''),
+    (store: ReturnType<typeof createPaperMinisStore>) => store.setMargin('2'),
+  ],
+] as const)(
+  'download and preview reject an invalid %s draft until it is fixed',
+  async (_, invalidate, fix) => {
+    // #given
+    let renders = 0;
+    const bytes = Uint8Array.from([7]);
+    const store = setup(async () => {
+      renders++;
+      return bytes;
+    });
+    const id = store.addBlank()!;
+    await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
+    invalidate(store, id);
+    // #when
+    const blockedDownload = await store.download();
+    await store.refreshPreview();
+    const blockedPreview = store.$preview.get();
+    const rendersWhileInvalid = renders;
+    fix(store, id);
+    const download = await store.download();
+    await store.refreshPreview();
+    // #then
+    expect({
+      blockedDownload,
+      blockedPreview,
+      rendersWhileInvalid,
+      download: download && Array.from(download),
+      preview: store.$preview.get()?.bytes && Array.from(store.$preview.get()!.bytes),
+      renders,
+    }).toEqual({
+      blockedDownload: undefined,
+      blockedPreview: undefined,
+      rendersWhileInvalid: 0,
+      download: [7],
+      preview: [7],
+      renders: 2,
+    });
+  },
+);
+
+test('generation availability follows layout, drafts, preparation and rendering', async () => {
+  // #given
+  let finishRender!: (bytes: Uint8Array) => void;
+  const rendering = new Promise<Uint8Array>((resolve) => {
+    finishRender = resolve;
+  });
+  const store = setup(() => rendering);
+  const availability = [store.$canGenerate.get()];
+  const id = store.addBlank()!;
+  availability.push(store.$canGenerate.get());
+  await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
+  availability.push(store.$canGenerate.get());
+  store.setCount(id, '');
+  availability.push(store.$canGenerate.get());
+  store.setCount(id, '1');
+  availability.push(store.$canGenerate.get());
+  const slow = deferredFile();
+  const imagePreparation = store.setImage(store.addBlank()!, slow.file);
+  availability.push(store.$canGenerate.get());
+  slow.release();
+  await imagePreparation;
+  availability.push(store.$canGenerate.get());
+  // #when
+  const download = store.download();
+  availability.push(store.$canGenerate.get());
+  finishRender(Uint8Array.from([1]));
+  await download;
+  availability.push(store.$canGenerate.get());
+  // #then
+  expect(availability).toEqual([false, false, true, false, true, false, true, false, true]);
+});
+
 test('a calibration session previews draft edits and cancel leaves the row unchanged', async () => {
   // #given
   const store = setup();
@@ -1113,7 +1214,7 @@ test('generation keeps every row and setting mutation locked until rendering set
       during.inputs === before.inputs &&
       during.revision === before.revision,
     busy: store.$busy.get(),
-    count: store.pack().miniCount,
+    count: store.$layout.get().miniCount,
   }).toEqual({ sameSnapshot: true, busy: false, count: 3 });
 });
 
@@ -1149,14 +1250,14 @@ test('generation waits for artwork preparation even when another row is printabl
   const during = {
     preparing: store.$preparing.get(),
     result: await store.download(),
-    count: store.pack().miniCount,
+    count: store.$layout.get().miniCount,
   };
   slow.release();
   await pending;
   const after = {
     preparing: store.$preparing.get(),
     result: Array.from((await store.download()) ?? []),
-    count: store.pack().miniCount,
+    count: store.$layout.get().miniCount,
   };
   // #then
   expect({ during, after, renders }).toEqual({
@@ -1204,7 +1305,7 @@ test('a pending normalized result keeps generation unavailable until its warning
     during,
     after: after && Array.from(after),
     renders,
-    count: store.pack().miniCount,
+    count: store.$layout.get().miniCount,
     warning: store.$rows.get()[1].normalizationWarning,
   }).toEqual({
     normalize: true,
@@ -1243,7 +1344,7 @@ test.each(['remove', 'clearBack', 'replace'])(
       rows: store.$rows
         .get()
         .map((row) => [row.image?.name, row.artwork?.width, row.artwork?.height]),
-      count: store.pack().miniCount,
+      count: store.$layout.get().miniCount,
       revisionChanged: store.$revision.get() !== revision,
     }).toEqual({
       preparing: false,
@@ -1322,13 +1423,17 @@ test('clearing a loading back keeps the reflection and restores print readiness'
   await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
   const slow = deferredFile();
   const pending = store.setImage(id, slow.file, true);
-  const during = store.pack().miniCount;
+  const during = store.$layout.get().miniCount;
   // #when
   store.clearBack(id);
   slow.release();
   await pending;
   // #then
-  expect({ during, after: store.pack().miniCount, back: store.$rows.get()[0].backArtwork }).toEqual(
+  expect({
+    during,
+    after: store.$layout.get().miniCount,
+    back: store.$rows.get()[0].backArtwork,
+  }).toEqual(
     { during: 0, after: 1, back: null },
   );
 });
@@ -1342,7 +1447,7 @@ test('a broken back falls back to the front with a warning', async () => {
   await store.setImage(id, failedFile('back.png'), true);
   // #then
   expect({
-    count: store.pack().miniCount,
+    count: store.$layout.get().miniCount,
     image: store.$rows.get()[0].backImage,
     warning: store.$rows.get()[0].backWarning,
   }).toEqual({
@@ -1357,11 +1462,18 @@ test('a failed front stays out of the print estimate and can be replaced', async
   const store = setup();
   const id = store.addBlank()!;
   await store.setImage(id, failedFile('bad.png'));
-  const failed = { count: store.pack().miniCount, error: store.$rows.get()[0].frontError };
+  const failed = {
+    count: store.$layout.get().miniCount,
+    error: store.$rows.get()[0].frontError,
+  };
   // #when
   await store.setImage(id, new File([png], 'good.png', { type: 'image/png' }));
   // #then
-  expect({ failed, count: store.pack().miniCount, error: store.$rows.get()[0].frontError }).toEqual(
+  expect({
+    failed,
+    count: store.$layout.get().miniCount,
+    error: store.$rows.get()[0].frontError,
+  }).toEqual(
     {
       failed: { count: 0, error: 'Не удалось загрузить изображение. Попробуйте другой файл.' },
       count: 1,
