@@ -49,5 +49,5 @@ A mini-width part of a strip, separated from its neighbours by straight vertical
 **Stack**:
 Minis placed one above another within a column, no taller together than the strip.
 
-**Gap**:
-The fixed 4 mm space between columns, stacked minis and strips that keeps neighbouring cut marks apart.
+**Shared cut line**:
+The single cut between two abutting minis. Columns, stacked minis and strips sit edge to edge with no gap, and their cut marks stay on their own pieces.

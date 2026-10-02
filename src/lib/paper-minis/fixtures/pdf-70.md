@@ -84,3 +84,7 @@ The upper sample exceeds the three-Letter budget. For example, the first sheet's
 ## Regression calibration
 
 A temporary Bun loader replaced only the candidate-selection expression in memory with `rowPlacements(rows.pages)`. Production files were not edited. All four Letter budget assertions in that initial run failed; row counts, copy conservation and A4 checks passed (12 pass / 4 fail). The temporary loader was removed. The final raw/rounded suite passes 8 tests with the real packer and fails its two Letter budget tests with that same row-only mutation.
+
+## Later changes
+
+The row layout and the 4 mm gap were later removed: minis now abut and share cut lines. The test that checked this reconstruction against the prototype's row sheet counts went with them, as it depended on both. The budget test remains and runs against the guillotine layout alone. The tables above record results at `47660a6`.
