@@ -1,6 +1,14 @@
 import { afterEach, expect, spyOn, test } from 'bun:test';
+import {
+  DEFAULT_CUSTOM_HEIGHT_MM,
+  DEFAULT_CUSTOM_WIDTH_MM,
+} from '@/lib/paper-minis/sizes';
 import type { HeightCalibration } from '@/lib/paper-minis/types';
-import { createPaperMinisStore, type PaperMinisRenderer } from './paper-minis-store';
+import {
+  createPaperMinisStore,
+  type PaperMinisRenderer,
+  type PaperMinisSettings,
+} from './paper-minis-store';
 
 const png = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==',
@@ -10,6 +18,13 @@ const tallPng = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAABkCAYAAABHLFpgAAAAEklEQVR4nGP4z8Dwn2GUGEkEAJoCxzl9ksz2AAAAAElFTkSuQmCC',
   'base64',
 );
+function pngFile(width: number, height: number, name = 'front.png') {
+  const bytes = Uint8Array.from(png);
+  const header = new DataView(bytes.buffer);
+  header.setUint32(16, width);
+  header.setUint32(20, height);
+  return new File([bytes], name, { type: 'image/png' });
+}
 function setup(renderer?: PaperMinisRenderer) {
   const store = createPaperMinisStore(renderer);
   store.settings({ normalization: false });
@@ -40,6 +55,172 @@ function deferredFile() {
   return { file, release: () => release(Uint8Array.from(slowPng).buffer) };
 }
 afterEach(() => localStorage.removeItem('pmg-settings'));
+
+test('switching a row to custom size seeds valid default dimensions', () => {
+  // #given
+  const store = setup();
+  const id = store.addBlank()!;
+  // #when
+  store.setSize(id, 'custom');
+  // #then
+  expect({
+    row: store.$rows.get()[0],
+    inputs: store.$inputs.get().rows[id],
+  }).toEqual({
+    row: {
+      id,
+      image: null,
+      artwork: null,
+      heightSlot: 'custom',
+      count: 1,
+      customWidthMm: DEFAULT_CUSTOM_WIDTH_MM,
+      customHeightMm: DEFAULT_CUSTOM_HEIGHT_MM,
+    },
+    inputs: {
+      count: { text: '1', valid: true },
+      customWidthMm: { text: '30', valid: true },
+      customHeightMm: { text: '30', valid: true },
+    },
+  });
+});
+
+test('setting every row size advances the revision once', () => {
+  // #given
+  const store = setup();
+  store.addBlank();
+  store.addBlank({ heightSlot: 'small' });
+  const revision = store.$revision.get();
+  // #when
+  store.setAllSizes('large');
+  // #then
+  expect({
+    sizes: store.$rows.get().map((row) => row.heightSlot),
+    revision: store.$revision.get() - revision,
+  }).toEqual({ sizes: ['large', 'large'], revision: 1 });
+});
+
+test.each(['', '-', '2.7', '0'])(
+  'an invalid count draft %j leaves the model unchanged and can revert',
+  (text) => {
+    // #given
+    const store = setup();
+    const id = store.addBlank()!;
+    // #when
+    store.setCount(id, text);
+    const invalid = {
+      count: store.$rows.get()[0].count,
+      input: store.$inputs.get().rows[id].count,
+      valid: store.$inputsValid.get(),
+    };
+    store.setCount(id, String(store.$rows.get()[0].count));
+    // #then
+    expect({ invalid, reverted: store.$inputs.get().rows[id].count }).toEqual({
+      invalid: { count: 1, input: { text, valid: false }, valid: false },
+      reverted: { text: '1', valid: true },
+    });
+  },
+);
+
+test('a finite scientific-notation count updates the model', () => {
+  // #given
+  const store = setup();
+  const id = store.addBlank()!;
+  // #when
+  store.setCount(id, '1e3');
+  // #then
+  expect({ count: store.$rows.get()[0].count, input: store.$inputs.get().rows[id].count }).toEqual({
+    count: 1000,
+    input: { text: '1e3', valid: true },
+  });
+});
+
+test('custom dimension drafts update valid fields without exposing invalid dimensions', () => {
+  // #given
+  const store = setup();
+  const id = store.addBlank()!;
+  store.setSize(id, 'custom');
+  // #when
+  store.setCustomDimensions(id, { width: '12.5', height: '-' });
+  const invalid = {
+    row: store.$rows.get()[0],
+    inputs: store.$inputs.get().rows[id],
+    valid: store.$inputsValid.get(),
+  };
+  store.setCustomDimensions(id, { height: String(store.$rows.get()[0].customHeightMm) });
+  // #then
+  expect({
+    invalid: {
+      dimensions: [invalid.row.customWidthMm, invalid.row.customHeightMm],
+      inputs: [invalid.inputs.customWidthMm, invalid.inputs.customHeightMm],
+      valid: invalid.valid,
+    },
+    reverted: store.$inputs.get().rows[id].customHeightMm,
+  }).toEqual({
+    invalid: {
+      dimensions: [12.5, DEFAULT_CUSTOM_HEIGHT_MM],
+      inputs: [
+        { text: '12.5', valid: true },
+        { text: '-', valid: false },
+      ],
+      valid: false,
+    },
+    reverted: { text: '30', valid: true },
+  });
+});
+
+test('an invalid margin draft leaves settings unchanged until valid text arrives', () => {
+  // #given
+  const store = setup();
+  // #when
+  store.setMargin('-');
+  const invalid = {
+    margin: store.$settings.get().marginMm,
+    input: store.$inputs.get().margin,
+    valid: store.$inputsValid.get(),
+  };
+  store.setMargin('1e1');
+  // #then
+  expect({
+    invalid,
+    margin: store.$settings.get().marginMm,
+    input: store.$inputs.get().margin,
+  }).toEqual({
+    invalid: { margin: 2, input: { text: '-', valid: false }, valid: false },
+    margin: 10,
+    input: { text: '1e1', valid: true },
+  });
+});
+
+test('direct and loaded settings reject the same invalid fields', () => {
+  // #given
+  const input = {
+    pageSize: 'legal',
+    marginMm: -1,
+    numberDuplicates: 'yes',
+    normalization: false,
+  };
+  const direct = createPaperMinisStore();
+  const loaded = createPaperMinisStore();
+  localStorage.setItem('pmg-settings', JSON.stringify(input));
+  // #when
+  loaded.loadSettings();
+  direct.settings(input as unknown as Partial<PaperMinisSettings>);
+  // #then
+  expect({ direct: direct.$settings.get(), loaded: loaded.$settings.get() }).toEqual({
+    direct: {
+      pageSize: 'a4',
+      marginMm: 2,
+      numberDuplicates: false,
+      normalization: false,
+    },
+    loaded: {
+      pageSize: 'a4',
+      marginMm: 2,
+      numberDuplicates: false,
+      normalization: false,
+    },
+  });
+});
 
 test('download renders the layout shown by the counter and returns the renderer bytes', async () => {
   // #given
@@ -160,16 +341,13 @@ test('applying untouched default lines closes the session without changing the r
   }).toEqual({ applied: true, session: undefined, calibration: undefined, revision });
 });
 
-test('an untouched session previews the uncalibrated fit and an edit exposes its limit warning', () => {
+test('an untouched session previews the uncalibrated fit and an edit exposes its limit warning', async () => {
   // #given
   const store = setup();
   const id = store.addBlank()!;
-  store.patch(id, {
-    artwork: { bytes: new Uint8Array(), format: 'png', width: 150, height: 100 },
-    heightSlot: 'custom',
-    customWidthMm: 10,
-    customHeightMm: 140,
-  });
+  await store.setImage(id, pngFile(150, 100));
+  store.setSize(id, 'custom');
+  store.setCustomDimensions(id, { width: '10', height: '140' });
   store.openCalibration(id);
   const untouched = store.$calibration.get();
   // #when
@@ -269,12 +447,11 @@ test('a calibration session closes when its row artwork changes or its row is re
   const store = setup();
   const id = store.addBlank()!;
   await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
-  const artwork = store.$rows.get()[0].artwork;
+  await store.setImage(id, new File([png], 'back.png', { type: 'image/png' }), true);
   store.openCalibration(id);
   // #when
-  store.patch(id, { artwork: null });
+  store.clearBack(id);
   const afterArtworkChange = store.$calibration.get();
-  store.patch(id, { artwork });
   store.openCalibration(id);
   store.remove(id);
   // #then
@@ -316,7 +493,7 @@ test('a preview records its revision and becomes stale after an edit', async () 
     preview: store.$preview.get(),
     stale: store.$previewStale.get(),
   };
-  store.patch(id, { count: 2 });
+  store.setCount(id, '2');
   // #then
   expect({
     current: {
@@ -383,11 +560,16 @@ test('generation keeps every row and setting mutation locked until rendering set
   const before = {
     rows: store.$rows.get(),
     settings: store.$settings.get(),
+    inputs: store.$inputs.get(),
     revision: store.$revision.get(),
   };
   // #when
   const download = store.download();
-  store.patch(id, { count: 7 });
+  store.setCount(id, '7');
+  store.setSize(id, 'custom');
+  store.setAllSizes('large');
+  store.setCustomDimensions(id, { width: '9' });
+  store.setMargin('7');
   store.settings({ pageSize: 'letter', normalization: true });
   store.addBlank();
   store.ingest([file]);
@@ -399,16 +581,18 @@ test('generation keeps every row and setting mutation locked until rendering set
   const during = {
     rows: store.$rows.get(),
     settings: store.$settings.get(),
+    inputs: store.$inputs.get(),
     revision: store.$revision.get(),
   };
   release(Uint8Array.from([1]));
   await download;
-  store.patch(id, { count: 3 });
+  store.setCount(id, '3');
   // #then
   expect({
     sameSnapshot:
       during.rows === before.rows &&
       during.settings === before.settings &&
+      during.inputs === before.inputs &&
       during.revision === before.revision,
     busy: store.$busy.get(),
     count: store.pack().miniCount,
@@ -762,7 +946,7 @@ test('calibration can be set, cleared, copied and kept across size changes', asy
   await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
   // #when
   calibrate(store, id, { head: 0.25, feet: 0.75 });
-  store.patch(id, { heightSlot: 'large' });
+  store.setSize(id, 'large');
   store.duplicate(id);
   store.resetCalibration(id);
   // #then
@@ -858,7 +1042,11 @@ test('removing the only image resets calibration', async () => {
   const store = setup();
   const id = store.addBlank()!;
   await store.setImage(id, new File([png], 'back.png', { type: 'image/png' }), true);
-  store.patch(id, { calibration: { head: 0.2, feet: 0.8 } });
+  store.$rows.set(
+    store.$rows
+      .get()
+      .map((row) => Object.assign({}, row, { calibration: { head: 0.2, feet: 0.8 } })),
+  );
   // #when
   store.clearBack(id);
   // #then
