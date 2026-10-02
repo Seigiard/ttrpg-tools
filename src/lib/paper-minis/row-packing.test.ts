@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { GAP_MM, packRows } from './packing.ts';
-import { MARGIN_MM, PAGE_SIZES_MM, type PackOptions, resolveMinis } from './geometry.ts';
+import { PAGE_SIZES_MM, SHEET_MARGIN_MM, type PackOptions, resolveMinis } from './geometry.ts';
 import type { PackingEntry as Entry } from './types.ts';
 
 import { test as t } from 'bun:test';
@@ -22,8 +22,8 @@ const rowCandidate = (entries: Entry[], opts: PackOptions) =>
   packRows(resolveMinis(entries, opts), opts);
 
 const A4 = PAGE_SIZES_MM.a4;
-const usableW = A4.w - MARGIN_MM * 2; // 190
-const usableH = A4.h - MARGIN_MM * 2; // 277
+const usableW = A4.w - SHEET_MARGIN_MM * 2; // 190
+const usableH = A4.h - SHEET_MARGIN_MM * 2; // 277
 
 const sheetOpts = { pageSize: 'a4', numberDuplicates: false } as const;
 

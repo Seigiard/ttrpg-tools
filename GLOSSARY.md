@@ -14,6 +14,26 @@ _Avoid_: lookup table, results list
 The head and feet lines a player sets on a mini's artwork to give the figure its own height, so a raised weapon does not count toward it. One per mini, shared by its front and back.
 _Avoid_: height lines, per-side calibration
 
+**Calibration session**:
+A player's draft of one mini's calibration in the calibration dialog, from opening it to Apply or Cancel. Only Apply saves it to the mini.
+_Avoid_: calibration state, dialog state
+
+**Face**:
+The paper between a tab and the fold that carries one side's artwork. A mini has a front face and a back face of equal height: the taller of the two images.
+_Avoid_: side panel, half
+
+**Tab**:
+The strip at the outer end of a face that the figure stands on. Its depth is half the base width.
+_Avoid_: base strip, foot
+
+**Floor strip**:
+The strip two tabs deep under the front tab. It folds under the stand and is glued to both tabs.
+_Avoid_: base, bottom tab
+
+**Fold**:
+The line between the front and back faces where the mini is folded in half.
+_Avoid_: middle line, crease
+
 **Export**:
 The zip of prepared paper minis that a batch upload restores.
 

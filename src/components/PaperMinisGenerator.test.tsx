@@ -135,6 +135,47 @@ test('a thumbnail drop uses the first supported image even after an unsupported 
   }).toEqual({ rejected: null, back: true });
 });
 
+test('a JPEG labelled image/jpg is accepted', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  const bytes = await Bun.file(
+    new URL('../lib/paper-minis/fixtures/artwork-4x3.jpg', import.meta.url),
+  ).arrayBuffer();
+  // #when
+  await act(async () => {
+    fireEvent.change(screen.getByLabelText('Добавить изображения', { selector: 'input' }), {
+      target: { files: [new File([bytes], 'figure.jpg', { type: 'image/jpg' })] },
+    });
+  });
+  // #then
+  expect({
+    rejection:
+      screen.queryByText('Некоторые файлы пропущены: поддерживаются PNG, JPG и WebP.')
+        ?.textContent ?? null,
+    loadError:
+      screen.queryByText('Не удалось загрузить изображение. Попробуйте другой файл.')
+        ?.textContent ?? null,
+    rows: screen.queryAllByRole('article').length,
+  }).toEqual({ rejection: null, loadError: null, rows: 1 });
+});
+
+test('every artwork file input offers every supported MIME type', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  // #when
+  const accepts = Array.from(
+    document.querySelectorAll<HTMLInputElement>('input[type="file"]'),
+    (input) => input.accept,
+  );
+  // #then
+  expect(accepts).toEqual([
+    'image/png,image/jpeg,image/jpg,image/webp,.zip,application/zip',
+    'image/png,image/jpeg,image/jpg,image/webp',
+    'image/png,image/jpeg,image/jpg,image/webp',
+  ]);
+});
+
 test('the drop zone explains the naming convention with every size id outside the button', () => {
   // #given
   render(<PaperMinisGenerator />);
@@ -169,7 +210,7 @@ test('the batch file picker accepts exported zip archives', () => {
   // #when
   const input = screen.getByLabelText('Добавить изображения', { selector: 'input' });
   // #then
-  expect(input.getAttribute('accept')).toBe('image/png,image/jpeg,image/webp,.zip,application/zip');
+  expect(input.getAttribute('accept')).toBe('image/png,image/jpeg,image/jpg,image/webp,.zip,application/zip');
 });
 
 test('a batch row is titled by its cleaned file name, or numbered when the name is empty', async () => {
@@ -480,6 +521,35 @@ test('height calibration stays disabled while the front loads and does not open 
   }).toEqual({ disabledDuringLoad: true, disabledAfter: false, dialog: false });
 });
 
+test('height calibration stays disabled until the selected back artwork is ready', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  let release!: (bytes: ArrayBuffer) => void;
+  const file = new File([png], 'pending-back.png', { type: 'image/png' });
+  file.arrayBuffer = () =>
+    new Promise((resolve) => {
+      release = resolve;
+    });
+  fireEvent.change(
+    screen.getByLabelText('Оборот: отражение лицевой стороны', { selector: 'input' }),
+    { target: { files: [file] } },
+  );
+  const button = screen.getByRole<HTMLButtonElement>('button', { name: 'Задать рост' });
+  // #when
+  const disabledDuringLoad = button.disabled;
+  fireEvent.click(button);
+  await act(async () => {
+    release(Uint8Array.from(png).buffer);
+  });
+  // #then
+  expect({
+    disabledDuringLoad,
+    disabledAfter: button.disabled,
+    dialog: screen.queryByRole('dialog') !== null,
+  }).toEqual({ disabledDuringLoad: true, disabledAfter: false, dialog: false });
+});
+
 const overlay = (slot: HTMLElement) =>
   ['head', 'feet'].map(
     (key) => within(slot).queryByTestId(`calibration-${key}`)?.style.top ?? null,
@@ -529,6 +599,29 @@ test('a front-only calibration dialog exposes sliders without an orphan tab stop
     panels: dialog.queryAllByRole('tabpanel').length,
     sliders: dialog.getAllByRole('slider').map((el) => el.getAttribute('aria-label')),
   }).toEqual({ tabs: 0, panels: 0, sliders: ['Голова', 'Ступни'] });
+});
+
+test('an oversized mini uses danger styling in both the row and calibration dialog', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  fireEvent.change(screen.getByRole('combobox', { name: 'Высота существа' }), {
+    target: { value: 'custom' },
+  });
+  fireEvent.change(screen.getByRole('spinbutton', { name: 'Основание, мм' }), {
+    target: { value: '300' },
+  });
+  fireEvent.change(screen.getByRole('spinbutton', { name: 'Фигурка, мм' }), {
+    target: { value: '30' },
+  });
+  const warning = 'Не помещается на лист. Уменьшите размер или поля. Эта миниатюра не попадёт в PDF.';
+  // #when
+  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
+  // #then
+  expect(screen.getAllByText(warning).map((element) => element.classList.contains('text-danger'))).toEqual([
+    true,
+    true,
+  ]);
 });
 
 test('front height dialog applies pointer calibration and row reset clears it', async () => {

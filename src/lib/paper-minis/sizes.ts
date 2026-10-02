@@ -8,7 +8,7 @@ export type SizeDimensionsMm = { baseWidthMm: number; figureHeightMm: number };
 // stand and to signal relative size, which the six categories still do well
 // enough — so the category is what fixes it, and every slot that
 // carries the category inherits the number.
-export const CATEGORY_BASE_WIDTH_MM: Record<SizeCategory, number> = {
+const CATEGORY_BASE_WIDTH_MM: Record<SizeCategory, number> = {
   tiny: 20,
   small: 25,
   medium: 25,
@@ -26,7 +26,7 @@ export const CATEGORY_BASE_WIDTH_MM: Record<SizeCategory, number> = {
 // bases neither fits Letter at any margin. Their tabs are cut to what keeps
 // them on Letter through a 5 mm figure margin, so a Gargantuan stands on a
 // shallow 75 × 13 mm footprint rather than falling off the sheet.
-export const CATEGORY_TAB_HEIGHT_MM: Record<SizeCategory, number> = {
+const CATEGORY_TAB_HEIGHT_MM: Record<SizeCategory, number> = {
   tiny: 10,
   small: 12.5,
   medium: 12.5,
@@ -35,7 +35,7 @@ export const CATEGORY_TAB_HEIGHT_MM: Record<SizeCategory, number> = {
   gargantuan: 6.5,
 };
 
-export const CATEGORY_NAMES: Record<SizeCategory, string> = {
+const CATEGORY_NAMES: Record<SizeCategory, string> = {
   tiny: 'Крошечный',
   small: 'Маленький',
   medium: 'Средний',
@@ -43,15 +43,6 @@ export const CATEGORY_NAMES: Record<SizeCategory, string> = {
   huge: 'Огромный',
   gargantuan: 'Громадный',
 };
-
-export const SIZE_CATEGORY_ORDER = [
-  'tiny',
-  'small',
-  'medium',
-  'large',
-  'huge',
-  'gargantuan',
-] as const satisfies readonly SizeCategory[];
 
 export type HeightSlotSpec = {
   category: SizeCategory;
@@ -152,10 +143,6 @@ export const HEIGHT_SLOT_ORDER = [
 
 export const CUSTOM_SIZE_NAME = 'Свой размер';
 
-export function slotsOfCategory(category: SizeCategory): HeightSlot[] {
-  return HEIGHT_SLOT_ORDER.filter((slot) => HEIGHT_SLOTS[slot].category === category);
-}
-
 // A slot's own name: its size category, and the grade within it where the
 // category carries more than one slot. Composed rather than stored, so the
 // category name has one source.
@@ -197,7 +184,7 @@ export function resolveFigureHeightMm(e: Pick<Entry, 'heightSlot' | 'customHeigh
 // has no valid width yet, which callers treat as "not packable". Custom stays
 // the one escape hatch that names a base width directly — deriving it from the
 // custom height would leave no way to set it at all.
-export function resolveBaseWidthMm(e: Pick<Entry, 'heightSlot' | 'customWidthMm'>): number {
+function resolveBaseWidthMm(e: Pick<Entry, 'heightSlot' | 'customWidthMm'>): number {
   if (e.heightSlot === 'custom') return validDimension(e.customWidthMm);
   return CATEGORY_BASE_WIDTH_MM[HEIGHT_SLOTS[e.heightSlot].category];
 }

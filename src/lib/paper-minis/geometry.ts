@@ -25,7 +25,7 @@ export const PAGE_SIZES_MM = {
 
 export type PageSizeKey = keyof typeof PAGE_SIZES_MM;
 
-export const MARGIN_MM = 10;
+export const SHEET_MARGIN_MM = 10;
 export const DEFAULT_FIGURE_MARGIN_MM = 2;
 
 export type PackOptions = {
@@ -36,12 +36,26 @@ export type PackOptions = {
 
 export function usableAreaMm(pageSize: PageSizeKey): { widthMm: number; heightMm: number } {
   const { w, h } = PAGE_SIZES_MM[pageSize];
-  return { widthMm: w - MARGIN_MM * 2, heightMm: h - MARGIN_MM * 2 };
+  return { widthMm: w - SHEET_MARGIN_MM * 2, heightMm: h - SHEET_MARGIN_MM * 2 };
 }
 
 export const CUT_MARK_ARM_MM = 1.5;
 export const CUT_MARK_STROKE_MM = 0.2;
 export const CUT_MARK_EXTENT_MM = CUT_MARK_ARM_MM + CUT_MARK_STROKE_MM / 2;
+
+export type MiniLevels = {
+  floorStripTopMm: number;
+  frontTabTopMm: number;
+  frontFaceTopMm: number;
+  foldMm: number;
+  backFaceBottomMm: number;
+  backFaceTopMm: number;
+  topMm: number;
+  cutMarks: {
+    crossesMm: [number, number, number];
+    halvesMm: [number, number, number];
+  };
+};
 
 // A single copy of an entry, with its resolved geometry. entryIndex maps back
 // to the source entry so the PDF drawer can attribute each mini to its row.
@@ -61,6 +75,8 @@ export type PackedMini = {
   // images, so both halves fold to the same length and both tabs meet the floor.
   faceHeightMm: number;
   back?: BackFace; // present only for an entry with back artwork
+  levels: MiniLevels; // vertical levels measured from the mini's bottom edge
+  backBadgeOffsetXMm: number; // measured from the back image's own origin
   fitLimits: FigureFitLimit[];
   totalHeightMm: number;
   label?: string;
@@ -182,8 +198,7 @@ function fitMiniFaces(
   opts: PackOptions,
 ): { front: FigureFitMm; back?: FigureFitMm } {
   const dimensions = resolveSizeDimensionsMm(e);
-  const usableHeightMm = PAGE_SIZES_MM[opts.pageSize].h - MARGIN_MM * 2;
-  const usableWidthMm = PAGE_SIZES_MM[opts.pageSize].w - MARGIN_MM * 2;
+  const { widthMm: usableWidthMm, heightMm: usableHeightMm } = usableAreaMm(opts.pageSize);
   const marginMm = opts.marginMm ?? DEFAULT_FIGURE_MARGIN_MM;
   const imageSpaceMm = (usableHeightMm - marginMm * 2 - resolveTabHeightMm(e) * 4) / 2;
   const calibrated = calibrationGap(e.calibration);
@@ -239,9 +254,15 @@ const fitLimitLabels: Record<FigureFitLimit, string> = {
   page: 'размер листа',
 };
 
-export function fitLimitWarning(limits: readonly FigureFitLimit[]): string | undefined {
+function fitLimitWarning(limits: readonly FigureFitLimit[]): string | undefined {
   if (!limits.length) return undefined;
   return `Миниатюра уменьшена: ${limits.map((limit) => fitLimitLabels[limit]).join(', ')}.`;
+}
+
+export function entryStatusWarning(status: EntryStatus): string | undefined {
+  if (status.state === 'oversized')
+    return 'Не помещается на лист. Уменьшите размер или поля. Эта миниатюра не попадёт в PDF.';
+  return fitLimitWarning(status.limits);
 }
 
 // Resolves one entry into the geometry every copy prints with and how it sits
@@ -286,14 +307,30 @@ export function resolveMini(
     imageOffsetXMm: marginMm + (contentWidthMm - backFit.imageWidthMm) / 2,
   };
   const faceHeightMm = Math.max(imageHeightMm, backFit?.imageHeightMm ?? 0);
-  // Derived here in millimetres rather than in the drawer, because the same
-  // arithmetic in points does not land on the same numbers. `drawMini` still
-  // derives the back badge's own offset, inside the rotated frame, from this
-  // rule — change it here and change it there.
   const baseOffsetXMm = marginMm + (contentWidthMm - baseWidthMm) / 2;
-  // Face on face, a margin either side of the fold, a tab at each end and
-  // the floor strip, twice a tab, under the front one.
-  const totalHeightMm = faceHeightMm * 2 + marginMm * 2 + tabHMm * 4;
+  const floorStripTopMm = tabHMm * 2;
+  const frontTabTopMm = floorStripTopMm + tabHMm;
+  const frontFaceTopMm = frontTabTopMm + faceHeightMm;
+  const foldMm = frontFaceTopMm + marginMm;
+  const backFaceBottomMm = foldMm + marginMm;
+  // Use the same closed form that fitMiniFaces inverts at the page cap. A
+  // chained sum can round one ulp above the usable height and reject the mini.
+  const topMm = faceHeightMm * 2 + marginMm * 2 + tabHMm * 4;
+  const backFaceTopMm = topMm - tabHMm;
+  const levels: MiniLevels = {
+    floorStripTopMm,
+    frontTabTopMm,
+    frontFaceTopMm,
+    foldMm,
+    backFaceBottomMm,
+    backFaceTopMm,
+    topMm,
+    cutMarks: {
+      crossesMm: [0, foldMm, topMm],
+      halvesMm: [floorStripTopMm, frontTabTopMm, backFaceTopMm],
+    },
+  };
+  const backBadgeOffsetXMm = ((back?.imageWidthMm ?? imageWidthMm) - baseWidthMm) / 2;
   const limits = [...new Set([...front.limits, ...(rawBackFit?.limits ?? [])])];
   const copies: PackedMini[] = [];
   for (let i = 0; i < e.count; i++) {
@@ -311,8 +348,10 @@ export function resolveMini(
       imageOffsetXMm,
       faceHeightMm,
       ...(back && { back }),
+      levels,
+      backBadgeOffsetXMm,
       fitLimits: [...limits],
-      totalHeightMm,
+      totalHeightMm: levels.topMm,
       label: opts.numberDuplicates ? String(i + 1) : undefined,
     });
   }

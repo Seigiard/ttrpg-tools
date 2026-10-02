@@ -1,11 +1,10 @@
 import assert from 'node:assert/strict';
-import { MARGIN_MM, PAGE_SIZES_MM, fitFigure, resolveMini } from './geometry.ts';
+import { PAGE_SIZES_MM, SHEET_MARGIN_MM, fitFigure, resolveMini } from './geometry.ts';
 import { type PackResult, packMinis } from './packing.ts';
 import {
   HEIGHT_SLOTS,
   HEIGHT_SLOT_ORDER,
-  resolveBaseWidthMm,
-  resolveFigureHeightMm,
+  resolveSizeDimensionsMm,
   slotGeometryLabel,
 } from './sizes.ts';
 import type { PackingEntry as Entry } from './types.ts';
@@ -18,7 +17,7 @@ t('every adjacent pair of slots prints a taller figure than the one below it', (
     (slot) =>
       fitFigure(
         {
-          baseWidthMm: resolveBaseWidthMm({ heightSlot: slot }),
+          baseWidthMm: resolveSizeDimensionsMm({ heightSlot: slot }).baseWidthMm,
           figureHeightMm: HEIGHT_SLOTS[slot].figureHeightMm,
         },
         100,
@@ -103,10 +102,7 @@ t('the tallest slot’s widest figure still fits the page', () => {
 t('a custom size honours both of its numbers', () => {
   // #given
   const e = { heightSlot: 'custom' as const, customWidthMm: 20, customHeightMm: 45 };
-  const dimensions = {
-    baseWidthMm: resolveBaseWidthMm(e),
-    figureHeightMm: resolveFigureHeightMm(e),
-  };
+  const dimensions = resolveSizeDimensionsMm(e);
   // #when
   const fit = fitFigure(dimensions, 100, 300);
   // #then
@@ -132,7 +128,7 @@ const placedMinis = (result: PackResult) =>
     .flatMap((page) => page.placements.map(({ mini }) => mini))
     .toSorted((a, b) => a.entryIndex - b.entryIndex || a.copyIndex - b.copyIndex);
 
-const usableH = PAGE_SIZES_MM.a4.h - MARGIN_MM * 2; // 277
+const usableH = PAGE_SIZES_MM.a4.h - SHEET_MARGIN_MM * 2; // 277
 const sheetOpts = { pageSize: 'a4', numberDuplicates: false } as const;
 
 t('default margin reserves paper around both faces without shrinking the figure', () => {
@@ -251,6 +247,30 @@ t('calibration too tall for the page scales to fit and is reported instead of le
       result.entries,
     ],
     [1, 128.5, usableH, ['page'], [{ state: 'upright', limits: ['page'] }]],
+  );
+});
+
+t('a fractional page-capped mini stays exactly within the usable page height', () => {
+  // #given  the face cap leaves exactly 277 mm for an A4 mini with a fractional base
+  const fractional = entry({
+    heightSlot: 'custom',
+    customWidthMm: 22.1,
+    customHeightMm: 300,
+    naturalWidth: 50,
+    naturalHeight: 100,
+    calibration: { head: 0.25, feet: 0.75 },
+  });
+  // #when
+  const resolved = resolveMini(fractional, 0, {
+    pageSize: 'a4',
+    numberDuplicates: false,
+    marginMm: 2,
+  })!;
+  const mini = resolved.copies[0];
+  // #then
+  assert.deepEqual(
+    [resolved.orientation, mini.totalHeightMm, mini.levels.topMm],
+    ['upright', 277, 277],
   );
 });
 
@@ -772,6 +792,114 @@ t('a Medium unfolds to both faces, two margins and four half-base tabs', () => {
   assert.deepEqual([m.totalHeightMm, m.tabHeightMm], [124, 12.5]);
 });
 
+t('a Medium resolves every internal level and the back badge offset in millimetres', () => {
+  // #given  a 25 mm base, 12.5 mm tabs, 35 mm faces and 2 mm around the fold
+  const entries = [entry({ heightSlot: 'medium' })];
+  // #when
+  const mini = packMinis(entries, { ...sheetOpts, marginMm: 2 }).pages[0].placements[0].mini;
+  // #then
+  assert.deepEqual(
+    {
+      levels: mini.levels,
+      backBadgeOffsetXMm: mini.backBadgeOffsetXMm,
+      totalHeightMm: mini.totalHeightMm,
+    },
+    {
+      levels: {
+        floorStripTopMm: 25,
+        frontTabTopMm: 37.5,
+        frontFaceTopMm: 72.5,
+        foldMm: 74.5,
+        backFaceBottomMm: 76.5,
+        backFaceTopMm: 111.5,
+        topMm: 124,
+        cutMarks: {
+          crossesMm: [0, 74.5, 124],
+          halvesMm: [25, 37.5, 111.5],
+        },
+      },
+      backBadgeOffsetXMm: 5,
+      totalHeightMm: 124,
+    },
+  );
+});
+
+t('resolved levels cover a taller back, a custom margin and a rotated rescue', () => {
+  // #given  three hand-worked unfoldings that exercise the layout inputs independently
+  const cases = [
+    {
+      entry: entry({
+        naturalWidth: 400,
+        naturalHeight: 100,
+        backNaturalWidth: 100,
+        backNaturalHeight: 100,
+      }),
+      marginMm: 2,
+      expected: {
+        orientation: false,
+        levels: [25, 37.5, 72.5, 74.5, 76.5, 111.5, 124],
+        crosses: [0, 74.5, 124],
+        halves: [25, 37.5, 111.5],
+        badge: 5,
+        totalMatchesTop: true,
+      },
+    },
+    {
+      entry: entry({}),
+      marginMm: 5,
+      expected: {
+        orientation: false,
+        levels: [25, 37.5, 72.5, 77.5, 82.5, 117.5, 130],
+        crosses: [0, 77.5, 130],
+        halves: [25, 37.5, 117.5],
+        badge: 5,
+        totalMatchesTop: true,
+      },
+    },
+    {
+      entry: entry({
+        heightSlot: 'custom',
+        customWidthMm: 20,
+        customHeightMm: 140,
+        naturalWidth: 1000,
+        naturalHeight: 100,
+      }),
+      marginMm: 2,
+      expected: {
+        orientation: true,
+        levels: [20, 30, 51, 53, 55, 76, 86],
+        crosses: [0, 53, 86],
+        halves: [20, 30, 76],
+        badge: 95,
+        totalMatchesTop: true,
+      },
+    },
+  ];
+  // #when
+  const actual = cases.map(({ entry: testEntry, marginMm }) => {
+    const placement = packMinis([testEntry], { ...sheetOpts, marginMm }).pages[0].placements[0];
+    const { levels, backBadgeOffsetXMm, totalHeightMm } = placement.mini;
+    return {
+      orientation: placement.rotated,
+      levels: [
+        levels.floorStripTopMm,
+        levels.frontTabTopMm,
+        levels.frontFaceTopMm,
+        levels.foldMm,
+        levels.backFaceBottomMm,
+        levels.backFaceTopMm,
+        levels.topMm,
+      ],
+      crosses: levels.cutMarks.crossesMm,
+      halves: levels.cutMarks.halvesMm,
+      badge: backBadgeOffsetXMm,
+      totalMatchesTop: totalHeightMm === levels.topMm,
+    };
+  });
+  // #then
+  assert.deepEqual(actual, cases.map(({ expected }) => expected));
+});
+
 t('margin alone can make a mini too wide or too tall for A4', () => {
   // #given
   const entries = [
@@ -823,25 +951,15 @@ t('a numbered mini at zero margin centres its base under the figure', () => {
   // #when
   const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: true, marginMm: 0 });
   // #then
-  assert.deepEqual(placedMinis(result), [
-    {
-      entryIndex: 0,
-      copyIndex: 0,
-      heightSlot: 'medium',
-      baseWidthMm: 25,
-      imageWidthMm: 35,
-      imageHeightMm: 35,
-      imageOffsetXMm: 0,
-      faceHeightMm: 35,
-      fitLimits: [],
-      totalWidthMm: 35,
-      baseOffsetXMm: 5,
-      tabHeightMm: 12.5,
-      totalHeightMm: 120,
-      marginMm: 0,
-      label: '1',
-    },
-  ]);
+  assert.deepEqual(
+    placedMinis(result).map(({ imageWidthMm, baseWidthMm, baseOffsetXMm, label }) => ({
+      imageWidthMm,
+      baseWidthMm,
+      baseOffsetXMm,
+      label,
+    })),
+    [{ imageWidthMm: 35, baseWidthMm: 25, baseOffsetXMm: 5, label: '1' }],
+  );
 });
 
 t('a mini reserves the greater of figure width and base width, plus margins', () => {

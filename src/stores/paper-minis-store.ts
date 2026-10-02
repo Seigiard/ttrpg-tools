@@ -5,6 +5,7 @@ import {
   type ArtworkPreparation,
   type PaperMinisArtwork,
 } from '@/lib/paper-minis/artwork';
+import { artworkMimeType } from '@/lib/paper-minis/artwork-formats';
 import { planBatch } from '@/lib/paper-minis/batch-plan';
 import {
   calibrationChanged,
@@ -18,12 +19,11 @@ import {
 import { canvasToPngBytes } from '@/lib/paper-minis/canvas';
 import {
   DEFAULT_FIGURE_MARGIN_MM,
-  fitLimitWarning,
-  resolveMini,
+  entryStatusWarning,
   type PageSizeKey,
 } from '@/lib/paper-minis/geometry';
 import { generatePDF } from '@/lib/paper-minis/pdf';
-import { packEntries, toPackingEntry, type PackResult } from '@/lib/paper-minis/packing';
+import { packEntries, resolveEntry, type PackResult } from '@/lib/paper-minis/packing';
 import {
   DEFAULT_CUSTOM_HEIGHT_MM,
   DEFAULT_CUSTOM_WIDTH_MM,
@@ -78,6 +78,7 @@ export type CalibrationSession = {
   slotHeightMm: number;
   printedHeightMm: number;
   warning?: string;
+  warningTone?: 'warning' | 'danger';
 };
 const storageKey = 'pmg-settings';
 const successMessage = 'PDF готов.';
@@ -88,10 +89,10 @@ const unzipFailureMessage =
   'Не удалось распаковать архив. Добавьте изображения вручную или попробуйте другой файл.';
 const skippedFilesMessage = 'Некоторые файлы пропущены: поддерживаются PNG, JPG и WebP.';
 const artworkTypesByExtension: Record<string, string> = {
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  png: 'image/png',
-  webp: 'image/webp',
+  jpg: artworkMimeType('jpg'),
+  jpeg: artworkMimeType('jpg'),
+  png: artworkMimeType('png'),
+  webp: artworkMimeType('webp'),
 };
 
 function parseNumericInput(text: string, accepts: (value: number) => boolean) {
@@ -164,7 +165,7 @@ function artworkTypeFromName(name: string): string | undefined {
 
 async function artworkAsPng(artwork: PreparedArtwork): Promise<Uint8Array> {
   if (artwork.format === 'png') return artwork.bytes;
-  const bitmap = await createImageBitmap(new Blob([artwork.bytes as BlobPart], { type: 'image/jpeg' }), {
+  const bitmap = await createImageBitmap(new Blob([artwork.bytes as BlobPart], { type: artworkMimeType('jpg') }), {
     imageOrientation: 'none',
   });
   const canvas = document.createElement('canvas');
@@ -236,12 +237,14 @@ export function createPaperMinisStore({
     if (!row.artwork) return undefined;
     const calibration = calibrationChanged(lines, initialCalibration) ? lines : initialCalibration;
     // Every copy shares one geometry, so a single copy is enough to preview it.
-    const mini = resolveMini(
-      { ...toPackingEntry(row), calibration, count: 1 },
+    const resolved = resolveEntry(
+      { ...row, calibration, count: 1 },
       0,
       $settings.get(),
     );
+    const { mini } = resolved;
     if (!mini) return undefined;
+    const warning = entryStatusWarning(resolved.status);
     return {
       rowId: row.id,
       rowLabel: row.name || 'Миниатюра',
@@ -255,7 +258,10 @@ export function createPaperMinisStore({
       },
       slotHeightMm: resolveFigureHeightMm(row),
       printedHeightMm: mini.copies[0].imageHeightMm,
-      warning: fitLimitWarning(mini.limits),
+      warning,
+      ...(warning && {
+        warningTone: resolved.status.state === 'oversized' ? ('danger' as const) : ('warning' as const),
+      }),
     };
   }
 

@@ -1,3 +1,5 @@
+import type { PreparedArtworkFormat } from './artwork-formats';
+
 // The size category a slot carries: a label the player knows from the rules,
 // and the one thing that still fixes the base width.
 export type SizeCategory = 'tiny' | 'small' | 'medium' | 'large' | 'huge' | 'gargantuan';
@@ -47,12 +49,12 @@ export type HeightCalibration = {
 
 export type PreparedArtwork = {
   readonly bytes: Uint8Array;
-  readonly format: 'png' | 'jpg';
+  readonly format: PreparedArtworkFormat;
   readonly width: number; // pixels in the prepared bytes
   readonly height: number;
 };
 
-// Geometry-only input keeps packing independent of image preparation.
+// Test seam for exercising geometry without constructing prepared artwork.
 export type PackingEntry = Pick<
   Entry,
   'heightSlot' | 'customWidthMm' | 'customHeightMm' | 'count' | 'calibration'
