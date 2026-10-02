@@ -349,6 +349,26 @@ test('a printer measurement resolves to the scale used for layout and PDF genera
   });
 });
 
+test('a printer measurement above 100 mm renders at the enlarging scale', async () => {
+  // #given  Fill Entire Paper printed the 100 mm ruler at 107 mm
+  let rendered: Parameters<PaperMinisRenderer> | undefined;
+  const store = setup(async (...input) => {
+    rendered = input;
+    return Uint8Array.from([1]);
+  });
+  const id = store.addBlank()!;
+  await store.setImage(id, artworkFile(10, 20));
+  // #when
+  store.setPrinterMeasurement('107');
+  await store.download();
+
+  // #then
+  expect({
+    measurement: store.$settings.get().printerMeasurementMm,
+    renderedScale: rendered?.[2].printerScale,
+  }).toEqual({ measurement: 107, renderedScale: 1.07 });
+});
+
 test('a printer measurement updates the estimated page count', async () => {
   // #given  this batch fits one A4 page at 95% but needs two at the 91% default
   const store = setup();
@@ -367,7 +387,7 @@ test('a printer measurement updates the estimated page count', async () => {
   expect([defaultPages, store.$layout.get().pageCount]).toEqual([2, 1]);
 });
 
-test.each(['79.9', '100.1', 'not a number'])(
+test.each(['79.9', '120.1', 'not a number'])(
   'an invalid printer measurement %j keeps the previous scale',
   (measurement) => {
     // #given
@@ -425,7 +445,7 @@ test('a stored valid printer measurement is restored and an invalid one clears a
   valid.loadSettings();
   const invalid = setup();
   invalid.setPrinterMeasurement('95');
-  localStorage.setItem('pmg-settings', JSON.stringify({ printerMeasurementMm: 101 }));
+  localStorage.setItem('pmg-settings', JSON.stringify({ printerMeasurementMm: 121 }));
 
   // #when
   invalid.loadSettings();

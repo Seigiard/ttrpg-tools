@@ -785,6 +785,34 @@ t('the scale bar expands by the inverse printer scale before printing', async ()
   assert.equal(widthMm(sheet.scaleBars[0].marks[0]), Number((100 / printerScale).toFixed(6)));
 });
 
+t('an enlarging printer keeps every mini and the scale bar on the cropped paper', async () => {
+  // #given  Fill Entire Paper enlarges A4 to 108% around its centre and crops the edges
+  const printerScale = 1.08;
+  const entries = [{ ...entry, count: 12 }, { ...wide, count: 3 }];
+  // #when
+  const sheet = await read(
+    await generatePDF(entries, { pageSize: 'a4', numberDuplicates: false, printerScale }),
+  );
+  // #then  every shape lands on the paper after the enlargement, and the bar prints 100 mm
+  const [pageW, pageH] = [210 * PT_PER_MM, 297 * PT_PER_MM];
+  const printed = ({ left, right, bottom, top }: Box): Box => ({
+    left: (left - pageW / 2) * printerScale + pageW / 2,
+    right: (right - pageW / 2) * printerScale + pageW / 2,
+    bottom: (bottom - pageH / 2) * printerScale + pageH / 2,
+    top: (top - pageH / 2) * printerScale + pageH / 2,
+  });
+  const onPaper = (box: Box) =>
+    box.left >= -1e-6 && box.right <= pageW + 1e-6 && box.bottom >= -1e-6 && box.top <= pageH + 1e-6;
+  assert.deepEqual(
+    {
+      shapesOnPaper: sheet.shapes.every((shape) => onPaper(printed(shape.box))),
+      barOnPaper: sheet.scaleBars[0].marks.every((box) => onPaper(printed(box))),
+      printedBarMm: Number((widthMm(sheet.scaleBars[0].marks[0]) * printerScale).toFixed(6)),
+    },
+    { shapesOnPaper: true, barOnPaper: true, printedBarMm: 100 },
+  );
+});
+
 t('the printer scale test sheet has a 100 mm ruler inside one selected-size page', async () => {
   // #given
   const selectedSizes = [
@@ -815,14 +843,14 @@ t('the printer scale test sheet has a 100 mm ruler inside one selected-size page
         sizeMm: selectedSizes[0][1],
         rulerLengthMm: 100,
         rulerInsidePage: true,
-        instruction: ['Print with Scale to Fit, measure the ruler, then enter the measured length.'],
+        instruction: ['Print, measure the ruler, enter its length, then print the minis with the same scaling.'],
       },
       {
         pages: 1,
         sizeMm: selectedSizes[1][1],
         rulerLengthMm: 100,
         rulerInsidePage: true,
-        instruction: ['Print with Scale to Fit, measure the ruler, then enter the measured length.'],
+        instruction: ['Print, measure the ruler, enter its length, then print the minis with the same scaling.'],
       },
     ],
   );
@@ -867,13 +895,13 @@ t('smaller printer scales enlarge PDF mini boxes instead of shrinking them', asy
   );
 });
 
-t('the scale bar tells the player to print with Scale to Fit', async () => {
+t('the scale bar tells the player to print with the test sheet scaling', async () => {
   // #when
   const sheet = await read(await generatePDF([entry], { pageSize: 'a4', numberDuplicates: false }));
   // #then
   assert.deepEqual(
     sheet.scaleBars.map((bar) => bar.notes.map((note) => note.label)),
-    [['Print with Scale to Fit. This bar should be 100 mm; if not, reprint the printer test sheet.']],
+    [['Print with the test sheet scaling. This bar should be 100 mm; if not, reprint the test sheet.']],
   );
 });
 

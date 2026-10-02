@@ -40,6 +40,12 @@ export function printerScale(opts: Pick<PackOptions, 'printerScale'>): number {
   return opts.printerScale ?? DEFAULT_PRINTER_SCALE;
 }
 
+// A printer that enlarges a page (Fill Entire Paper) crops it around the
+// centre, so the paper never holds more than the page itself.
+export function printedPageScale(opts: Pick<PackOptions, 'printerScale'>): number {
+  return Math.min(printerScale(opts), 1);
+}
+
 export function usableAreaMm(opts: Pick<PackOptions, 'pageSize' | 'printerScale'>): {
   widthMm: number;
   heightMm: number;
@@ -53,7 +59,7 @@ export function fullPageAreaMm(opts: Pick<PackOptions, 'pageSize' | 'printerScal
   widthMm: number;
   heightMm: number;
 } {
-  const scale = printerScale(opts);
+  const scale = printedPageScale(opts);
   const { w, h } = PAGE_SIZES_MM[opts.pageSize];
   return { widthMm: w * scale, heightMm: h * scale };
 }

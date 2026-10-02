@@ -579,7 +579,7 @@ export default function PaperMinisGenerator() {
                     className={field}
                     type="number"
                     min="80"
-                    max="100"
+                    max="120"
                     step="any"
                     value={inputs.printerMeasurement.text}
                     aria-invalid={!inputs.printerMeasurement.valid}
@@ -909,8 +909,8 @@ export default function PaperMinisGenerator() {
             только настройки печати.
           </p>
           <p>
-            <b>Печатайте с подгонкой под страницу.</b> Контрольная линейка на листе должна быть
-            ровно 100 мм.
+            <b>Печатайте с тем же масштабом, что и тестовый лист.</b> Контрольная линейка на листе
+            должна быть ровно 100 мм.
           </p>
           <p>
             <b>Вырежьте развёртку</b> по внешним меткам, согните пополам между изображениями,

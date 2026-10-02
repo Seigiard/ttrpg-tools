@@ -21,6 +21,7 @@ import {
   CUT_MARK_STROKE_MM,
   PAGE_SIZES_MM,
   SCALE_BAR_BAND_MM,
+  fullPageAreaMm,
   printerScale,
   type BackFace,
   type PackOptions,
@@ -48,9 +49,9 @@ const SCALE_TICK_WIDTH_MM = 0.3;
 const SCALE_TEXT_PT = 7;
 const SCALE_NOTE_GAP_MM = 1.5;
 export const SCALE_BAR_NOTE =
-  'Print with Scale to Fit. This bar should be 100 mm; if not, reprint the printer test sheet.';
+  'Print with the test sheet scaling. This bar should be 100 mm; if not, reprint the test sheet.';
 const TEST_SHEET_INSTRUCTION =
-  'Print with Scale to Fit, measure the ruler, then enter the measured length.';
+  'Print, measure the ruler, enter its length, then print the minis with the same scaling.';
 const TEST_SHEET_TICK_WIDTH_MM = 0.2;
 
 export type GenerateOptions = PackOptions;
@@ -95,11 +96,18 @@ export async function generatePDF(
 
   const { w: pageWmm, h: pageHmm } = PAGE_SIZES_MM[opts.pageSize];
   const scale = printerScale(opts);
-  const scaledPageHmm = pageHmm * scale;
+  const area = fullPageAreaMm(opts);
+  // Centre the printed area on the page: a printer that enlarges keeps only the
+  // middle, and a printer that shrinks fills the whole page either way.
+  const offsetXmm = (pageWmm - area.widthMm / scale) / 2;
+  const offsetYmm = (pageHmm - area.heightMm / scale) / 2;
   for (const [pageIndex, page] of layout.pages.entries()) {
     const pdfPage = pdf.addPage([mm(pageWmm), mm(pageHmm)]);
-    pdfPage.pushOperators(pushGraphicsState(), concatTransformationMatrix(1 / scale, 0, 0, 1 / scale, 0, 0));
-    const layoutTopMm = scaledPageHmm - (pageIndex === 0 ? SCALE_BAR_BAND_MM : 0);
+    pdfPage.pushOperators(
+      pushGraphicsState(),
+      concatTransformationMatrix(1 / scale, 0, 0, 1 / scale, mm(offsetXmm), mm(offsetYmm)),
+    );
+    const layoutTopMm = area.heightMm - (pageIndex === 0 ? SCALE_BAR_BAND_MM : 0);
     for (const { mini, xMm, yMm, rotated } of page.placements) {
       if (rotated) {
         // Turn the whole local drawing clockwise about the footprint's top-left.
@@ -127,7 +135,7 @@ export async function generatePDF(
         font,
       );
     }
-    if (pageIndex === 0) drawScaleBar(pdfPage, scaledPageHmm, noteFont);
+    if (pageIndex === 0) drawScaleBar(pdfPage, area.heightMm, noteFont);
     pdfPage.pushOperators(popGraphicsState());
   }
 

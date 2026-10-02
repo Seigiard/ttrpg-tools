@@ -88,7 +88,11 @@ const storageKey = 'pmg-settings';
 const successMessage = 'PDF готов.';
 const failureMessage = 'Не удалось создать PDF. Попробуйте ещё раз или уменьшите изображения.';
 const marginDraftError = 'Поля должны быть числом от 0 мм.';
-const printerMeasurementDraftError = 'Длина линейки должна быть числом от 80 до 100 мм.';
+// Below 100 mm the printer shrinks the page (Scale to Fit); above, it enlarges
+// and crops it (Fill Entire Paper).
+const MIN_PRINTER_MEASUREMENT_MM = 80;
+const MAX_PRINTER_MEASUREMENT_MM = 120;
+const printerMeasurementDraftError = `Длина линейки должна быть числом от ${MIN_PRINTER_MEASUREMENT_MM} до ${MAX_PRINTER_MEASUREMENT_MM} мм.`;
 const rowDraftError = 'Количество должно быть целым числом от 1, размеры — больше 0 мм.';
 
 function inputsForRow(row: Pick<Entry, 'count' | 'customWidthMm' | 'customHeightMm'>) {
@@ -771,7 +775,8 @@ export function createPaperMinisStore({
     }
     const { input, value } = parseNumericInput(
       text,
-      (candidate) => candidate >= 80 && candidate <= 100,
+      (candidate) =>
+        candidate >= MIN_PRINTER_MEASUREMENT_MM && candidate <= MAX_PRINTER_MEASUREMENT_MM,
     );
     $inputs.set({ ...$inputs.get(), printerMeasurement: input });
     if (value === undefined || value === $settings.get().printerMeasurementMm) return;
@@ -968,5 +973,10 @@ export function createPaperMinisStore({
 }
 
 function isValidPrinterMeasurement(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 80 && value <= 100;
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= MIN_PRINTER_MEASUREMENT_MM &&
+    value <= MAX_PRINTER_MEASUREMENT_MM
+  );
 }
