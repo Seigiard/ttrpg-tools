@@ -44,7 +44,13 @@ const inside = (inner: Box, outer: Box) =>
 // furniture rather than part of any mini: it is the only fill-only path and the
 // only text set in regular Helvetica, so it is read into its own list per page.
 type Role = 'marks' | 'badge' | 'image' | 'text';
-type Text = { label: string; size: number; direction: number; position: Point };
+type Text = {
+  label: string;
+  size: number;
+  direction: number;
+  verticalDirection: number;
+  position: Point;
+};
 type Mirror = { x: boolean; y: boolean };
 type Segment = [Point, Point];
 type Shape = {
@@ -55,6 +61,7 @@ type Shape = {
   mirror?: Mirror;
   segments?: Segment[];
   xobject?: string;
+  axes?: number[];
 };
 type ScaleBar = { page: number; marks: Box[]; notes: Text[] };
 
@@ -75,7 +82,7 @@ type Mini = {
 };
 
 // Read geometry from the saved PDF's graphics operators, not drawing helpers.
-async function read(bytes: Uint8Array) {
+async function read(bytes: Uint8Array, readUprightMinis = true) {
   const pdf = await PDFDocument.load(bytes);
   const shapes: Shape[] = [];
   const scaleBars: ScaleBar[] = [];
@@ -142,6 +149,7 @@ async function read(bytes: Uint8Array) {
             ]),
             mirror: { x: matrix[0] < 0, y: matrix[3] < 0 },
             xobject: xobject(images, tokens[0]),
+            axes: matrix.slice(0, 4).map((v) => Math.sign(v) || 0),
           });
         if (op === 'Tf') {
           size = n[1];
@@ -157,6 +165,7 @@ async function read(bytes: Uint8Array) {
             label: Buffer.from(tokens[0].slice(1, -1), 'hex').toString(),
             size,
             direction: matrix[0] * textMatrix[0] + matrix[2] * textMatrix[1],
+            verticalDirection: matrix[1] * textMatrix[0] + matrix[3] * textMatrix[1],
             position,
           };
           if (baseFont === '/Helvetica') scaleBar.notes.push(text);
@@ -167,7 +176,7 @@ async function read(bytes: Uint8Array) {
   }
   return {
     shapes,
-    minis: minis(shapes),
+    minis: readUprightMinis ? minis(shapes) : [],
     texts: shapes.filter((s) => s.role === 'text').map((s) => s.text!),
     pages: pdf.getPageCount(),
     scaleBars,
@@ -241,6 +250,152 @@ const artwork = {
   height: 1,
 };
 const entry: Entry = { image: null, artwork, heightSlot: 'tiny', count: 1 };
+
+for (const separateBack of [false, true]) {
+  t(
+    `clockwise rescue turns the complete drawing (${separateBack ? 'separate' : 'reflected'} back)`,
+    async () => {
+      // #given: 214×86 cut-out, 89.2×217.2 footprint including stroked corner arms.
+      const wideMini: Entry = {
+        ...entry,
+        heightSlot: 'custom',
+        customWidthMm: 20,
+        customHeightMm: 140,
+        artwork: { ...artwork, width: 10, height: 1 },
+        ...(separateBack
+          ? {
+              backImage: new File([], 'back.png'),
+              backArtwork: { ...artwork, width: 20, height: 1 },
+            }
+          : {}),
+      };
+      // #when
+      const sheet = await read(
+        await generatePDF([wideMini], {
+          pageSize: 'a4',
+          numberDuplicates: true,
+        }),
+        false,
+      );
+      const images = sheet.shapes.filter((s) => s.role === 'image');
+      const marks = sheet.shapes.find((s) => s.role === 'marks')!;
+      const badge = sheet.shapes.find((s) => s.role === 'badge')!;
+      const boxMm = (box: Box) => [box.left, box.bottom, box.right, box.top].map(asMm);
+      // #then: PDF world coordinates, measured from the bottom-left of A4.
+      assert.deepEqual(
+        {
+          pages: sheet.pages,
+          images: images.map((s) => boxMm(s.box)),
+          axes: images.map((s) => s.axes),
+          marks: boxMm(marks.box),
+          folds: [
+            ...new Set(marks.segments!.filter(([a, b]) => a.x === b.x).map(([a]) => asMm(a.x))),
+          ].toSorted((a, b) => a - b),
+          badge: boxMm(badge.box),
+          label: sheet.texts.map((text) => [text.label, text.direction, text.verticalDirection]),
+          scale: [
+            asMm(sheet.scaleBars[0].marks[0].left),
+            widthMm(sheet.scaleBars[0].marks[0]),
+            sheet.scaleBars[0].notes[0].direction,
+          ],
+        },
+        {
+          pages: 1,
+          images: [
+            [41.6, 73.4, 62.6, 283.4],
+            [separateBack ? 77.1 : 66.6, 73.4, 87.6, 283.4],
+          ],
+          axes: [[0, -1, 1, 0], separateBack ? [0, 1, -1, 0] : [0, -1, -1, 0]],
+          marks: [10.1, 69.9, 99.1, 286.9],
+          folds: [11.6, 31.6, 41.6, 64.6, 87.6, 97.6],
+          badge: [88.4, 183.2, 92.14, 187.6],
+          label: [['1', 0, 1]],
+          scale: [10, 100, 1],
+        },
+      );
+    },
+  );
+}
+
+t('a turned mini and an upright neighbour print with separate stroked cut marks', async () => {
+  // #given: a 217.2 mm rescue strip followed by a 34 mm upright strip fits A4.
+  const entries: Entry[] = [
+    {
+      ...entry,
+      heightSlot: 'custom',
+      customWidthMm: 20,
+      customHeightMm: 140,
+      artwork: { ...artwork, width: 10, height: 1 },
+    },
+    { ...entry, heightSlot: 'custom', customWidthMm: 5, customHeightMm: 10 },
+  ];
+  // #when
+  const sheet = await read(
+    await generatePDF(entries, { pageSize: 'a4', numberDuplicates: true }),
+    false,
+  );
+  const marks = sheet.shapes.filter((s) => s.role === 'marks').map((s) => s.box);
+  // #then: the 4 mm strip gap leaves 2.4 mm after the upright mark's 1.6 mm reach.
+  assert.deepEqual(
+    {
+      pages: sheet.pages,
+      marks: marks.length,
+      clearMm: asMm(marks[0].bottom - marks[1].top - 0.2 * PT_PER_MM),
+      images: sheet.shapes.filter((s) => s.role === 'image').length,
+      badges: sheet.shapes.filter((s) => s.role === 'badge').length,
+      labels: sheet.texts.map((text) => [text.label, text.direction, text.verticalDirection]),
+    },
+    {
+      pages: 1,
+      marks: 2,
+      clearMm: 2.4,
+      images: 4,
+      badges: 2,
+      labels: [
+        ['1', 0, 1],
+        ['1', -1, 0],
+      ],
+    },
+  );
+});
+
+t('stacked minis print on one sheet with separate cut marks and complete faces', async () => {
+  // #given: one 92×264 footprint beside two stacks of two 44×124 footprints.
+  const entries: Entry[] = [
+    { ...entry, heightSlot: 'custom', customWidthMm: 88, customHeightMm: 42 },
+    { ...entry, heightSlot: 'custom', customWidthMm: 40, customHeightMm: 20, count: 4 },
+  ];
+  // #when
+  const sheet = await read(await generatePDF(entries, { pageSize: 'a4', numberDuplicates: true }));
+  // #then
+  assert.deepEqual(
+    {
+      pages: sheet.pages,
+      minis: sheet.minis.length,
+      touching: sheet.minis.some((a, i) =>
+        sheet.minis
+          .slice(i + 1)
+          .some(
+            (b) =>
+              !(
+                a.marks.right < b.marks.left ||
+                b.marks.right < a.marks.left ||
+                a.marks.top < b.marks.bottom ||
+                b.marks.top < a.marks.bottom
+              ),
+          ),
+      ),
+      complete: sheet.minis.every(
+        (mini) =>
+          inside(mini.front.image, mini.extent) &&
+          inside(mini.back.image, mini.extent) &&
+          inside(mini.back.badge!, mini.extent),
+      ),
+      labels: sheet.texts.map((text) => text.label).toSorted(),
+    },
+    { pages: 1, minis: 5, touching: false, complete: true, labels: ['1', '1', '2', '3', '4'] },
+  );
+});
 
 // 3x2 px at Medium: the figure prints 52.5 mm wide at its 35 mm height, over a
 // 25 mm base, overhanging it and staying under the width cap.
