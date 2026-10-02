@@ -1,4 +1,4 @@
-import type { Entry, HeightSlot, MiniSize, SizeCategory } from './types';
+import type { Entry, HeightCalibration, HeightSlot, MiniSize, SizeCategory } from './types';
 
 export type SizeDimensionsMm = { baseWidthMm: number; figureHeightMm: number };
 export type FigureFitMm = { imageWidthMm: number; imageHeightMm: number };
@@ -262,16 +262,33 @@ export function fitFigure(
   { figureHeightMm }: SizeDimensionsMm,
   imgWidthPx: number,
   imgHeightPx: number,
+  calibration?: HeightCalibration,
 ): FigureFitMm {
   const maxWidthMm = figureHeightMm * MAX_WIDTH_TO_SLOT_HEIGHT;
   const aspect = imgWidthPx / imgHeightPx;
-  let imageHeightMm = figureHeightMm;
-  let imageWidthMm = aspect * figureHeightMm;
+  const calibrationScale = validCalibrationGap(calibration) ?? 1;
+  let imageHeightMm = figureHeightMm / calibrationScale;
+  let imageWidthMm = aspect * imageHeightMm;
   if (imageWidthMm > maxWidthMm) {
     imageWidthMm = maxWidthMm;
     imageHeightMm = maxWidthMm / aspect;
   }
   return { imageWidthMm, imageHeightMm };
+}
+
+export function validCalibrationGap(calibration: HeightCalibration | undefined): number | undefined {
+  if (!calibration) return undefined;
+  const { head, feet } = calibration;
+  if (
+    !Number.isFinite(head) ||
+    !Number.isFinite(feet) ||
+    head < 0 ||
+    feet > 1 ||
+    head >= feet ||
+    feet - head < 0.1
+  )
+    return undefined;
+  return feet - head;
 }
 
 function validDimension(value: number | undefined): number {

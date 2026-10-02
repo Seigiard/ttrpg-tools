@@ -366,3 +366,37 @@ test('a single-slot upload ignores the size in its file name', async () => {
   // #then
   expect(store.$rows.get()[0].heightSlot).toBe('medium');
 });
+
+test('front calibration can be set, cleared, copied and kept across size changes', async () => {
+  // #given
+  const store = setup();
+  const id = store.addBlank()!;
+  await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
+  // #when
+  store.setFrontCalibration(id, { head: 0.25, feet: 0.75 });
+  store.patch(id, { heightSlot: 'large' });
+  store.duplicate(id);
+  store.clearFrontCalibration(id);
+  // #then
+  expect(store.$rows.get().map((row) => row.frontCalibration)).toEqual([
+    undefined,
+    { head: 0.25, feet: 0.75 },
+  ]);
+});
+
+test('front image replacement and normalization toggle clear front calibration', async () => {
+  // #given
+  const store = setup();
+  const id = store.addBlank()!;
+  await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
+  store.setFrontCalibration(id, { head: 0.25, feet: 0.75 });
+  // #when
+  await store.setImage(id, new File([png], 'replacement.png', { type: 'image/png' }));
+  const afterReplace = store.$rows.get()[0].frontCalibration;
+  store.setFrontCalibration(id, { head: 0.2, feet: 0.8 });
+  store.patch(id, { image: null, artwork: null });
+  store.settings({ normalization: true });
+  const afterNormalization = store.$rows.get()[0].frontCalibration;
+  // #then
+  expect([afterReplace, afterNormalization]).toEqual([undefined, undefined]);
+});

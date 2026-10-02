@@ -8,14 +8,42 @@ import {
   DEFAULT_CUSTOM_HEIGHT_MM,
   DEFAULT_CUSTOM_WIDTH_MM,
   HEIGHT_SLOT_ORDER,
+  resolveFigureHeightMm,
   slotLabel,
   slotGeometryLabel,
   slotName,
 } from '@/lib/paper-minis/sizes';
-import type { MiniSize, PreparedArtwork } from '@/lib/paper-minis/types';
+import type { HeightCalibration, MiniSize, PreparedArtwork } from '@/lib/paper-minis/types';
 
 const field =
   'min-h-11 w-full rounded-lg border border-border bg-surface-elevated px-3 text-text focus-visible:outline-2 focus-visible:outline-primary';
+const minCalibrationGap = 0.1;
+
+function useArtworkUrl(artwork?: PreparedArtwork | null) {
+  const [url, setUrl] = useState<string>();
+  useEffect(() => {
+    if (!artwork) {
+      setUrl(undefined);
+      return;
+    }
+    const next = URL.createObjectURL(
+      new Blob([artwork.bytes as BlobPart], {
+        type: artwork.format === 'jpg' ? 'image/jpeg' : 'image/png',
+      }),
+    );
+    setUrl(next);
+    return () => URL.revokeObjectURL(next);
+  }, [artwork]);
+  return url;
+}
+
+function clamp(v: number, lo: number, hi: number) {
+  return Math.min(Math.max(v, lo), hi);
+}
+
+function lineStyle(value: number) {
+  return { top: `${value * 100}%` };
+}
 
 function SizeOptions({ custom = false }: { custom?: boolean }) {
   return (
@@ -55,6 +83,7 @@ function NamingHint() {
 
 function ArtworkSlot({
   artwork,
+  calibration,
   label,
   displayLabel,
   hint,
@@ -62,27 +91,15 @@ function ArtworkSlot({
   onFile,
 }: {
   artwork?: PreparedArtwork | null;
+  calibration?: HeightCalibration;
   label: string;
   displayLabel?: string;
   hint: string;
   loading: boolean;
   onFile: (file: File) => void;
 }) {
-  const [url, setUrl] = useState<string>();
+  const url = useArtworkUrl(artwork);
   const input = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    if (!artwork) {
-      setUrl(undefined);
-      return;
-    }
-    const next = URL.createObjectURL(
-      new Blob([artwork.bytes as BlobPart], {
-        type: artwork.format === 'jpg' ? 'image/jpeg' : 'image/png',
-      }),
-    );
-    setUrl(next);
-    return () => URL.revokeObjectURL(next);
-  }, [artwork]);
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-surface-elevated">
       <div className="border-b border-border px-3 py-2">
@@ -106,7 +123,20 @@ function ArtworkSlot({
         }}
       >
         {url ? (
-          <img src={url} alt={label} className="h-full w-full object-contain" />
+          <span className="relative h-full w-full">
+            <img src={url} alt={label} className="h-full w-full object-contain" />
+            {calibration && (
+              <span className="pointer-events-none absolute inset-y-0 left-1/2 aspect-square h-full -translate-x-1/2">
+                {(['head', 'feet'] as const).map((key) => (
+                  <span
+                    key={key}
+                    className="absolute left-0 right-0 border-t-2 border-primary bg-surface/70 text-[10px] font-bold text-primary shadow-sm"
+                    style={{ top: `${calibration[key] * 100}%` }}
+                  />
+                ))}
+              </span>
+            )}
+          </span>
         ) : (
           <span className="max-w-44 text-sm font-normal leading-relaxed text-text-muted">
             {loading ? 'Загрузка…' : hint}
@@ -129,6 +159,104 @@ function ArtworkSlot({
   );
 }
 
+function HeightCalibrationDialog({
+  artwork,
+  rowLabel,
+  slotHeightMm,
+  initial,
+  onApply,
+  onCancel,
+}: {
+  artwork: PreparedArtwork;
+  rowLabel: string;
+  slotHeightMm: number;
+  initial?: HeightCalibration;
+  onApply: (calibration: HeightCalibration) => void;
+  onCancel: () => void;
+}) {
+  const url = useArtworkUrl(artwork);
+  const artworkRef = useRef<HTMLDivElement>(null);
+  const dragging = useRef<'head' | 'feet' | null>(null);
+  const [lines, setLines] = useState<HeightCalibration>(initial ?? { head: 0, feet: 1 });
+  const printedHeightMm = slotHeightMm / Math.max(lines.feet - lines.head, minCalibrationGap);
+
+  function setLineFromClientY(which: 'head' | 'feet', clientY: number) {
+    const box = artworkRef.current?.getBoundingClientRect();
+    if (!box || box.height <= 0) return;
+    const fraction = clamp((clientY - box.top) / box.height, 0, 1);
+    setLines((current) => {
+      if (which === 'head')
+        return { ...current, head: clamp(fraction, 0, current.feet - minCalibrationGap) };
+      return { ...current, feet: clamp(fraction, current.head + minCalibrationGap, 1) };
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Задать рост лицевой стороны"
+        className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-xl border border-border bg-surface p-4 shadow-xl"
+      >
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-2xl text-text">Задать рост</h2>
+            <p className="text-sm text-text-muted">{rowLabel}: перетащите линии головы и стоп.</p>
+          </div>
+          <p className="text-sm font-medium text-text" aria-live="polite">
+            Рост {Math.round(slotHeightMm)} мм · напечатается {Math.round(printedHeightMm)} мм
+          </p>
+        </div>
+        <div
+          ref={artworkRef}
+          data-testid="height-calibration-artwork"
+          className="relative mt-4 h-[min(65vh,640px)] touch-none overflow-hidden rounded-lg border border-border bg-surface-elevated"
+          onPointerMove={(event) => {
+            if (dragging.current) setLineFromClientY(dragging.current, event.clientY);
+          }}
+          onPointerUp={(event) => {
+            dragging.current = null;
+            event.currentTarget.releasePointerCapture?.(event.pointerId);
+          }}
+        >
+          {url && <img src={url} alt="Лицевая сторона" className="h-full w-full object-contain" />}
+          {(['head', 'feet'] as const).map((key) => (
+            <button
+              key={key}
+              type="button"
+              role="slider"
+              aria-label={key === 'head' ? 'Head' : 'Feet'}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(lines[key] * 100)}
+              className="absolute left-0 right-0 h-8 -translate-y-1/2 cursor-row-resize border-y-2 border-primary bg-primary/10 text-left text-xs font-bold text-primary focus-visible:outline-2 focus-visible:outline-primary"
+              style={lineStyle(lines[key])}
+              onPointerDown={(event) => {
+                dragging.current = key;
+                event.currentTarget.setPointerCapture?.(event.pointerId);
+                setLineFromClientY(key, event.clientY);
+              }}
+            >
+              <span className="ml-2 rounded bg-surface/90 px-1">
+                {key === 'head' ? 'Head' : 'Feet'}
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="ghost" className="min-h-11" onClick={onCancel}>
+            Отмена
+          </Button>
+          <Button className="min-h-11" onClick={() => onApply(lines)}>
+            Применить
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PaperMinisGenerator() {
   const store = useMemo(() => createPaperMinisStore(), []);
   const rows = useStore(store.$rows);
@@ -139,12 +267,14 @@ export default function PaperMinisGenerator() {
   const busy = useStore(store.$busy);
   const preparing = useStore(store.$preparing);
   const [preview, setPreview] = useState<{ url: string; revision: number }>();
+  const [calibratingId, setCalibratingId] = useState<number>();
   const previewUrl = useRef<string | undefined>(undefined);
   const [dragging, setDragging] = useState(false);
   const files = useRef<HTMLInputElement>(null);
   const packed = useMemo(() => store.pack(), [store, rows, settings]);
   const marginValid =
     margin.trim() !== '' && Number.isFinite(Number(margin)) && Number(margin) >= 0;
+  const calibratingRow = rows.find((row) => row.id === calibratingId && row.artwork);
 
   useEffect(() => {
     store.loadSettings();
@@ -420,6 +550,7 @@ export default function PaperMinisGenerator() {
                   <div className="grid gap-3 sm:grid-cols-2">
                     <ArtworkSlot
                       artwork={row.artwork}
+                      calibration={row.frontCalibration}
                       label="Лицевая сторона"
                       hint="Выбрать лицевую сторону"
                       loading={!!row.image && !row.artwork && !row.frontError}
@@ -451,6 +582,30 @@ export default function PaperMinisGenerator() {
                   </div>
 
                   <div className="mt-4 grid gap-3 rounded-lg bg-muted/50 p-3 sm:grid-cols-2">
+                    <div className="space-y-2 sm:col-span-2">
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          variant="outline"
+                          className="min-h-11"
+                          disabled={!row.artwork}
+                          onClick={() => setCalibratingId(row.id)}
+                        >
+                          Задать рост
+                        </Button>
+                        {row.frontCalibration && (
+                          <Button
+                            variant="ghost"
+                            className="min-h-11"
+                            onClick={() => store.clearFrontCalibration(row.id)}
+                          >
+                            Сбросить рост
+                          </Button>
+                        )}
+                      </div>
+                      {row.frontCalibration && (
+                        <p className="text-sm font-medium text-text">Рост задан вручную</p>
+                      )}
+                    </div>
                     <label className="block text-sm">
                       Высота существа
                       <select
@@ -597,6 +752,19 @@ export default function PaperMinisGenerator() {
         <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center border-4 border-primary bg-surface/90 text-2xl text-primary">
           Отпустите файлы, чтобы добавить миниатюры
         </div>
+      )}
+      {calibratingRow?.artwork && (
+        <HeightCalibrationDialog
+          artwork={calibratingRow.artwork}
+          rowLabel={calibratingRow.name || 'Миниатюра'}
+          slotHeightMm={resolveFigureHeightMm(calibratingRow)}
+          initial={calibratingRow.frontCalibration}
+          onCancel={() => setCalibratingId(undefined)}
+          onApply={(calibration) => {
+            store.setFrontCalibration(calibratingRow.id, calibration);
+            setCalibratingId(undefined);
+          }}
+        />
       )}
     </div>
   );

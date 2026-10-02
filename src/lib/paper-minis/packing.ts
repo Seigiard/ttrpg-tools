@@ -88,6 +88,7 @@ export function packEntries(entries: Entry[], opts: PackOptions): PackResult {
       customWidthMm: entry.customWidthMm,
       customHeightMm: entry.customHeightMm,
       count: entry.count,
+      frontCalibration: entry.frontCalibration,
       naturalWidth: isBackArtworkLoading(entry) ? undefined : entry.artwork?.width,
       naturalHeight: isBackArtworkLoading(entry) ? undefined : entry.artwork?.height,
       backNaturalWidth: entry.backArtwork?.width,
@@ -124,7 +125,12 @@ export function packMinis(entries: PackingEntry[], opts: PackOptions): PackResul
     ) {
       return; // not packable yet
     }
-    const { imageWidthMm, imageHeightMm } = fitFigure(dimensions, e.naturalWidth, e.naturalHeight);
+    const { imageWidthMm, imageHeightMm } = fitFigure(
+      dimensions,
+      e.naturalWidth,
+      e.naturalHeight,
+      e.frontCalibration,
+    );
     const backFit =
       e.backNaturalWidth && e.backNaturalHeight
         ? fitFigure(dimensions, e.backNaturalWidth, e.backNaturalHeight)

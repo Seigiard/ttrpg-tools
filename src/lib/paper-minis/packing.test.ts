@@ -39,6 +39,58 @@ t('default margin reserves paper around both faces without shrinking the figure'
   );
 });
 
+t('front calibration scales the artwork height from the marked creature height', () => {
+  // #given
+  const entries = [
+    entry({ naturalWidth: 50, naturalHeight: 100, frontCalibration: { head: 0.25, feet: 0.75 } }),
+  ];
+  // #when
+  const mini = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 }).pages[0]
+    .rows[0].items[0];
+  // #then
+  assert.deepEqual([mini.imageWidthMm, mini.imageHeightMm, mini.faceHeightMm], [35, 70, 70]);
+});
+
+t('front calibration uses a custom figure height as its target', () => {
+  // #given
+  const entries = [
+    entry({
+      heightSlot: 'custom',
+      customWidthMm: 30,
+      customHeightMm: 30,
+      naturalWidth: 50,
+      naturalHeight: 100,
+      frontCalibration: { head: 0.25, feet: 0.75 },
+    }),
+  ];
+  // #when
+  const mini = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 }).pages[0]
+    .rows[0].items[0];
+  // #then
+  assert.deepEqual([mini.imageWidthMm, mini.imageHeightMm], [30, 60]);
+});
+
+t('calibrated slots keep their height order with the same marked lines', () => {
+  // #given
+  const shared = {
+    naturalWidth: 50,
+    naturalHeight: 100,
+    frontCalibration: { head: 0.25, feet: 0.75 },
+  };
+  const entries = [
+    entry({ ...shared, heightSlot: 'medium-short' }),
+    entry({ ...shared, heightSlot: 'medium-tall' }),
+  ];
+  // #when
+  const bySlot = Object.fromEntries(
+    packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 }).pages.flatMap(
+      (page) => page.rows.flatMap((row) => row.items.map((mini) => [mini.heightSlot, mini.imageHeightMm])),
+    ),
+  );
+  // #then
+  assert.deepEqual(bySlot, { 'medium-short': 54, 'medium-tall': 86 });
+});
+
 // --- counting & expansion ---
 
 t('empty input yields zero pages and zero minis', () => {

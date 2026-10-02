@@ -24,6 +24,7 @@ export type Entry = {
   name?: string;
   image: File | null;
   artwork: PreparedArtwork | null;
+  frontCalibration?: HeightCalibration;
   normalizationWarning?: string;
   // Optional, drawn as the creature looks from behind. While `backImage` is set
   // and `backArtwork` is null, the back is loading and the entry is not ready.
@@ -36,6 +37,11 @@ export type Entry = {
   count: number;
 };
 
+export type HeightCalibration = {
+  head: number;
+  feet: number;
+};
+
 export type PreparedArtwork = {
   readonly bytes: Uint8Array;
   readonly format: 'png' | 'jpg';
@@ -46,7 +52,7 @@ export type PreparedArtwork = {
 // Geometry-only input keeps packing independent of image preparation.
 export type PackingEntry = Pick<
   Entry,
-  'heightSlot' | 'customWidthMm' | 'customHeightMm' | 'count'
+  'heightSlot' | 'customWidthMm' | 'customHeightMm' | 'count' | 'frontCalibration'
 > & {
   naturalWidth?: number;
   naturalHeight?: number;

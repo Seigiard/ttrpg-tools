@@ -298,3 +298,61 @@ test('PDF actions wait for a pending image while the editor stays available', as
     after: [false, false, false],
   });
 });
+
+test('front height dialog applies pointer calibration and row reset clears it', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  // #when
+  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
+  const dialog = screen.getByRole('dialog', { name: 'Задать рост лицевой стороны' });
+  const artwork = within(dialog).getByTestId('height-calibration-artwork');
+  Object.defineProperty(artwork, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => ({ left: 0, top: 0, width: 100, height: 100, right: 100, bottom: 100 }),
+  });
+  fireEvent.pointerDown(within(dialog).getByRole('slider', { name: 'Head' }), {
+    pointerId: 1,
+    clientY: 25,
+  });
+  fireEvent.pointerMove(artwork, { pointerId: 1, clientY: 50 });
+  fireEvent.pointerUp(artwork, { pointerId: 1, clientY: 50 });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Применить' }));
+  const label = screen.getByText('Рост задан вручную');
+  fireEvent.click(screen.getByRole('button', { name: 'Сбросить рост' }));
+  // #then
+  expect({ label: label.textContent, reset: screen.queryByText('Рост задан вручную') }).toEqual({
+    label: 'Рост задан вручную',
+    reset: null,
+  });
+});
+
+test('front height dialog cancel leaves the row unchanged and keeps a 10 percent line gap', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  // #when
+  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
+  const dialog = screen.getByRole('dialog', { name: 'Задать рост лицевой стороны' });
+  const artwork = within(dialog).getByTestId('height-calibration-artwork');
+  Object.defineProperty(artwork, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => ({ left: 0, top: 0, width: 100, height: 100, right: 100, bottom: 100 }),
+  });
+  const head = within(dialog).getByRole('slider', { name: 'Head' });
+  const feet = within(dialog).getByRole('slider', { name: 'Feet' });
+  fireEvent.pointerDown(head, { pointerId: 1, clientY: 0 });
+  fireEvent.pointerMove(artwork, { pointerId: 1, clientY: 96 });
+  fireEvent.pointerUp(artwork, { pointerId: 1, clientY: 96 });
+  const positions = [head.getAttribute('aria-valuenow'), feet.getAttribute('aria-valuenow')];
+  const readout = within(dialog).getByText('Рост 35 мм · напечатается 350 мм');
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Отмена' }));
+  // #then
+  expect({ positions, readout: readout.textContent, label: screen.queryByText('Рост задан вручную') }).toEqual(
+    {
+      positions: ['90', '100'],
+      readout: 'Рост 35 мм · напечатается 350 мм',
+      label: null,
+    },
+  );
+});
