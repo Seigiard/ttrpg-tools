@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/preact';
+import { cleanup, fireEvent, render, within } from '@testing-library/preact';
 import { useState } from 'preact/hooks';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs';
 
@@ -22,7 +22,8 @@ describe('Preact Tabs', () => {
 
   test('clicking a tab changes selection and visible panel', () => {
     // #given controlled tabs with one selected value
-    render(<StatefulTabs />);
+    // Queries stay inside this render: CI runs test files concurrently on one document.
+    const screen = within(render(<StatefulTabs />).container as HTMLElement);
 
     // #when the user selects another tab
     fireEvent.click(screen.getByRole('tab', { name: 'Зима' }));
@@ -36,7 +37,8 @@ describe('Preact Tabs', () => {
 
   test('arrow keys move focus between tab triggers without selecting', () => {
     // #given horizontal tabs where keyboard users move through triggers
-    render(<StatefulTabs />);
+    // Queries stay inside this render: CI runs test files concurrently on one document.
+    const screen = within(render(<StatefulTabs />).container as HTMLElement);
     const spring = screen.getByRole('tab', { name: 'Весна' });
     const winter = screen.getByRole('tab', { name: 'Зима' });
     spring.focus();
