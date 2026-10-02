@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { packRows, GAP_MM, MARGIN_MM, PAGE_SIZES_MM } from './packing.ts';
+import { packMinis, packRows, GAP_MM, MARGIN_MM, PAGE_SIZES_MM } from './packing.ts';
 import { HEIGHT_SLOT_ORDER, slotGeometryLabel } from './sizes.ts';
 import type { PackingEntry as Entry } from './types.ts';
 
 import { test as t } from 'bun:test';
 
-// Covers the row candidate; layout.test.ts covers the chosen layout.
+// Covers the row candidate and calibrated geometry through the chosen layout.
+// layout.test.ts covers placement decisions.
 
 // Helper: build an entry with square art at a given size/count.
 const entry = (over: Partial<Entry>): Entry => ({
@@ -39,6 +40,527 @@ t('default margin reserves paper around both faces without shrinking the figure'
     ],
     [25, 35, 35, 39, 124, 2, 2],
   );
+});
+
+t('front calibration scales the artwork height from the marked creature height', () => {
+  // #given
+  const entries = [
+    entry({ naturalWidth: 50, naturalHeight: 100, frontCalibration: { head: 0.25, feet: 0.75 } }),
+  ];
+  // #when
+  const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 });
+  const mini = result.pages[0].placements[0].mini;
+  // #then
+  assert.deepEqual(
+    [
+      mini.imageWidthMm,
+      mini.imageHeightMm,
+      mini.faceHeightMm,
+      mini.fitLimits,
+      result.limitedEntryFitLimits,
+    ],
+    [35, 70, 70, [], []],
+  );
+});
+
+t('front calibration uses a custom figure height as its target', () => {
+  // #given
+  const entries = [
+    entry({
+      heightSlot: 'custom',
+      customWidthMm: 30,
+      customHeightMm: 30,
+      naturalWidth: 50,
+      naturalHeight: 100,
+      frontCalibration: { head: 0.25, feet: 0.75 },
+    }),
+  ];
+  // #when
+  const mini = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 }).pages[0]
+    .placements[0].mini;
+  // #then
+  assert.deepEqual([mini.imageWidthMm, mini.imageHeightMm], [30, 60]);
+});
+
+t('front calibration past twice the slot height is scaled down and reported', () => {
+  // #given
+  const entries = [
+    entry({ naturalWidth: 50, naturalHeight: 100, frontCalibration: { head: 0.1, feet: 0.2 } }),
+  ];
+  // #when
+  const mini = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 }).pages[0]
+    .placements[0].mini;
+  // #then
+  assert.deepEqual(
+    [mini.imageWidthMm, mini.imageHeightMm, mini.imageWidthMm / mini.imageHeightMm, mini.fitLimits],
+    [35, 70, 0.5, ['height']],
+  );
+});
+
+t('front calibration that hits the width cap scales down whole and reports width', () => {
+  // #given
+  const entries = [
+    entry({ naturalWidth: 300, naturalHeight: 100, frontCalibration: { head: 0.25, feet: 0.75 } }),
+  ];
+  // #when
+  const mini = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 }).pages[0]
+    .placements[0].mini;
+  // #then
+  assert.deepEqual(
+    [mini.imageWidthMm, mini.imageHeightMm, mini.imageWidthMm / mini.imageHeightMm, mini.fitLimits],
+    [52.5, 17.5, 3, ['width']],
+  );
+});
+
+t(
+  'front calibration too tall for the page scales to fit and is reported instead of skipped',
+  () => {
+    // #given
+    const entries = [
+      entry({
+        heightSlot: 'custom',
+        customWidthMm: 10,
+        customHeightMm: 140,
+        naturalWidth: 50,
+        naturalHeight: 100,
+        frontCalibration: { head: 0.25, feet: 0.75 },
+      }),
+    ];
+    // #when
+    const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 });
+    const mini = result.pages[0].placements[0].mini;
+    // #then
+    assert.deepEqual(
+      [
+        result.miniCount,
+        result.skipped.length,
+        mini.imageHeightMm,
+        mini.totalHeightMm,
+        mini.fitLimits,
+        result.limitedEntryFitLimits,
+      ],
+      [1, 0, 128.5, usableH, ['page'], [{ entryIndex: 0, limits: ['page'] }]],
+    );
+  },
+);
+
+t('a calibrated custom figure fits both page dimensions without changing its aspect', () => {
+  // #given: a 10 mm base, 140 mm creature and 3:2 artwork on A4.
+  const entries = [
+    entry({
+      heightSlot: 'custom',
+      customWidthMm: 10,
+      customHeightMm: 140,
+      naturalWidth: 150,
+      naturalHeight: 100,
+      frontCalibration: { head: 0.25, feet: 0.75 },
+    }),
+  ];
+  // #when
+  const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false });
+  // #then
+  assert.deepEqual(
+    {
+      count: result.miniCount,
+      skipped: result.skipped,
+      oversized: result.oversizedEntryIndices,
+      warnings: result.limitedEntryFitLimits,
+      geometry: result.pages.flatMap((page) =>
+        page.placements.map(({ mini, rotated }) => [
+          mini.imageWidthMm,
+          mini.imageHeightMm,
+          mini.totalWidthMm,
+          mini.totalHeightMm,
+          rotated,
+        ]),
+      ),
+    },
+    {
+      count: 1,
+      skipped: [],
+      oversized: [],
+      warnings: [{ entryIndex: 0, limits: ['width', 'page'] }],
+      geometry: [[186, 124, 190, 272, false]],
+    },
+  );
+});
+
+t('a page-width cap shrinks the inherited back and front to the same height', () => {
+  // #given: the back is wider than the calibrated front; neither may be cropped.
+  const entries = [
+    entry({
+      heightSlot: 'custom',
+      customWidthMm: 10,
+      customHeightMm: 140,
+      naturalWidth: 50,
+      naturalHeight: 100,
+      frontCalibration: { head: 0.25, feet: 0.75 },
+      backNaturalWidth: 150,
+      backNaturalHeight: 100,
+    }),
+  ];
+  // #when
+  const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false });
+  // #then
+  assert.deepEqual(
+    {
+      count: result.miniCount,
+      skipped: result.skipped,
+      warnings: result.limitedEntryFitLimits,
+      geometry: result.pages.flatMap((page) =>
+        page.placements.map(({ mini }) => [
+          mini.imageWidthMm,
+          mini.imageHeightMm,
+          mini.back?.imageWidthMm,
+          mini.back?.imageHeightMm,
+          mini.totalWidthMm,
+          mini.totalHeightMm,
+        ]),
+      ),
+    },
+    {
+      count: 1,
+      skipped: [],
+      warnings: [{ entryIndex: 0, limits: ['width', 'page'] }],
+      geometry: [[62, 124, 186, 124, 190, 272]],
+    },
+  );
+});
+
+t('page fit prints the former too-wide page-cap case at zero margin', () => {
+  // #given: this case used to lose its page warning and be skipped after a height-only cap.
+  const entries = [
+    entry({
+      heightSlot: 'custom',
+      customWidthMm: 10,
+      customHeightMm: 130,
+      naturalWidth: 150,
+      naturalHeight: 100,
+      frontCalibration: { head: 0.25, feet: 0.75 },
+    }),
+  ];
+  // #when
+  const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 });
+  // #then: millimetres rounded to a micron for the repeating 3:2 height.
+  assert.deepEqual(
+    {
+      skipped: result.skipped,
+      warnings: result.limitedEntryFitLimits,
+      geometry: result.pages.flatMap((page) =>
+        page.placements.map(({ mini }) => [
+          mini.imageWidthMm,
+          Number(mini.imageHeightMm.toFixed(3)),
+          mini.totalWidthMm,
+          Number(mini.totalHeightMm.toFixed(3)),
+        ]),
+      ),
+    },
+    {
+      skipped: [],
+      warnings: [{ entryIndex: 0, limits: ['width', 'page'] }],
+      geometry: [[190, 126.667, 190, 273.333]],
+    },
+  );
+});
+
+t(
+  'page fit bounds an independently calibrated back without forcing the front to its height',
+  () => {
+    // #given: a narrow unmarked front and a wider back with its own calibration.
+    const entries = [
+      entry({
+        heightSlot: 'custom',
+        customWidthMm: 10,
+        customHeightMm: 140,
+        naturalWidth: 25,
+        naturalHeight: 100,
+        backNaturalWidth: 150,
+        backNaturalHeight: 100,
+        backCalibration: { head: 0.25, feet: 0.75 },
+      }),
+    ];
+    // #when
+    const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false });
+    // #then
+    assert.deepEqual(
+      {
+        skipped: result.skipped,
+        warnings: result.limitedEntryFitLimits,
+        geometry: result.pages.flatMap((page) =>
+          page.placements.map(({ mini }) => [
+            mini.imageWidthMm,
+            mini.imageHeightMm,
+            mini.back?.imageWidthMm,
+            mini.back?.imageHeightMm,
+            mini.totalWidthMm,
+            mini.totalHeightMm,
+          ]),
+        ),
+      },
+      {
+        skipped: [],
+        warnings: [{ entryIndex: 0, limits: ['page', 'width'] }],
+        geometry: [[31.625, 126.5, 186, 124, 190, 277]],
+      },
+    );
+  },
+);
+
+t('an uncalibrated custom figure is not shrunk to the page', () => {
+  // #given: the same 10/140, 3:2 artwork, with no head and feet lines.
+  const entries = [
+    entry({
+      heightSlot: 'custom',
+      customWidthMm: 10,
+      customHeightMm: 140,
+      naturalWidth: 150,
+      naturalHeight: 100,
+    }),
+  ];
+  // #when
+  const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false });
+  // #then
+  assert.deepEqual(
+    {
+      pages: result.pages,
+      skipped: result.skipped,
+      warnings: result.limitedEntryFitLimits,
+    },
+    {
+      pages: [],
+      skipped: [{ entryIndex: 0, copyIndex: 0, baseWidthMm: 10, totalHeightMm: 304 }],
+      warnings: [],
+    },
+  );
+});
+
+t('back calibration scales the back artwork height from its own marked creature height', () => {
+  // #given
+  const entries = [
+    entry({
+      naturalWidth: 100,
+      naturalHeight: 100,
+      backNaturalWidth: 50,
+      backNaturalHeight: 100,
+      backCalibration: { head: 0.25, feet: 0.75 },
+    }),
+  ];
+  // #when
+  const mini = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 }).pages[0]
+    .placements[0].mini;
+  // #then
+  assert.deepEqual(
+    [mini.imageHeightMm, mini.back?.imageWidthMm, mini.back?.imageHeightMm],
+    [35, 35, 70],
+  );
+});
+
+t('an inherited square back shrinks both faces together at its width cap', () => {
+  // #given
+  const entries = [
+    entry({
+      naturalWidth: 50,
+      naturalHeight: 100,
+      frontCalibration: { head: 0.25, feet: 0.75 },
+      backNaturalWidth: 100,
+      backNaturalHeight: 100,
+    }),
+  ];
+  // #when
+  const mini = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 }).pages[0]
+    .placements[0].mini;
+  // #then
+  assert.deepEqual(
+    [
+      mini.imageWidthMm,
+      mini.imageHeightMm,
+      mini.back?.imageWidthMm,
+      mini.back?.imageHeightMm,
+      mini.fitLimits,
+    ],
+    [26.25, 52.5, 52.5, 52.5, ['width']],
+  );
+});
+
+t('an inherited wide back stays printable with matching heights and unchanged proportions', () => {
+  // #given
+  const entries = [
+    entry({
+      naturalWidth: 50,
+      naturalHeight: 100,
+      frontCalibration: { head: 0.25, feet: 0.75 },
+      backNaturalWidth: 300,
+      backNaturalHeight: 100,
+    }),
+  ];
+  // #when
+  const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false });
+  const mini = result.pages[0]?.placements[0].mini;
+  // #then
+  assert.deepEqual(
+    {
+      count: result.miniCount,
+      skipped: result.skipped,
+      front: [mini?.imageWidthMm, mini?.imageHeightMm],
+      back: mini?.back,
+      warnings: result.limitedEntryFitLimits,
+    },
+    {
+      count: 1,
+      skipped: [],
+      front: [8.75, 17.5],
+      back: { imageWidthMm: 52.5, imageHeightMm: 17.5, imageOffsetXMm: 2 },
+      warnings: [{ entryIndex: 0, limits: ['width'] }],
+    },
+  );
+});
+
+t('back-only calibration is capped to the page and reports every active limit', () => {
+  // #given
+  const entries = [
+    entry({
+      heightSlot: 'gargantuan',
+      naturalWidth: 50,
+      naturalHeight: 100,
+      backNaturalWidth: 100,
+      backNaturalHeight: 100,
+      backCalibration: { head: 0, feet: 0.25 },
+    }),
+  ];
+  // #when
+  const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 });
+  const mini = result.pages[0]?.placements[0].mini;
+  // #then
+  assert.deepEqual(
+    {
+      count: result.miniCount,
+      skipped: result.skipped.length,
+      front: mini?.imageHeightMm,
+      back: mini?.back,
+      limits: result.limitedEntryFitLimits,
+    },
+    {
+      count: 1,
+      skipped: 0,
+      front: 111,
+      back: { imageWidthMm: 125.5, imageHeightMm: 125.5, imageOffsetXMm: 0 },
+      limits: [{ entryIndex: 0, limits: ['height', 'width', 'page'] }],
+    },
+  );
+});
+
+t('back-only calibration fits an oversized custom front and back onto the page', () => {
+  // #given
+  const entries = [
+    entry({
+      heightSlot: 'custom',
+      customWidthMm: 10,
+      customHeightMm: 140,
+      naturalWidth: 50,
+      naturalHeight: 100,
+      backNaturalWidth: 25,
+      backNaturalHeight: 100,
+      backCalibration: { head: 0.25, feet: 0.75 },
+    }),
+  ];
+  // #when
+  const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 });
+  const mini = result.pages[0]?.placements[0].mini;
+  // #then
+  assert.deepEqual(
+    {
+      count: result.miniCount,
+      skipped: result.skipped,
+      front: [mini?.imageWidthMm, mini?.imageHeightMm],
+      back: [mini?.back?.imageWidthMm, mini?.back?.imageHeightMm],
+      total: mini?.totalHeightMm,
+      warnings: result.limitedEntryFitLimits,
+    },
+    {
+      count: 1,
+      skipped: [],
+      front: [64.25, 128.5],
+      back: [32.125, 128.5],
+      total: 277,
+      warnings: [{ entryIndex: 0, limits: ['page'] }],
+    },
+  );
+});
+
+t('a calibrated mini with an oversized base does not claim it was fitted to the page', () => {
+  // #given
+  const entries = [
+    entry({
+      heightSlot: 'custom',
+      customWidthMm: 200,
+      customHeightMm: 140,
+      backNaturalWidth: 50,
+      backNaturalHeight: 100,
+      backCalibration: { head: 0.25, feet: 0.75 },
+    }),
+  ];
+  // #when
+  const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 });
+  // #then
+  assert.deepEqual(
+    [result.miniCount, result.oversizedEntryIndices, result.limitedEntryFitLimits],
+    [0, [0], []],
+  );
+});
+
+t('fit warnings describe placed copies, not a skipped entry that hit the height cap', () => {
+  // #given: the oversized base cannot fit either orientation, even after its height cap.
+  const entries = [
+    entry({
+      heightSlot: 'custom',
+      customWidthMm: 200,
+      customHeightMm: 140,
+      frontCalibration: { head: 0.2, feet: 0.3 },
+      count: 2,
+    }),
+    entry({ naturalWidth: 50, frontCalibration: { head: 0.1, feet: 0.2 }, count: 2 }),
+  ];
+  // #when
+  const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false });
+  // #then
+  assert.deepEqual(
+    {
+      count: result.miniCount,
+      skipped: result.skipped.map(({ entryIndex, copyIndex }) => [entryIndex, copyIndex]),
+      oversized: result.oversizedEntryIndices,
+      warnings: result.limitedEntryFitLimits,
+    },
+    {
+      count: 2,
+      skipped: [
+        [0, 0],
+        [0, 1],
+      ],
+      oversized: [0],
+      warnings: [{ entryIndex: 1, limits: ['height'] }],
+    },
+  );
+});
+
+t('calibrated slots keep their height order with the same marked lines', () => {
+  // #given
+  const shared = {
+    naturalWidth: 50,
+    naturalHeight: 100,
+    frontCalibration: { head: 0.25, feet: 0.75 },
+  };
+  const entries = [
+    entry({ ...shared, heightSlot: 'medium-short' }),
+    entry({ ...shared, heightSlot: 'medium-tall' }),
+  ];
+  // #when
+  const bySlot = Object.fromEntries(
+    packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 }).pages.flatMap(
+      (page) => page.placements.map(({ mini }) => [mini.heightSlot, mini.imageHeightMm]),
+    ),
+  );
+  // #then
+  assert.deepEqual(bySlot, { 'medium-short': 54, 'medium-tall': 86 });
 });
 
 // --- counting & expansion ---
@@ -343,6 +865,7 @@ t('a numbered mini at zero margin centres its base under the figure', () => {
               imageHeightMm: 35,
               imageOffsetXMm: 0,
               faceHeightMm: 35,
+              fitLimits: [],
               totalWidthMm: 35,
               baseOffsetXMm: 5,
               tabHeightMm: 12.5,

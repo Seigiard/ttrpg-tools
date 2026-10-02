@@ -366,3 +366,124 @@ test('a single-slot upload ignores the size in its file name', async () => {
   // #then
   expect(store.$rows.get()[0].heightSlot).toBe('medium');
 });
+
+test('front calibration can be set, cleared, copied and kept across size changes', async () => {
+  // #given
+  const store = setup();
+  const id = store.addBlank()!;
+  await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
+  // #when
+  store.setFrontCalibration(id, { head: 0.25, feet: 0.75 });
+  store.patch(id, { heightSlot: 'large' });
+  store.duplicate(id);
+  store.clearFrontCalibration(id);
+  // #then
+  expect(store.$rows.get().map((row) => row.frontCalibration)).toEqual([
+    undefined,
+    { head: 0.25, feet: 0.75 },
+  ]);
+});
+
+test('front image replacement clears front calibration', async () => {
+  // #given
+  const store = setup();
+  const id = store.addBlank()!;
+  await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
+  store.setFrontCalibration(id, { head: 0.25, feet: 0.75 });
+  // #when
+  await store.setImage(id, new File([png], 'replacement.png', { type: 'image/png' }));
+  // #then
+  expect(store.$rows.get()[0].frontCalibration).toBe(undefined);
+});
+
+test('normalization clears both calibrations on a row with loaded front and back images', async () => {
+  // #given
+  const store = setup();
+  const id = store.addBlank()!;
+  await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
+  await store.setImage(id, new File([png], 'back.png', { type: 'image/png' }), true);
+  store.setFrontCalibration(id, { head: 0.2, feet: 0.8 });
+  store.setBackCalibration(id, { head: 0.25, feet: 0.75 });
+  // happy-dom has no bitmap decoder. The reset must also survive trim fallback.
+  const errors = spyOn(console, 'error').mockImplementation(() => {});
+  const settled = new Promise<void>((resolve) => {
+    const unsubscribe = store.$preparing.listen((preparing) => {
+      if (!preparing) {
+        unsubscribe();
+        resolve();
+      }
+    });
+  });
+  try {
+    // #when
+    store.settings({ normalization: true });
+    const during = store.$rows.get()[0];
+    await settled;
+    const after = store.$rows.get()[0];
+    // #then
+    expect(
+      [during, after].map((row) => [
+        row.image?.name,
+        row.backImage?.name,
+        row.frontCalibration,
+        row.backCalibration,
+      ]),
+    ).toEqual([
+      ['front.png', 'back.png', undefined, undefined],
+      ['front.png', 'back.png', undefined, undefined],
+    ]);
+  } finally {
+    errors.mockRestore();
+  }
+});
+
+test('removing a calibrated back clears its lines and preserves front calibration', async () => {
+  // #given
+  const store = setup();
+  const id = store.addBlank()!;
+  await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
+  await store.setImage(id, new File([png], 'back.png', { type: 'image/png' }), true);
+  store.setFrontCalibration(id, { head: 0.2, feet: 0.8 });
+  store.setBackCalibration(id, { head: 0.25, feet: 0.75 });
+  // #when
+  store.clearBack(id);
+  const row = store.$rows.get()[0];
+  // #then
+  expect([row.backImage, row.backArtwork, row.backCalibration, row.frontCalibration]).toEqual([
+    null,
+    null,
+    undefined,
+    { head: 0.2, feet: 0.8 },
+  ]);
+});
+
+test('back calibration can be set, copied, cleared and reset without changing the front', async () => {
+  // #given
+  const store = setup();
+  const id = store.addBlank()!;
+  await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
+  await store.setImage(id, new File([png], 'back.png', { type: 'image/png' }), true);
+  store.setFrontCalibration(id, { head: 0.2, feet: 0.8 });
+  store.setBackCalibration(id, { head: 0.25, feet: 0.75 });
+  // #when
+  store.duplicate(id);
+  store.clearBackCalibration(id);
+  const afterClear = store.$rows.get().map((row) => [row.frontCalibration, row.backCalibration]);
+  store.setBackCalibration(id, { head: 0.3, feet: 0.9 });
+  await store.setImage(id, new File([png], 'new-back.png', { type: 'image/png' }), true);
+  const afterReplace = store.$rows.get()[0];
+  // #then
+  expect({
+    afterClear,
+    afterReplace: [afterReplace.frontCalibration, afterReplace.backCalibration],
+  }).toEqual({
+    afterClear: [
+      [{ head: 0.2, feet: 0.8 }, undefined],
+      [
+        { head: 0.2, feet: 0.8 },
+        { head: 0.25, feet: 0.75 },
+      ],
+    ],
+    afterReplace: [{ head: 0.2, feet: 0.8 }, undefined],
+  });
+});

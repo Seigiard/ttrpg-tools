@@ -1,7 +1,12 @@
-import type { Entry, HeightSlot, MiniSize, SizeCategory } from './types';
+import type { Entry, HeightCalibration, HeightSlot, MiniSize, SizeCategory } from './types';
 
 export type SizeDimensionsMm = { baseWidthMm: number; figureHeightMm: number };
-export type FigureFitMm = { imageWidthMm: number; imageHeightMm: number };
+export type FigureFitLimit = 'height' | 'width' | 'page';
+export type FigureFitMm = {
+  imageWidthMm: number;
+  imageHeightMm: number;
+  limits: FigureFitLimit[];
+};
 
 // printableminimaker ADR-0002: base width is a convention, not a measurement. A creature's space
 // is the area it controls in combat, explicitly not its physical size, and the
@@ -253,25 +258,63 @@ export function hasPackableDimensions(
 // here — the number is a judgement about how far a figure may spread, not a
 // limit the paper forces.
 export const MAX_WIDTH_TO_SLOT_HEIGHT = 1.5;
+// Leave room for raised weapons without letting a short marked gap make a giant mini.
+export const MAX_CALIBRATED_HEIGHT_TO_SLOT_HEIGHT = 2;
+export const MIN_CALIBRATION_GAP = 0.1;
 
-// The one place a height slot becomes millimetres of artwork. Fits a figure to
-// its slot's height, letting width follow the artwork's proportions, then scales
-// the whole figure down if it passes the width cap. Aspect ratio is preserved
-// throughout and nothing is cropped.
+// Convert the slot height to artwork millimetres, dividing by a valid marked gap.
+// Then apply the 2× height cap, width cap, and supplied page-height cap, in order.
+// Each cap only shrinks the whole image; proportions stay intact, without cropping.
+// The height cap and width-limit reporting require valid calibration. The page
+// cap is opt-in: packing supplies it for both faces when either is calibrated.
+// Without calibration or a supplied page cap, only the existing width cap applies.
 export function fitFigure(
   { figureHeightMm }: SizeDimensionsMm,
   imgWidthPx: number,
   imgHeightPx: number,
+  calibration?: HeightCalibration,
+  maxImageHeightMm?: number,
 ): FigureFitMm {
   const maxWidthMm = figureHeightMm * MAX_WIDTH_TO_SLOT_HEIGHT;
   const aspect = imgWidthPx / imgHeightPx;
-  let imageHeightMm = figureHeightMm;
-  let imageWidthMm = aspect * figureHeightMm;
+  const calibrationGap = validCalibrationGap(calibration);
+  const limits: FigureFitLimit[] = [];
+  const calibrationScale = calibrationGap ?? 1;
+  let imageHeightMm = figureHeightMm / calibrationScale;
+  let imageWidthMm = aspect * imageHeightMm;
+  if (calibrationGap && imageHeightMm > figureHeightMm * MAX_CALIBRATED_HEIGHT_TO_SLOT_HEIGHT) {
+    imageHeightMm = figureHeightMm * MAX_CALIBRATED_HEIGHT_TO_SLOT_HEIGHT;
+    imageWidthMm = aspect * imageHeightMm;
+    limits.push('height');
+  }
   if (imageWidthMm > maxWidthMm) {
     imageWidthMm = maxWidthMm;
     imageHeightMm = maxWidthMm / aspect;
+    if (calibrationGap) limits.push('width');
   }
-  return { imageWidthMm, imageHeightMm };
+  if (maxImageHeightMm != null && imageHeightMm > maxImageHeightMm) {
+    imageHeightMm = maxImageHeightMm;
+    imageWidthMm = aspect * imageHeightMm;
+    limits.push('page');
+  }
+  return { imageWidthMm, imageHeightMm, limits };
+}
+
+export function validCalibrationGap(
+  calibration: HeightCalibration | undefined,
+): number | undefined {
+  if (!calibration) return undefined;
+  const { head, feet } = calibration;
+  if (
+    !Number.isFinite(head) ||
+    !Number.isFinite(feet) ||
+    head < 0 ||
+    feet > 1 ||
+    head >= feet ||
+    feet - head < MIN_CALIBRATION_GAP - Number.EPSILON
+  )
+    return undefined;
+  return feet - head;
 }
 
 function validDimension(value: number | undefined): number {

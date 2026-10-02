@@ -1,9 +1,12 @@
 import type { Entry, MiniSize, PackingEntry } from './types';
 import {
+  type FigureFitLimit,
+  type FigureFitMm,
   fitFigure,
   hasPackableDimensions,
   resolveSizeDimensionsMm,
   resolveTabHeightMm,
+  validCalibrationGap,
 } from './sizes.ts';
 
 // Page and layout constants. These live here (not in pdf.ts) so the packing
@@ -44,6 +47,7 @@ export type PackedMini = {
   // images, so both halves fold to the same length and both tabs meet the floor.
   faceHeightMm: number;
   back?: BackFace; // present only for an entry with back artwork
+  fitLimits: FigureFitLimit[];
   totalHeightMm: number;
   label?: string;
 };
@@ -77,6 +81,7 @@ export type PackResult = {
   miniCount: number; // minis actually placed (what will print)
   skipped: SkippedMini[];
   oversizedEntryIndices: number[]; // distinct entries with >=1 skipped mini
+  limitedEntryFitLimits: { entryIndex: number; limits: FigureFitLimit[] }[];
 };
 
 export type PackOptions = {
@@ -84,6 +89,74 @@ export type PackOptions = {
   numberDuplicates: boolean;
   marginMm?: number;
 };
+
+// Resolve both faces together for packing and the calibration preview. An unset
+// back inherits the calibrated front's height; its width cap shrinks both faces
+// by the same factor so their heights still match and neither artwork distorts.
+export function fitMiniFaces(
+  e: PackingEntry & { naturalWidth: number; naturalHeight: number },
+  opts: PackOptions,
+): { front: FigureFitMm; back?: FigureFitMm } {
+  const dimensions = resolveSizeDimensionsMm(e);
+  const usableHeightMm = PAGE_SIZES_MM[opts.pageSize].h - MARGIN_MM * 2;
+  const usableWidthMm = PAGE_SIZES_MM[opts.pageSize].w - MARGIN_MM * 2;
+  const marginMm = opts.marginMm ?? DEFAULT_FIGURE_MARGIN_MM;
+  const imageSpaceMm = (usableHeightMm - marginMm * 2 - resolveTabHeightMm(e) * 4) / 2;
+  const hasBack = !!(e.backNaturalWidth && e.backNaturalHeight);
+  const calibrated = !!(
+    validCalibrationGap(e.frontCalibration) ||
+    (hasBack && validCalibrationGap(e.backCalibration))
+  );
+  // Page fitting belongs to the whole calibrated mini, including an unmarked
+  // front. Do not promise a page fit when the base/tabs alone cannot fit.
+  const maxImageHeightMm = (aspect: number) =>
+    calibrated && imageSpaceMm > 0 && dimensions.baseWidthMm + marginMm * 2 <= usableWidthMm
+      ? Math.min(imageSpaceMm, (usableWidthMm - marginMm * 2) / aspect)
+      : undefined;
+  let faces: { front: FigureFitMm; back?: FigureFitMm };
+  if (
+    e.backNaturalWidth &&
+    e.backNaturalHeight &&
+    validCalibrationGap(e.frontCalibration) &&
+    !validCalibrationGap(e.backCalibration)
+  ) {
+    const frontAspect = e.naturalWidth / e.naturalHeight;
+    const backAspect = e.backNaturalWidth / e.backNaturalHeight;
+    // Fit the wider face first so width still precedes page in the cap order.
+    const shared = fitFigure(
+      dimensions,
+      Math.max(frontAspect, backAspect),
+      1,
+      e.frontCalibration,
+      maxImageHeightMm(Math.max(frontAspect, backAspect)),
+    );
+    faces = {
+      front: { ...shared, imageWidthMm: frontAspect * shared.imageHeightMm },
+      back: { ...shared, imageWidthMm: backAspect * shared.imageHeightMm },
+    };
+  } else {
+    faces = {
+      front: fitFigure(
+        dimensions,
+        e.naturalWidth,
+        e.naturalHeight,
+        e.frontCalibration,
+        maxImageHeightMm(e.naturalWidth / e.naturalHeight),
+      ),
+      back:
+        e.backNaturalWidth && e.backNaturalHeight
+          ? fitFigure(
+              dimensions,
+              e.backNaturalWidth,
+              e.backNaturalHeight,
+              e.backCalibration,
+              maxImageHeightMm(e.backNaturalWidth / e.backNaturalHeight),
+            )
+          : undefined,
+    };
+  }
+  return faces;
+}
 
 // A back file is chosen but not prepared yet. Such an entry is not ready, so
 // it does not print reflected for a moment and then jump to its own back.
@@ -99,6 +172,8 @@ export function packEntries(entries: Entry[], opts: PackOptions): PackResult {
       customWidthMm: entry.customWidthMm,
       customHeightMm: entry.customHeightMm,
       count: entry.count,
+      frontCalibration: entry.frontCalibration,
+      backCalibration: entry.backCalibration,
       naturalWidth: isBackArtworkLoading(entry) ? undefined : entry.artwork?.width,
       naturalHeight: isBackArtworkLoading(entry) ? undefined : entry.artwork?.height,
       backNaturalWidth: entry.backArtwork?.width,
@@ -260,11 +335,16 @@ export function packRows(
     ) {
       return; // not packable yet
     }
-    const { imageWidthMm, imageHeightMm } = fitFigure(dimensions, e.naturalWidth, e.naturalHeight);
-    const backFit =
-      e.backNaturalWidth && e.backNaturalHeight
-        ? fitFigure(dimensions, e.backNaturalWidth, e.backNaturalHeight)
-        : undefined;
+    const tabHMm = resolveTabHeightMm(e);
+    const { front, back: rawBackFit } = fitMiniFaces(
+      { ...e, naturalWidth: e.naturalWidth, naturalHeight: e.naturalHeight },
+      opts,
+    );
+    const { imageWidthMm, imageHeightMm, limits } = front;
+    const backFit = rawBackFit && {
+      imageWidthMm: rawBackFit.imageWidthMm,
+      imageHeightMm: rawBackFit.imageHeightMm,
+    };
     // A figure may overhang its base, so the reserved column is the widest of
     // base and faces.
     const contentWidthMm = Math.max(baseWidthMm, imageWidthMm, backFit?.imageWidthMm ?? 0);
@@ -280,7 +360,6 @@ export function packRows(
     // derives the back badge's own offset, inside the rotated frame, from this
     // rule — change it here and change it there.
     const baseOffsetXMm = marginMm + (contentWidthMm - baseWidthMm) / 2;
-    const tabHMm = resolveTabHeightMm(e);
     // Face on face, a margin either side of the fold, a tab at each end and
     // the floor strip, twice a tab, under the front one.
     const totalHeightMm = faceHeightMm * 2 + marginMm * 2 + tabHMm * 4;
@@ -299,6 +378,7 @@ export function packRows(
         imageOffsetXMm,
         faceHeightMm,
         ...(back && { back }),
+        fitLimits: [...new Set([...limits, ...(rawBackFit?.limits ?? [])])],
         totalHeightMm,
         label: opts.numberDuplicates ? String(i + 1) : undefined,
       });
@@ -378,11 +458,24 @@ export function packRows(
     }
   }
 
+  const placedLimits = new Map<number, FigureFitLimit[]>();
+  for (const sheet of pages) {
+    for (const { items } of sheet.rows) {
+      for (const mini of items) {
+        if (mini.fitLimits.length) placedLimits.set(mini.entryIndex, mini.fitLimits);
+      }
+    }
+  }
+
   return {
     pages,
     pageCount: pages.length,
     miniCount: placed,
     skipped,
     oversizedEntryIndices: [...oversized],
+    limitedEntryFitLimits: [...placedLimits].map(([entryIndex, limits]) => ({
+      entryIndex,
+      limits,
+    })),
   };
 }

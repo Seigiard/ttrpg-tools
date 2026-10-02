@@ -48,7 +48,10 @@ test.each([
     ['big_bad_wolf.png', 'big-bad-wolf-back.png'],
     [['Big bad wolf', 'big_bad_wolf.png', 'big-bad-wolf-back.png']],
   ],
-  [['Goblin MK2.png', 'goblin mk2-back.png'], [['Goblin MK2', 'Goblin MK2.png', 'goblin mk2-back.png']]],
+  [
+    ['Goblin MK2.png', 'goblin mk2-back.png'],
+    [['Goblin MK2', 'Goblin MK2.png', 'goblin mk2-back.png']],
+  ],
 ])('%p pairs into one row with both sides', (fileNames, expected) => {
   expect(rows(...fileNames)).toEqual(expected);
 });
@@ -86,7 +89,9 @@ test('a front that two backs match stays unpaired, and each back becomes its own
 });
 
 test('an ambiguous name does not block pairing of other names', () => {
-  expect(rows('goblin.png', 'goblin-back.png', 'goblin-back.jpg', 'ogre.png', 'ogre-back.png')).toEqual([
+  expect(
+    rows('goblin.png', 'goblin-back.png', 'goblin-back.jpg', 'ogre.png', 'ogre-back.png'),
+  ).toEqual([
     ['Goblin', 'goblin.png', undefined],
     ['Goblin', 'goblin-back.png', undefined],
     ['Goblin', 'goblin-back.jpg', undefined],
@@ -157,7 +162,12 @@ test.each([
 
 // Rows with their size, so the size cases read like the acceptance table.
 const sizedRows = (...fileNames: string[]) =>
-  planBatch(fileNames.map(file)).map((row) => [row.name, row.front.name, row.back?.name, row.heightSlot]);
+  planBatch(fileNames.map(file)).map((row) => [
+    row.name,
+    row.front.name,
+    row.back?.name,
+    row.heightSlot,
+  ]);
 
 test('a side and a size pair the same way in both files', () => {
   expect(sizedRows('ogre-large-tall-front.png', 'ogre-large-tall-back.png')).toEqual([
@@ -174,7 +184,12 @@ test('an unsized back goes to every sized front with the same name', () => {
 
 test('sized backs go only to fronts of their own size', () => {
   expect(
-    sizedRows('goblin-small-front.png', 'goblin-large-front.png', 'goblin-small-back.png', 'goblin-large-back.png'),
+    sizedRows(
+      'goblin-small-front.png',
+      'goblin-large-front.png',
+      'goblin-small-back.png',
+      'goblin-large-back.png',
+    ),
   ).toEqual([
     ['Goblin', 'goblin-small-front.png', 'goblin-small-back.png', 'small'],
     ['Goblin', 'goblin-large-front.png', 'goblin-large-back.png', 'large'],

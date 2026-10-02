@@ -255,8 +255,69 @@ test('empty and unprepared inputs have no placements or skipped copies', () => {
       miniCount: 0,
       skipped: [],
       oversizedEntryIndices: [],
+      limitedEntryFitLimits: [],
     })),
   );
+});
+
+test('an uncalibrated wide mini keeps its dimensions through rotation and strip packing', () => {
+  // #given: the 8:1 front and 4:1 back hit the slot width cap independently.
+  // The 199 mm cut-out only fits turned, including marks. A Tiny fits below it.
+  const entries: PackingEntry[] = [
+    {
+      heightSlot: 'custom',
+      customWidthMm: 30,
+      customHeightMm: 130,
+      count: 1,
+      naturalWidth: 800,
+      naturalHeight: 100,
+      backNaturalWidth: 400,
+      backNaturalHeight: 100,
+    },
+    { heightSlot: 'tiny', count: 1, naturalWidth: 1, naturalHeight: 1 },
+  ];
+  // #when
+  const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false });
+  // #then
+  expect({
+    count: result.miniCount,
+    skipped: result.skipped,
+    warnings: result.limitedEntryFitLimits,
+    pages: result.pages.map((page) =>
+      page.placements.map(({ mini, rotated, xMm, yMm }) => ({
+        entry: mini.entryIndex,
+        rotated,
+        position: [xMm, yMm],
+        front: [mini.imageWidthMm, mini.imageHeightMm],
+        back: mini.back && [mini.back.imageWidthMm, mini.back.imageHeightMm],
+        cutout: [mini.totalWidthMm, mini.totalHeightMm],
+      })),
+    ),
+  }).toEqual({
+    count: 2,
+    skipped: [],
+    warnings: [],
+    pages: [
+      [
+        {
+          entry: 0,
+          rotated: true,
+          position: [0, 0],
+          front: [195, 24.375],
+          back: [195, 48.75],
+          cutout: [199, 161.5],
+        },
+        {
+          entry: 1,
+          rotated: false,
+          position: [0, 206.2],
+          front: [12, 12],
+          back: undefined,
+          cutout: [24, 68],
+        },
+      ],
+    ],
+  });
 });
 
 test('later small minis backfill the first sheet; guillotine wins a sheet-count tie', () => {

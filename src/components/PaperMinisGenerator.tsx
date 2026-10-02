@@ -1,21 +1,97 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
 import { useStore } from '@nanostores/react';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { createPaperMinisStore } from '@/stores/paper-minis-store';
 import { isSupportedArtwork } from '@/lib/paper-minis/artwork';
 import { generatePDF, buildFilename } from '@/lib/paper-minis/pdf';
+import { fitMiniFaces } from '@/lib/paper-minis/packing';
 import {
   DEFAULT_CUSTOM_HEIGHT_MM,
   DEFAULT_CUSTOM_WIDTH_MM,
   HEIGHT_SLOT_ORDER,
+  MIN_CALIBRATION_GAP,
+  type FigureFitLimit,
+  resolveFigureHeightMm,
   slotLabel,
   slotGeometryLabel,
   slotName,
 } from '@/lib/paper-minis/sizes';
-import type { MiniSize, PreparedArtwork } from '@/lib/paper-minis/types';
+import type { Entry, HeightCalibration, MiniSize, PreparedArtwork } from '@/lib/paper-minis/types';
+
+type CalibrationDraft = Pick<Entry, 'frontCalibration' | 'backCalibration'>;
 
 const field =
   'min-h-11 w-full rounded-lg border border-border bg-surface-elevated px-3 text-text focus-visible:outline-2 focus-visible:outline-primary';
+
+function useArtworkUrl(artwork?: PreparedArtwork | null) {
+  const [url, setUrl] = useState<string>();
+  useEffect(() => {
+    if (!artwork) {
+      setUrl(undefined);
+      return;
+    }
+    const next = URL.createObjectURL(
+      new Blob([artwork.bytes as BlobPart], {
+        type: artwork.format === 'jpg' ? 'image/jpeg' : 'image/png',
+      }),
+    );
+    setUrl(next);
+    return () => URL.revokeObjectURL(next);
+  }, [artwork]);
+  return url;
+}
+
+function clamp(v: number, lo: number, hi: number) {
+  return Math.min(Math.max(v, lo), hi);
+}
+
+function lineStyle(value: number) {
+  return { top: `${value * 100}%` };
+}
+
+// The overlay and image share an exact aspect-ratio box inside the available
+// space. Container units keep it fitted on both axes, including row thumbnails.
+function ArtworkFrame({
+  artwork,
+  url,
+  label,
+  imageRef,
+  children,
+}: {
+  artwork: PreparedArtwork;
+  url: string;
+  label: string;
+  imageRef?: Ref<HTMLImageElement>;
+  children?: ReactNode;
+}) {
+  return (
+    <span className="relative block h-full w-full [container-type:size]">
+      <span
+        className="absolute left-1/2 top-1/2 block -translate-x-1/2 -translate-y-1/2"
+        style={{
+          width: `min(100cqw, ${(100 * artwork.width) / artwork.height}cqh)`,
+          aspectRatio: `${artwork.width} / ${artwork.height}`,
+        }}
+      >
+        <img ref={imageRef} src={url} alt={label} className="block h-full w-full" />
+        {children}
+      </span>
+    </span>
+  );
+}
+
+const fitLimitLabels: Record<FigureFitLimit, string> = {
+  height: 'лимит высоты 2×',
+  width: 'лимит ширины',
+  page: 'размер листа',
+};
+
+function fitLimitWarning(limits: FigureFitLimit[]) {
+  if (!limits.length) return undefined;
+  return `Миниатюра уменьшена: ${limits.map((limit) => fitLimitLabels[limit]).join(', ')}.`;
+}
 
 function SizeOptions({ custom = false }: { custom?: boolean }) {
   return (
@@ -55,6 +131,7 @@ function NamingHint() {
 
 function ArtworkSlot({
   artwork,
+  calibration,
   label,
   displayLabel,
   hint,
@@ -62,27 +139,15 @@ function ArtworkSlot({
   onFile,
 }: {
   artwork?: PreparedArtwork | null;
+  calibration?: HeightCalibration;
   label: string;
   displayLabel?: string;
   hint: string;
   loading: boolean;
   onFile: (file: File) => void;
 }) {
-  const [url, setUrl] = useState<string>();
+  const url = useArtworkUrl(artwork);
   const input = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    if (!artwork) {
-      setUrl(undefined);
-      return;
-    }
-    const next = URL.createObjectURL(
-      new Blob([artwork.bytes as BlobPart], {
-        type: artwork.format === 'jpg' ? 'image/jpeg' : 'image/png',
-      }),
-    );
-    setUrl(next);
-    return () => URL.revokeObjectURL(next);
-  }, [artwork]);
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-surface-elevated">
       <div className="border-b border-border px-3 py-2">
@@ -105,8 +170,21 @@ function ArtworkSlot({
           if (file) onFile(file);
         }}
       >
-        {url ? (
-          <img src={url} alt={label} className="h-full w-full object-contain" />
+        {url && artwork ? (
+          <ArtworkFrame artwork={artwork} url={url} label={label}>
+            {calibration && (
+              <span className="pointer-events-none absolute inset-0">
+                {(['head', 'feet'] as const).map((key) => (
+                  <span
+                    key={key}
+                    data-testid={`calibration-${key}`}
+                    className="absolute left-0 right-0 border-t-2 border-primary bg-surface/70 text-[10px] font-bold text-primary shadow-sm"
+                    style={{ top: `${calibration[key] * 100}%` }}
+                  />
+                ))}
+              </span>
+            )}
+          </ArtworkFrame>
         ) : (
           <span className="max-w-44 text-sm font-normal leading-relaxed text-text-muted">
             {loading ? 'Загрузка…' : hint}
@@ -129,6 +207,211 @@ function ArtworkSlot({
   );
 }
 
+function CalibrationSides({
+  hasBack,
+  side,
+  onSideChange,
+  children,
+}: {
+  hasBack: boolean;
+  side: 'front' | 'back';
+  onSideChange: (side: 'front' | 'back') => void;
+  children: ReactNode;
+}) {
+  if (!hasBack) return children;
+  return (
+    <Tabs value={side} onValueChange={(value) => onSideChange(value as 'front' | 'back')}>
+      <TabsList aria-label="Сторона" className="mt-4 min-h-11">
+        {(['front', 'back'] as const).map((key) => (
+          <TabsTrigger key={key} value={key} className="min-h-11">
+            {key === 'front' ? 'Перед' : 'Зад'}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+      <TabsContent value={side}>{children}</TabsContent>
+    </Tabs>
+  );
+}
+
+function HeightCalibrationDialog({
+  artwork,
+  backArtwork,
+  rowLabel,
+  slotHeightMm,
+  initial,
+  previewFit,
+  initialBack,
+  onApply,
+  onCancel,
+  returnFocus,
+}: {
+  artwork: PreparedArtwork;
+  backArtwork?: PreparedArtwork | null;
+  rowLabel: string;
+  slotHeightMm: number;
+  initial?: HeightCalibration;
+  previewFit: (draft: CalibrationDraft) => ReturnType<typeof fitMiniFaces>;
+  initialBack?: HeightCalibration;
+  onApply: (changes: CalibrationDraft) => void;
+  onCancel: () => void;
+  returnFocus: React.RefObject<HTMLButtonElement | null>;
+}) {
+  const [side, setSide] = useState<'front' | 'back'>('front');
+  const currentArtwork = side === 'front' ? artwork : (backArtwork ?? artwork);
+  const url = useArtworkUrl(currentArtwork);
+  const artworkRef = useRef<HTMLImageElement>(null);
+  const dragging = useRef<'head' | 'feet' | null>(null);
+  const [frontLines, setFrontLines] = useState(initial);
+  const [backLines, setBackLines] = useState(initialBack);
+  const lines = (side === 'front' ? frontLines : backLines) ?? { head: 0, feet: 1 };
+  const setLines = side === 'front' ? setFrontLines : setBackLines;
+  const fits = previewFit({ frontCalibration: frontLines, backCalibration: backLines });
+  const fit = side === 'back' ? (fits.back ?? fits.front) : fits.front;
+  const printedHeightMm = fit.imageHeightMm;
+  const warning = fitLimitWarning([
+    ...new Set([...fits.front.limits, ...(fits.back?.limits ?? [])]),
+  ]);
+  const hasBack = !!backArtwork;
+
+  function setLineFromClientY(which: 'head' | 'feet', clientY: number) {
+    const box = artworkRef.current?.getBoundingClientRect();
+    if (!box || box.height <= 0) return;
+    const fraction = clamp((clientY - box.top) / box.height, 0, 1);
+    setLine(which, () => fraction);
+  }
+
+  function setLine(which: 'head' | 'feet', position: (current: number) => number) {
+    setLines((previous) => {
+      const current = previous ?? { head: 0, feet: 1 };
+      const fraction = position(current[which]);
+      const next =
+        which === 'head'
+          ? clamp(fraction, 0, current.feet - MIN_CALIBRATION_GAP)
+          : clamp(fraction, current.head + MIN_CALIBRATION_GAP, 1);
+      return next === current[which] ? previous : { ...current, [which]: next };
+    });
+  }
+
+  return (
+    <Dialog
+      defaultOpen
+      onOpenChange={(open) => {
+        if (!open) onCancel();
+      }}
+    >
+      <DialogContent finalFocus={returnFocus}>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <DialogTitle className="text-2xl text-text">
+              Задать рост
+              <span className="sr-only">{side === 'front' ? ' лицевой стороны' : ' оборота'}</span>
+            </DialogTitle>
+            <p className="text-sm text-text-muted">
+              {rowLabel}: перетащите линии головы и стоп или используйте ↑/↓ — 1 пиксель, с Shift —
+              10.
+            </p>
+          </div>
+          <p className="text-sm font-medium text-text" aria-live="polite">
+            Рост {Math.round(slotHeightMm)} мм · напечатается {Math.round(printedHeightMm)} мм
+          </p>
+        </div>
+        {warning && (
+          <p role="status" className="mt-3 border-l-2 border-warning pl-3 text-sm text-warning">
+            {warning}
+          </p>
+        )}
+        <CalibrationSides hasBack={hasBack} side={side} onSideChange={setSide}>
+          <div
+            data-testid="height-calibration-artwork"
+            className="relative mt-4 h-[min(65vh,640px)] touch-none rounded-lg border border-border bg-surface-elevated p-6"
+            onPointerMove={(event) => {
+              if (dragging.current) setLineFromClientY(dragging.current, event.clientY);
+            }}
+            onPointerUp={(event) => {
+              dragging.current = null;
+              event.currentTarget.releasePointerCapture?.(event.pointerId);
+            }}
+            onPointerCancel={() => {
+              dragging.current = null;
+            }}
+            onLostPointerCapture={() => {
+              dragging.current = null;
+            }}
+          >
+            {url && (
+              <ArtworkFrame
+                artwork={currentArtwork}
+                url={url}
+                label={side === 'front' ? 'Лицевая сторона' : 'Оборот'}
+                imageRef={artworkRef}
+              >
+                {(['head', 'feet'] as const).map((key) => (
+                  <Fragment key={key}>
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-x-0 border-t-2 border-primary"
+                      style={lineStyle(lines[key])}
+                    />
+                    <button
+                      type="button"
+                      role="slider"
+                      aria-label={key === 'head' ? 'Голова' : 'Ступни'}
+                      aria-orientation="vertical"
+                      aria-valuemin={key === 'feet' ? (lines.head + MIN_CALIBRATION_GAP) * 100 : 0}
+                      aria-valuemax={
+                        key === 'head' ? (lines.feet - MIN_CALIBRATION_GAP) * 100 : 100
+                      }
+                      aria-valuenow={lines[key] * 100}
+                      aria-valuetext={`${Number((lines[key] * currentArtwork.height).toFixed(2))} пикселей от верха`}
+                      className={`absolute left-1/2 h-11 w-1/2 min-w-11 -translate-y-1/2 cursor-row-resize text-left text-xs font-bold text-primary focus-visible:outline-2 focus-visible:outline-primary ${key === 'head' ? '-translate-x-full' : ''}`}
+                      style={lineStyle(lines[key])}
+                      onKeyDown={(event) => {
+                        if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+                        event.preventDefault();
+                        const step = (event.shiftKey ? 10 : 1) / currentArtwork.height;
+                        setLine(
+                          key,
+                          (current) => current + (event.key === 'ArrowUp' ? -step : step),
+                        );
+                      }}
+                      onPointerDown={(event) => {
+                        if (event.button !== 0 || event.ctrlKey) return;
+                        dragging.current = key;
+                        event.currentTarget.setPointerCapture?.(event.pointerId);
+                        setLineFromClientY(key, event.clientY);
+                      }}
+                    >
+                      <span className="relative ml-2 rounded bg-surface/90 px-1">
+                        {key === 'head' ? 'Голова' : 'Ступни'}
+                      </span>
+                    </button>
+                  </Fragment>
+                ))}
+              </ArtworkFrame>
+            )}
+          </div>
+        </CalibrationSides>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="ghost" className="min-h-11" onClick={onCancel}>
+            Отмена
+          </Button>
+          <Button
+            className="min-h-11"
+            onClick={() =>
+              onApply({
+                ...(frontLines !== initial && { frontCalibration: frontLines }),
+                ...(backLines !== initialBack && { backCalibration: backLines }),
+              })
+            }
+          >
+            Применить
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function PaperMinisGenerator() {
   const store = useMemo(() => createPaperMinisStore(), []);
   const rows = useStore(store.$rows);
@@ -139,12 +422,15 @@ export default function PaperMinisGenerator() {
   const busy = useStore(store.$busy);
   const preparing = useStore(store.$preparing);
   const [preview, setPreview] = useState<{ url: string; revision: number }>();
+  const [calibratingId, setCalibratingId] = useState<number>();
+  const calibrationOpener = useRef<HTMLButtonElement>(null);
   const previewUrl = useRef<string | undefined>(undefined);
   const [dragging, setDragging] = useState(false);
   const files = useRef<HTMLInputElement>(null);
   const packed = useMemo(() => store.pack(), [store, rows, settings]);
   const marginValid =
     margin.trim() !== '' && Number.isFinite(Number(margin)) && Number(margin) >= 0;
+  const calibratingRow = rows.find((row) => row.id === calibratingId && row.artwork);
 
   useEffect(() => {
     store.loadSettings();
@@ -161,7 +447,7 @@ export default function PaperMinisGenerator() {
     const hasFiles = (event: DragEvent) =>
       Array.from(event.dataTransfer?.types ?? []).includes('Files');
     const enter = (event: DragEvent) => {
-      if (hasFiles(event)) {
+      if (hasFiles(event) && calibratingId === undefined) {
         event.preventDefault();
         depth++;
         if (!store.$busy.get()) setDragging(true);
@@ -182,7 +468,7 @@ export default function PaperMinisGenerator() {
     const drop = (event: DragEvent) => {
       if (hasFiles(event)) {
         event.preventDefault();
-        store.ingest(Array.from(event.dataTransfer?.files ?? []));
+        if (calibratingId === undefined) store.ingest(Array.from(event.dataTransfer?.files ?? []));
       }
     };
     window.addEventListener('dragenter', enter);
@@ -197,7 +483,7 @@ export default function PaperMinisGenerator() {
       window.removeEventListener('drop', clear, true);
       window.removeEventListener('drop', drop);
     };
-  }, [store]);
+  }, [store, calibratingId]);
 
   async function generate(showPreview: boolean) {
     if (!marginValid || !packed.miniCount || !store.beginGeneration()) return;
@@ -241,121 +527,121 @@ export default function PaperMinisGenerator() {
         <div className="grid gap-6 xl:block">
           <div className="xl:absolute xl:right-full xl:h-full xl:w-60">
             <aside className="space-y-6 rounded-lg border border-border bg-surface-elevated p-4 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
-            <div>
-              <h2 className="text-2xl text-text">Настройки</h2>
-              <p className="mt-1 text-sm leading-relaxed text-text-muted">
-                Общие параметры печати.
-              </p>
-            </div>
-            <label className="block text-sm">
-              Размер бумаги
-              <select
-                className={field}
-                value={settings.pageSize}
-                onChange={(event) =>
-                  store.settings({ pageSize: event.target.value as 'a4' | 'letter' })
-                }
-              >
-                <option value="a4">A4 (210 × 297 мм)</option>
-                <option value="letter">Letter (216 × 279 мм)</option>
-              </select>
-            </label>
-            <label className="block text-sm">
-              Поля, мм
-              <input
-                className={field}
-                type="number"
-                min="0"
-                step="any"
-                required
-                value={margin}
-                aria-invalid={!marginValid}
-                onChange={(event) => {
-                  if (store.$busy.get()) return;
-                  setMargin(event.target.value);
-                  const n = event.target.valueAsNumber;
-                  if (Number.isFinite(n) && n >= 0) store.settings({ marginMm: n });
-                }}
-              />
-            </label>
-            {rows.length > 0 && (
+              <div>
+                <h2 className="text-2xl text-text">Настройки</h2>
+                <p className="mt-1 text-sm leading-relaxed text-text-muted">
+                  Общие параметры печати.
+                </p>
+              </div>
               <label className="block text-sm">
-                Высота всех фигурок
+                Размер бумаги
                 <select
                   className={field}
-                  value=""
-                  onChange={(event) => {
-                    for (const row of rows)
-                      store.patch(row.id, { heightSlot: event.target.value as MiniSize });
-                  }}
+                  value={settings.pageSize}
+                  onChange={(event) =>
+                    store.settings({ pageSize: event.target.value as 'a4' | 'letter' })
+                  }
                 >
-                  <option value="" disabled>
-                    Выберите…
-                  </option>
-                  <SizeOptions />
+                  <option value="a4">A4 (210 × 297 мм)</option>
+                  <option value="letter">Letter (216 × 279 мм)</option>
                 </select>
               </label>
-            )}
-            <div className="space-y-2 border-y border-border py-3">
-              <label className="flex min-h-11 items-center gap-3 text-sm">
+              <label className="block text-sm">
+                Поля, мм
                 <input
-                  type="checkbox"
-                  checked={settings.numberDuplicates}
-                  onChange={(event) => store.settings({ numberDuplicates: event.target.checked })}
+                  className={field}
+                  type="number"
+                  min="0"
+                  step="any"
+                  required
+                  value={margin}
+                  aria-invalid={!marginValid}
+                  onChange={(event) => {
+                    if (store.$busy.get()) return;
+                    setMargin(event.target.value);
+                    const n = event.target.valueAsNumber;
+                    if (Number.isFinite(n) && n >= 0) store.settings({ marginMm: n });
+                  }}
                 />
-                Нумеровать копии
               </label>
-              <label className="flex min-h-11 items-center gap-3 text-sm">
-                <input
-                  type="checkbox"
-                  checked={settings.normalization}
-                  onChange={(event) => store.settings({ normalization: event.target.checked })}
-                />
-                Обрезать пустые поля
-              </label>
-            </div>
-            <div className="space-y-3">
-              <h3 className="text-xl text-text">PDF</h3>
-              <p aria-live="polite" className="text-sm">
-                {rows.length
-                  ? `Миниатюр: ${packed.miniCount} → листов: ${packed.pageCount} (${settings.pageSize === 'a4' ? 'A4' : 'Letter'})`
-                  : 'Добавьте изображения для печати миниатюр.'}
-              </p>
-              {message && (
-                <p role="status" className="text-sm">
-                  {message}
-                </p>
+              {rows.length > 0 && (
+                <label className="block text-sm">
+                  Высота всех фигурок
+                  <select
+                    className={field}
+                    value=""
+                    onChange={(event) => {
+                      for (const row of rows)
+                        store.patch(row.id, { heightSlot: event.target.value as MiniSize });
+                    }}
+                  >
+                    <option value="" disabled>
+                      Выберите…
+                    </option>
+                    <SizeOptions />
+                  </select>
+                </label>
               )}
-              <p role="status" className="text-sm">
-                {busy
-                  ? 'Создаём PDF. Редактирование временно недоступно.'
-                  : preparing
-                    ? 'Обрабатываем изображения. PDF будет доступен после завершения.'
-                    : ''}
-              </p>
-              {!marginValid && (
-                <p role="status" className="text-sm text-danger">
-                  Поля должны быть числом от 0 мм.
-                </p>
-              )}
-              <div className="space-y-2">
-                <Button
-                  className="min-h-11 w-full"
-                  disabled={busy || preparing || !packed.miniCount || !marginValid}
-                  onClick={() => void generate(false)}
-                >
-                  {busy ? 'Подготовка PDF…' : 'Скачать PDF'}
-                </Button>
-                <Button
-                  variant="outline"
-                  className="min-h-11 w-full"
-                  disabled={busy || preparing || !packed.miniCount || !marginValid}
-                  onClick={() => void generate(true)}
-                >
-                  {preview ? 'Обновить предпросмотр' : 'Предпросмотр PDF'}
-                </Button>
+              <div className="space-y-2 border-y border-border py-3">
+                <label className="flex min-h-11 items-center gap-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={settings.numberDuplicates}
+                    onChange={(event) => store.settings({ numberDuplicates: event.target.checked })}
+                  />
+                  Нумеровать копии
+                </label>
+                <label className="flex min-h-11 items-center gap-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={settings.normalization}
+                    onChange={(event) => store.settings({ normalization: event.target.checked })}
+                  />
+                  Обрезать пустые поля
+                </label>
               </div>
-            </div>
+              <div className="space-y-3">
+                <h3 className="text-xl text-text">PDF</h3>
+                <p aria-live="polite" className="text-sm">
+                  {rows.length
+                    ? `Миниатюр: ${packed.miniCount} → листов: ${packed.pageCount} (${settings.pageSize === 'a4' ? 'A4' : 'Letter'})`
+                    : 'Добавьте изображения для печати миниатюр.'}
+                </p>
+                {message && (
+                  <p role="status" className="text-sm">
+                    {message}
+                  </p>
+                )}
+                <p role="status" className="text-sm">
+                  {busy
+                    ? 'Создаём PDF. Редактирование временно недоступно.'
+                    : preparing
+                      ? 'Обрабатываем изображения. PDF будет доступен после завершения.'
+                      : ''}
+                </p>
+                {!marginValid && (
+                  <p role="status" className="text-sm text-danger">
+                    Поля должны быть числом от 0 мм.
+                  </p>
+                )}
+                <div className="space-y-2">
+                  <Button
+                    className="min-h-11 w-full"
+                    disabled={busy || preparing || !packed.miniCount || !marginValid}
+                    onClick={() => void generate(false)}
+                  >
+                    {busy ? 'Подготовка PDF…' : 'Скачать PDF'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="min-h-11 w-full"
+                    disabled={busy || preparing || !packed.miniCount || !marginValid}
+                    onClick={() => void generate(true)}
+                  >
+                    {preview ? 'Обновить предпросмотр' : 'Предпросмотр PDF'}
+                  </Button>
+                </div>
+              </div>
             </aside>
           </div>
 
@@ -389,157 +675,203 @@ export default function PaperMinisGenerator() {
 
             <section aria-label="Миниатюры" className="space-y-5">
               <h2 className="sr-only">Миниатюры</h2>
-              {rows.map((row, index) => (
-                <article
-                  key={row.id}
-                  aria-label={`Миниатюра ${index + 1}`}
-                  className="border-y border-border py-5"
-                >
-                  <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <h3 className="break-all text-xl text-text">
-                      {row.name || `Миниатюра ${index + 1}`}
-                    </h3>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="ghost"
-                        className="min-h-11"
-                        onClick={() => store.duplicate(row.id)}
-                      >
-                        Дублировать
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        className="min-h-11"
-                        onClick={() => store.remove(row.id)}
-                      >
-                        Удалить
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <ArtworkSlot
-                      artwork={row.artwork}
-                      label="Лицевая сторона"
-                      hint="Выбрать лицевую сторону"
-                      loading={!!row.image && !row.artwork && !row.frontError}
-                      onFile={(file) => void store.setImage(row.id, file)}
-                    />
-                    <div className="space-y-2">
-                      <ArtworkSlot
-                        artwork={row.backArtwork}
-                        label={
-                          row.backImage
-                            ? `Оборот: ${row.backImage.name}`
-                            : 'Оборот: отражение лицевой стороны'
-                        }
-                        displayLabel="Оборот"
-                        hint="Добавить свой оборот или оставить отражение"
-                        loading={!!row.backImage && !row.backArtwork}
-                        onFile={(file) => void store.setImage(row.id, file, true)}
-                      />
-                      {(row.backImage || row.backWarning) && (
+              {rows.map((row, index) => {
+                const fitWarning = fitLimitWarning(
+                  packed.limitedEntryFitLimits.find((warning) => warning.entryIndex === index)
+                    ?.limits ?? [],
+                );
+                return (
+                  <article
+                    key={row.id}
+                    aria-label={`Миниатюра ${index + 1}`}
+                    className="border-y border-border py-5"
+                  >
+                    <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <h3 className="break-all text-xl text-text">
+                        {row.name || `Миниатюра ${index + 1}`}
+                      </h3>
+                      <div className="flex gap-2">
                         <Button
                           variant="ghost"
-                          className="min-h-11 w-full"
-                          onClick={() => store.clearBack(row.id)}
+                          className="min-h-11"
+                          onClick={() => store.duplicate(row.id)}
                         >
-                          Убрать оборот
+                          Дублировать
                         </Button>
+                        <Button
+                          variant="ghost"
+                          className="min-h-11"
+                          onClick={() => store.remove(row.id)}
+                        >
+                          Удалить
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <ArtworkSlot
+                        artwork={row.artwork}
+                        calibration={row.frontCalibration}
+                        label="Лицевая сторона"
+                        hint="Выбрать лицевую сторону"
+                        loading={!!row.image && !row.artwork && !row.frontError}
+                        onFile={(file) => void store.setImage(row.id, file)}
+                      />
+                      <div className="space-y-2">
+                        <ArtworkSlot
+                          artwork={row.backArtwork}
+                          calibration={row.backCalibration}
+                          label={
+                            row.backImage
+                              ? `Оборот: ${row.backImage.name}`
+                              : 'Оборот: отражение лицевой стороны'
+                          }
+                          displayLabel="Оборот"
+                          hint="Добавить свой оборот или оставить отражение"
+                          loading={!!row.backImage && !row.backArtwork}
+                          onFile={(file) => void store.setImage(row.id, file, true)}
+                        />
+                        {(row.backImage || row.backWarning) && (
+                          <Button
+                            variant="ghost"
+                            className="min-h-11 w-full"
+                            onClick={() => store.clearBack(row.id)}
+                          >
+                            Убрать оборот
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 rounded-lg bg-muted/50 p-3 sm:grid-cols-2">
+                      <div className="space-y-2 sm:col-span-2">
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            variant="outline"
+                            className="min-h-11"
+                            disabled={!row.artwork}
+                            onClick={(event) => {
+                              calibrationOpener.current = event.currentTarget;
+                              setCalibratingId(row.id);
+                            }}
+                          >
+                            Задать рост
+                          </Button>
+                          {(row.frontCalibration || row.backCalibration) && (
+                            <Button
+                              variant="ghost"
+                              className="min-h-11"
+                              onClick={() => {
+                                store.clearFrontCalibration(row.id);
+                                store.clearBackCalibration(row.id);
+                              }}
+                            >
+                              Сбросить рост
+                            </Button>
+                          )}
+                        </div>
+                        {(row.frontCalibration || row.backCalibration) && (
+                          <p className="text-sm font-medium text-text">Рост задан вручную</p>
+                        )}
+                      </div>
+                      <label className="block text-sm">
+                        Высота существа
+                        <select
+                          className={field}
+                          value={row.heightSlot}
+                          title={slotGeometryLabel(row.heightSlot)}
+                          onChange={(event) =>
+                            store.patch(row.id, {
+                              heightSlot: event.target.value as MiniSize,
+                              customHeightMm: row.customHeightMm ?? DEFAULT_CUSTOM_HEIGHT_MM,
+                              customWidthMm: row.customWidthMm ?? DEFAULT_CUSTOM_WIDTH_MM,
+                            })
+                          }
+                        >
+                          <SizeOptions custom />
+                        </select>
+                      </label>
+                      <label className="block text-sm">
+                        Количество копий
+                        <input
+                          className={field}
+                          type="number"
+                          min="1"
+                          step="1"
+                          defaultValue={row.count}
+                          onChange={(event) =>
+                            store.patch(row.id, {
+                              count: Math.max(1, Math.floor(event.target.valueAsNumber) || 1),
+                            })
+                          }
+                          onBlur={(event) => {
+                            event.currentTarget.value = String(row.count);
+                          }}
+                        />
+                      </label>
+                      {row.heightSlot === 'custom' && (
+                        <div className="grid grid-cols-2 gap-2 sm:col-span-2">
+                          {(['customWidthMm', 'customHeightMm'] as const).map((key, i) => (
+                            <label key={key} className="text-sm">
+                              {i === 0 ? 'Основание, мм' : 'Фигурка, мм'}
+                              <input
+                                className={field}
+                                type="number"
+                                min="1"
+                                step="0.5"
+                                value={row[key] ?? ''}
+                                onChange={(event) =>
+                                  store.patch(row.id, {
+                                    [key]:
+                                      Number.isFinite(event.target.valueAsNumber) &&
+                                      event.target.valueAsNumber > 0
+                                        ? event.target.valueAsNumber
+                                        : undefined,
+                                  })
+                                }
+                              />
+                            </label>
+                          ))}
+                        </div>
                       )}
                     </div>
-                  </div>
 
-                  <div className="mt-4 grid gap-3 rounded-lg bg-muted/50 p-3 sm:grid-cols-2">
-                    <label className="block text-sm">
-                      Высота существа
-                      <select
-                        className={field}
-                        value={row.heightSlot}
-                        title={slotGeometryLabel(row.heightSlot)}
-                        onChange={(event) =>
-                          store.patch(row.id, {
-                            heightSlot: event.target.value as MiniSize,
-                            customHeightMm: row.customHeightMm ?? DEFAULT_CUSTOM_HEIGHT_MM,
-                            customWidthMm: row.customWidthMm ?? DEFAULT_CUSTOM_WIDTH_MM,
-                          })
-                        }
-                      >
-                        <SizeOptions custom />
-                      </select>
-                    </label>
-                    <label className="block text-sm">
-                      Количество копий
-                      <input
-                        className={field}
-                        type="number"
-                        min="1"
-                        step="1"
-                        defaultValue={row.count}
-                        onChange={(event) =>
-                          store.patch(row.id, {
-                            count: Math.max(1, Math.floor(event.target.valueAsNumber) || 1),
-                          })
-                        }
-                        onBlur={(event) => {
-                          event.currentTarget.value = String(row.count);
-                        }}
-                      />
-                    </label>
-                    {row.heightSlot === 'custom' && (
-                      <div className="grid grid-cols-2 gap-2 sm:col-span-2">
-                        {(['customWidthMm', 'customHeightMm'] as const).map((key, i) => (
-                          <label key={key} className="text-sm">
-                            {i === 0 ? 'Основание, мм' : 'Фигурка, мм'}
-                            <input
-                              className={field}
-                              type="number"
-                              min="1"
-                              step="0.5"
-                              value={row[key] ?? ''}
-                              onChange={(event) =>
-                                store.patch(row.id, {
-                                  [key]:
-                                    Number.isFinite(event.target.valueAsNumber) &&
-                                    event.target.valueAsNumber > 0
-                                      ? event.target.valueAsNumber
-                                      : undefined,
-                                })
-                              }
-                            />
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <p className="mt-3 text-xs leading-relaxed text-text-muted">
-                    {row.backImage
-                      ? 'В PDF попадёт отдельное изображение оборота.'
-                      : 'Без отдельного файла лицевая сторона будет отражена автоматически.'}
-                  </p>
-                  {packed.oversizedEntryIndices.includes(index) && (
-                    <p
-                      role="status"
-                      className="mt-3 border-l-2 border-danger pl-3 text-sm text-danger"
-                    >
-                      Не помещается на лист. Уменьшите размер или поля. Эта миниатюра не попадёт в
-                      PDF.
+                    <p className="mt-3 text-xs leading-relaxed text-text-muted">
+                      {row.backImage
+                        ? 'В PDF попадёт отдельное изображение оборота.'
+                        : 'Без отдельного файла лицевая сторона будет отражена автоматически.'}
                     </p>
-                  )}
-                  {[row.frontError, row.normalizationWarning, row.backWarning]
-                    .filter(Boolean)
-                    .map((warning, i) => (
+                    {packed.oversizedEntryIndices.includes(index) && (
                       <p
-                        key={i}
+                        role="status"
+                        className="mt-3 border-l-2 border-danger pl-3 text-sm text-danger"
+                      >
+                        Не помещается на лист. Уменьшите размер или поля. Эта миниатюра не попадёт в
+                        PDF.
+                      </p>
+                    )}
+                    {fitWarning && (
+                      <p
                         role="status"
                         className="mt-3 border-l-2 border-warning pl-3 text-sm text-warning"
                       >
-                        {warning}
+                        {fitWarning}
                       </p>
-                    ))}
-                </article>
-              ))}
+                    )}
+                    {[row.frontError, row.normalizationWarning, row.backWarning]
+                      .filter(Boolean)
+                      .map((warning, i) => (
+                        <p
+                          key={i}
+                          role="status"
+                          className="mt-3 border-l-2 border-warning pl-3 text-sm text-warning"
+                        >
+                          {warning}
+                        </p>
+                      ))}
+                  </article>
+                );
+              })}
             </section>
           </div>
         </div>
@@ -597,6 +929,35 @@ export default function PaperMinisGenerator() {
         <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center border-4 border-primary bg-surface/90 text-2xl text-primary">
           Отпустите файлы, чтобы добавить миниатюры
         </div>
+      )}
+      {calibratingRow?.artwork && (
+        <HeightCalibrationDialog
+          returnFocus={calibrationOpener}
+          artwork={calibratingRow.artwork}
+          backArtwork={calibratingRow.backArtwork}
+          rowLabel={calibratingRow.name || 'Миниатюра'}
+          slotHeightMm={resolveFigureHeightMm(calibratingRow)}
+          initial={calibratingRow.frontCalibration}
+          previewFit={(draft) =>
+            fitMiniFaces(
+              {
+                ...calibratingRow,
+                ...draft,
+                naturalWidth: calibratingRow.artwork!.width,
+                naturalHeight: calibratingRow.artwork!.height,
+                backNaturalWidth: calibratingRow.backArtwork?.width,
+                backNaturalHeight: calibratingRow.backArtwork?.height,
+              },
+              settings,
+            )
+          }
+          initialBack={calibratingRow.backCalibration}
+          onCancel={() => setCalibratingId(undefined)}
+          onApply={(changes) => {
+            if (Object.keys(changes).length) store.patch(calibratingRow.id, changes);
+            setCalibratingId(undefined);
+          }}
+        />
       )}
     </div>
   );
