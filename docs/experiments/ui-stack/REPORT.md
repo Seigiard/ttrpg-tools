@@ -132,7 +132,7 @@ Diffs: `results/{react,preact,svelte}/followup.diff`. The Svelte diff contains f
 | Dependencies | −10, +5 | −10, +7 |
 | Type checking | `astro check` covers `.tsx` as before | `astro check` does **not** check `.svelte` types (verified with a deliberate error); `svelte-check` added to `typecheck` |
 | Formatting | `oxfmt` as before | `oxfmt` for TS + `prettier-plugin-svelte` for `.svelte` |
-| Unit tests under Bun | work as before; component tests need explicit waits after store updates | needs a 60-line Bun preload plugin that compiles `.svelte` and redirects `svelte` to its client build. Plain `bun test` fails 25 tests, because parallel files share one happy-dom document. CI runs `bun test --parallel=1` |
+| Unit tests under Bun | work as before; component tests need explicit waits after store updates, and one test had to scope its queries because CI runs test files concurrently on one happy-dom document | needs a 60-line Bun preload plugin that compiles `.svelte` and redirects `svelte` to its client build. Plain `bun test` fails 25 tests, because parallel files share one happy-dom document. CI runs `bun test --parallel=1` |
 | UI library | none left; own Tabs/Dialog to maintain | none left; own Tabs/Dialog to maintain |
 
 Both candidates drop the shadcn CLI package. The nine Tailwind variants the primitives use (`data-active:`, `data-horizontal/…`) are vendored into `global.css`. The first cut of each candidate got this wrong: Preact silently lost the variants, and Svelte kept an import of a removed package that only built because of a stale `node_modules`.
