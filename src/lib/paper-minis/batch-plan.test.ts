@@ -184,9 +184,9 @@ test('x1 is ignored and leaves the default count implicit', () => {
   // #given
   const fileName = 'goblin-small-front-x1.png';
   // #when
-  const rows = detailedRows(fileName);
+  const plannedRows = detailedRows(fileName);
   // #then
-  expect(rows).toEqual([
+  expect(plannedRows).toEqual([
     {
       name: 'Goblin',
       front: fileName,
@@ -205,9 +205,9 @@ test.each(['goblin-small-front-x0.png', 'goblin-small-front-xmany.png'])(
     // #given
     const files = [fileName];
     // #when
-    const rows = detailedRows(...files);
+    const plannedRows = detailedRows(...files);
     // #then
-    expect(rows).toEqual([
+    expect(plannedRows).toEqual([
       {
         name: 'Goblin',
         front: fileName,
@@ -225,9 +225,9 @@ test('a valid count marker plans the row count', () => {
   // #given
   const fileName = 'goblin-small-front-x4.png';
   // #when
-  const rows = detailedRows(fileName);
+  const plannedRows = detailedRows(fileName);
   // #then
-  expect(rows).toEqual([
+  expect(plannedRows).toEqual([
     {
       name: 'Goblin',
       front: fileName,
@@ -244,9 +244,9 @@ test('custom-WxH plans a custom size with dimensions', () => {
   // #given
   const fileName = 'goblin-custom-30x45-front.png';
   // #when
-  const rows = detailedRows(fileName);
+  const plannedRows = detailedRows(fileName);
   // #then
-  expect(rows).toEqual([
+  expect(plannedRows).toEqual([
     {
       name: 'Goblin',
       front: fileName,
@@ -263,9 +263,9 @@ test('a custom marker with a non-positive dimension falls back to the default si
   // #given
   const fileName = 'goblin-custom-0x45-front.png';
   // #when
-  const rows = detailedRows(fileName);
+  const plannedRows = detailedRows(fileName);
   // #then
-  expect(rows).toEqual([
+  expect(plannedRows).toEqual([
     {
       name: 'Goblin',
       front: fileName,
@@ -282,9 +282,9 @@ test('a name ending in custom without dimensions keeps custom in the name', () =
   // #given
   const fileName = 'goblin-custom-front.png';
   // #when
-  const rows = detailedRows(fileName);
+  const plannedRows = detailedRows(fileName);
   // #then
-  expect(rows).toEqual([
+  expect(plannedRows).toEqual([
     {
       name: 'Goblin custom',
       front: fileName,
@@ -301,9 +301,9 @@ test('front and back with different counts still pair', () => {
   // #given
   const fileNames = ['goblin-small-front-x2.png', 'goblin-small-back-x5.png'];
   // #when
-  const rows = detailedRows(...fileNames);
+  const plannedRows = detailedRows(...fileNames);
   // #then
-  expect(rows).toEqual([
+  expect(plannedRows).toEqual([
     {
       name: 'Goblin',
       front: 'goblin-small-front-x2.png',
