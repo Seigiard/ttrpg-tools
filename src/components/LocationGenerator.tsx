@@ -1,6 +1,6 @@
 import { useStore } from '@nanostores/react';
 import { RefreshCw } from 'lucide-react';
-import { useEffect, useMemo } from 'react';
+import { memo, useEffect, useMemo } from 'react';
 import { ReferenceList } from '@/components/ReferenceList';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -13,7 +13,7 @@ interface Props<Biome extends string> {
   table: LocationTable<Biome>;
 }
 
-export function LocationGenerator<Biome extends string>({ table }: Props<Biome>) {
+function LocationGeneratorComponent<Biome extends string>({ table }: Props<Biome>) {
   // useMemo гарантирует, что стор создаётся один раз на жизнь компонента.
   // Если когда-то таблица будет приходить «горячей» (live-обновление перевода) — поменять на key.
   const store = useMemo(() => createLocationStore(table), [table]);
@@ -64,6 +64,8 @@ export function LocationGenerator<Biome extends string>({ table }: Props<Biome>)
     </div>
   );
 }
+
+export const LocationGenerator = memo(LocationGeneratorComponent) as typeof LocationGeneratorComponent;
 
 interface ResultCardProps<Biome extends string> {
   table: LocationTable<Biome>;

@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/react';
-import { useEffect, useMemo } from 'react';
+import { memo, useEffect, useMemo } from 'react';
 import { referenceHitClass } from '@/components/ReferenceList';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -13,7 +13,7 @@ interface Props {
   table: WeatherTable;
 }
 
-export function WeatherGenerator({ table }: Props) {
+function WeatherGeneratorComponent({ table }: Props) {
   // useMemo гарантирует, что стор создаётся один раз на жизнь компонента.
   const store = useMemo(() => createWeatherStore(table), [table]);
   const season = useStore(store.$season);
@@ -57,6 +57,8 @@ export function WeatherGenerator({ table }: Props) {
     </div>
   );
 }
+
+export const WeatherGenerator = memo(WeatherGeneratorComponent) as typeof WeatherGeneratorComponent;
 
 interface ResultCardProps {
   table: WeatherTable;

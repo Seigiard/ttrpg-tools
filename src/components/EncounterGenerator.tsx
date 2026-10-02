@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/react';
-import { useEffect, useMemo } from 'react';
+import { memo, useEffect, useMemo } from 'react';
 import { ReferenceList } from '@/components/ReferenceList';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -18,7 +18,7 @@ const outcomeTone: Record<EncounterCheckOutcome, string> = {
   clear: 'text-text-muted',
 };
 
-export function EncounterGenerator({ table }: Props) {
+function EncounterGeneratorComponent({ table }: Props) {
   // useMemo гарантирует, что стор создаётся один раз на жизнь компонента.
   const store = useMemo(() => createEncounterStore(table), [table]);
   const check = useStore(store.$check);
@@ -38,6 +38,8 @@ export function EncounterGenerator({ table }: Props) {
     </div>
   );
 }
+
+export const EncounterGenerator = memo(EncounterGeneratorComponent) as typeof EncounterGeneratorComponent;
 
 interface SectionProps {
   table: EncounterTable;

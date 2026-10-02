@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
+import { Fragment, memo, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
 import { useStore } from '@nanostores/react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
@@ -357,7 +357,7 @@ function HeightCalibrationDialog({
   );
 }
 
-export default function PaperMinisGenerator() {
+function PaperMinisGenerator() {
   const store = useMemo(() => createPaperMinisStore(), []);
   const rows = useStore(store.$rows);
   const settings = useStore(store.$settings);
@@ -890,3 +890,5 @@ export default function PaperMinisGenerator() {
     </div>
   );
 }
+
+export default memo(PaperMinisGenerator);

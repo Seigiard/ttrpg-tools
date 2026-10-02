@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/react';
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -17,7 +17,7 @@ interface Props {
   table: PriceTable;
 }
 
-export function BlackHackPricesGenerator({ table }: Props) {
+function BlackHackPricesGeneratorComponent({ table }: Props) {
   // useMemo гарантирует, что стор создаётся один раз на жизнь компонента.
   const store = useMemo(() => createPricesStore(table), [table]);
   const settlement = useStore(store.$settlement);
@@ -100,6 +100,10 @@ export function BlackHackPricesGenerator({ table }: Props) {
     </div>
   );
 }
+
+export const BlackHackPricesGenerator = memo(
+  BlackHackPricesGeneratorComponent,
+) as typeof BlackHackPricesGeneratorComponent;
 
 function readStorage(table: PriceTable): PricesState | null {
   try {
