@@ -8,7 +8,7 @@ import {
 } from '@/stores/paper-minis-store';
 import { isSupportedArtwork } from '@/lib/paper-minis/artwork';
 import type { CalibrationLine } from '@/lib/paper-minis/calibration';
-import { fitLimitWarning } from '@/lib/paper-minis/fit-limits';
+import { fitLimitWarning } from '@/lib/paper-minis/geometry';
 import { buildFilename } from '@/lib/paper-minis/pdf';
 import {
   HEIGHT_SLOT_ORDER,

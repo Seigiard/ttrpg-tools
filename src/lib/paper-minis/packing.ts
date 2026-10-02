@@ -1,32 +1,20 @@
 import type { Entry, MiniSize, PackingEntry } from './types';
-import { calibrationGap } from './calibration';
 import {
   type FigureFitLimit,
-  type FigureFitMm,
-  fitFigure,
-  hasPackableDimensions,
-  resolveSizeDimensionsMm,
-  resolveTabHeightMm,
-} from './sizes.ts';
+  type PackOptions,
+  fitMiniFaces,
+  MARGIN_MM,
+  PAGE_SIZES_MM,
+  DEFAULT_FIGURE_MARGIN_MM,
+} from './geometry.ts';
+import { hasPackableDimensions, resolveSizeDimensionsMm, resolveTabHeightMm } from './sizes.ts';
 
-// Page and layout constants. These live here (not in pdf.ts) so the packing
-// math is a pure, DOM/PDF-free module that both the live page-count estimate
-// and the PDF generator share.
-export const PAGE_SIZES_MM = {
-  a4: { w: 210, h: 297 },
-  letter: { w: 216, h: 279 },
-} as const;
-
-export type PageSizeKey = keyof typeof PAGE_SIZES_MM;
-
-export const MARGIN_MM = 10;
 // Wide enough that two neighbours' cut marks, each reaching CUT_MARK_ARM_MM
 // out from its own edge, never touch and read as one mark.
 export const GAP_MM = 4;
 export const CUT_MARK_ARM_MM = 1.5;
 export const CUT_MARK_STROKE_MM = 0.2;
 export const CUT_MARK_EXTENT_MM = CUT_MARK_ARM_MM + CUT_MARK_STROKE_MM / 2;
-export const DEFAULT_FIGURE_MARGIN_MM = 2;
 
 // A single placed copy of an entry, with its resolved geometry. entryIndex maps
 // back to the source entry so callers (the PDF drawer, the warning UI) can
@@ -83,71 +71,6 @@ export type PackResult = {
   oversizedEntryIndices: number[]; // distinct entries with >=1 skipped mini
   limitedEntryFitLimits: { entryIndex: number; limits: FigureFitLimit[] }[];
 };
-
-export type PackOptions = {
-  pageSize: PageSizeKey;
-  numberDuplicates: boolean;
-  marginMm?: number;
-};
-
-// Resolve both faces together for packing and the calibration preview. A shared
-// calibration gives both faces the same printed height. The wider face's cap
-// shrinks both by the same factor so neither artwork distorts.
-export function fitMiniFaces(
-  e: PackingEntry & { naturalWidth: number; naturalHeight: number },
-  opts: PackOptions,
-): { front: FigureFitMm; back?: FigureFitMm } {
-  const dimensions = resolveSizeDimensionsMm(e);
-  const usableHeightMm = PAGE_SIZES_MM[opts.pageSize].h - MARGIN_MM * 2;
-  const usableWidthMm = PAGE_SIZES_MM[opts.pageSize].w - MARGIN_MM * 2;
-  const marginMm = opts.marginMm ?? DEFAULT_FIGURE_MARGIN_MM;
-  const imageSpaceMm = (usableHeightMm - marginMm * 2 - resolveTabHeightMm(e) * 4) / 2;
-  const calibrated = calibrationGap(e.calibration);
-  // Page fitting belongs to the whole calibrated mini. Do not promise a page
-  // fit when the base/tabs alone cannot fit.
-  const maxImageHeightMm = (aspect: number) =>
-    calibrated && imageSpaceMm > 0 && dimensions.baseWidthMm + marginMm * 2 <= usableWidthMm
-      ? Math.min(imageSpaceMm, (usableWidthMm - marginMm * 2) / aspect)
-      : undefined;
-  let faces: { front: FigureFitMm; back?: FigureFitMm };
-  if (e.backNaturalWidth && e.backNaturalHeight && calibrated) {
-    const frontAspect = e.naturalWidth / e.naturalHeight;
-    const backAspect = e.backNaturalWidth / e.backNaturalHeight;
-    // Fit the wider face first so width still precedes page in the cap order.
-    const shared = fitFigure(
-      dimensions,
-      Math.max(frontAspect, backAspect),
-      1,
-      e.calibration,
-      maxImageHeightMm(Math.max(frontAspect, backAspect)),
-    );
-    faces = {
-      front: { ...shared, imageWidthMm: frontAspect * shared.imageHeightMm },
-      back: { ...shared, imageWidthMm: backAspect * shared.imageHeightMm },
-    };
-  } else {
-    faces = {
-      front: fitFigure(
-        dimensions,
-        e.naturalWidth,
-        e.naturalHeight,
-        e.calibration,
-        maxImageHeightMm(e.naturalWidth / e.naturalHeight),
-      ),
-      back:
-        e.backNaturalWidth && e.backNaturalHeight
-          ? fitFigure(
-              dimensions,
-              e.backNaturalWidth,
-              e.backNaturalHeight,
-              e.calibration,
-              maxImageHeightMm(e.backNaturalWidth / e.backNaturalHeight),
-            )
-          : undefined,
-    };
-  }
-  return faces;
-}
 
 // A back file is chosen but not prepared yet. Such an entry is not ready, so
 // it does not print reflected for a moment and then jump to its own back.

@@ -15,16 +15,14 @@ import {
   type CalibrationLine,
   type CalibrationRange,
 } from '@/lib/paper-minis/calibration';
-import { fitLimitWarning } from '@/lib/paper-minis/fit-limits';
-import { generatePDF } from '@/lib/paper-minis/pdf';
 import {
   DEFAULT_FIGURE_MARGIN_MM,
+  fitLimitWarning,
   fitMiniFaces,
-  packEntries,
-  toPackingEntry,
-  type PackResult,
   type PageSizeKey,
-} from '@/lib/paper-minis/packing';
+} from '@/lib/paper-minis/geometry';
+import { generatePDF } from '@/lib/paper-minis/pdf';
+import { packEntries, toPackingEntry, type PackResult } from '@/lib/paper-minis/packing';
 import {
   DEFAULT_CUSTOM_HEIGHT_MM,
   DEFAULT_CUSTOM_WIDTH_MM,

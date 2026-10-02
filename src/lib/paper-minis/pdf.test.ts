@@ -9,7 +9,8 @@ import {
   decodePDFRawStream,
 } from 'pdf-lib';
 import { generatePDF as renderPDF } from './pdf.ts';
-import { packEntries, type PackOptions } from './packing.ts';
+import { packEntries } from './packing.ts';
+import type { PackOptions } from './geometry.ts';
 import type { Entry } from './types.ts';
 
 import { test as t } from 'bun:test';
