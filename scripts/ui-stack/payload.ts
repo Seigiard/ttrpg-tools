@@ -114,7 +114,8 @@ function extractAssets(html: string) {
 function importsFromJs(code: string) {
   const staticImports = [
     ...code.matchAll(
-      /(?:import\s+(?:[^'"()]+?\s+from\s+)?|export\s+[^'"()]+?\s+from\s+)(['"])(.*?)\1/g,
+      // Minified chunks drop the whitespace: `import{a as b}from"./x.js"` and `import"./y.js"`.
+      /(?:\bimport\s*(?:[^'"()=;]+?\s*from\s*)?|\bexport\s*[^'"()=;]+?\s*from\s*)(['"])(.*?)\1/g,
     ),
   ].map((match) => match[2] ?? '');
   const dynamicImports = [...code.matchAll(/import\(\s*(['"])(.*?)\1\s*\)/g)].map(
@@ -245,7 +246,8 @@ export function payloadMarkdown(report: PayloadReport) {
 }
 
 if (import.meta.main) {
-  const out = Bun.argv[Bun.argv.indexOf('--out') + 1];
+  const outIndex = Bun.argv.indexOf('--out');
+  const out = outIndex === -1 ? undefined : Bun.argv[outIndex + 1];
   const report = await buildPayloadReport();
   if (out) {
     await writeFile(join(out, 'payload.json'), `${JSON.stringify(report, null, 2)}\n`);
