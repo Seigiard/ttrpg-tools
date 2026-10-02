@@ -142,6 +142,24 @@ test('a thumbnail drop uses the first supported image even after an unsupported 
   }).toEqual({ rejected: null, back: true });
 });
 
+test('bulk height selector resets after applying so the same size can be chosen again', async () => {
+  // #given
+  render(PaperMinisGenerator);
+  await addFront();
+  const bulk = screen.getByRole<HTMLSelectElement>('combobox', { name: 'Высота всех фигурок' });
+  const row = screen.getByRole<HTMLSelectElement>('combobox', { name: 'Высота существа' });
+  // #when
+  fireEvent.change(bulk, { target: { value: 'large' } });
+  const afterBulk = { bulk: bulk.value, row: row.value };
+  fireEvent.change(row, { target: { value: 'small' } });
+  fireEvent.change(bulk, { target: { value: 'large' } });
+  // #then
+  expect({ afterBulk, afterRepeat: { bulk: bulk.value, row: row.value } }).toEqual({
+    afterBulk: { bulk: '', row: 'large' },
+    afterRepeat: { bulk: '', row: 'large' },
+  });
+});
+
 test('a JPEG labelled image/jpg is accepted', async () => {
   // #given
   render(PaperMinisGenerator);
@@ -753,6 +771,49 @@ test('front height dialog applies pointer calibration and row reset clears it', 
     warning: 'Миниатюра уменьшена: лимит ширины.',
     reset: null,
   });
+});
+
+test.each(['Отмена', 'Применить'] as const)(
+  'height dialog %s restores focus to the calibration opener',
+  async (action) => {
+    // #given
+    render(PaperMinisGenerator);
+    await addFront();
+    const opener = screen.getByRole('button', { name: 'Задать рост' });
+    opener.focus();
+    fireEvent.click(opener);
+    const dialog = screen.getByRole('dialog', { name: 'Задать рост' });
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+    // #when
+    fireEvent.click(within(dialog).getByRole('button', { name: action }));
+    // #then
+    await waitFor(() =>
+      expect({ open: screen.queryByRole('dialog') !== null, focused: document.activeElement }).toEqual({
+        open: false,
+        focused: opener,
+      }),
+    );
+  },
+);
+
+test('height dialog backdrop click cancels and restores focus to the calibration opener', async () => {
+  // #given
+  render(PaperMinisGenerator);
+  await addFront();
+  const opener = screen.getByRole('button', { name: 'Задать рост' });
+  opener.focus();
+  fireEvent.click(opener);
+  const dialog = screen.getByRole('dialog', { name: 'Задать рост' });
+  await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+  // #when
+  fireEvent.click(dialog.firstElementChild!);
+  // #then
+  await waitFor(() =>
+    expect({ open: screen.queryByRole('dialog') !== null, focused: document.activeElement }).toEqual({
+      open: false,
+      focused: opener,
+    }),
+  );
 });
 
 test('pointer calibration measures the visible image inside vertical letterboxing', async () => {

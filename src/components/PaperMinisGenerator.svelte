@@ -165,6 +165,13 @@
       store.reportExportFailure();
     }
   }
+
+  function setBulkSize(event: Event) {
+    const select = event.currentTarget as HTMLSelectElement;
+    const value = select.value;
+    if (value) store.setAllSizes(value as MiniSize);
+    select.value = '';
+  }
 </script>
 
 <div class="space-y-8">
@@ -215,18 +222,7 @@
           {#if rows.length > 0}
             <label class="block text-sm">
               Высота всех фигурок
-              <select
-                class={field}
-                value=""
-                oninput={(event) => {
-                  const value = event.currentTarget.value;
-                  if (value) store.setAllSizes(value as MiniSize);
-                }}
-                onchange={(event) => {
-                  const value = event.currentTarget.value;
-                  if (value) store.setAllSizes(value as MiniSize);
-                }}
-              >
+              <select class={field} value="" onchange={setBulkSize}>
                 <option value="" disabled>Выберите…</option>
                 {#each HEIGHT_SLOT_ORDER as slot}<option
                     value={slot}

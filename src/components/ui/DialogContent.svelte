@@ -15,21 +15,22 @@
   let element = $state<HTMLDialogElement>();
 
   const focusableSelector = [
-    'a[href]',
-    'button:not(:disabled)',
-    'input:not(:disabled)',
-    'select:not(:disabled)',
-    'textarea:not(:disabled)',
+    'a[href]:not([tabindex="-1"])',
+    'button:not(:disabled):not([tabindex="-1"])',
+    'input:not(:disabled):not([tabindex="-1"])',
+    'select:not(:disabled):not([tabindex="-1"])',
+    'textarea:not(:disabled):not([tabindex="-1"])',
     '[tabindex]:not([tabindex="-1"])',
   ].join(',');
 
   function restoreFocus() {
     const target = finalFocus ?? dialog.previouslyFocused;
     dialog.previouslyFocused = null;
-    setTimeout(() => target?.focus(), 0);
+    target?.focus();
   }
 
   function close() {
+    if (element?.open) element.close();
     dialog.setOpen(false);
     restoreFocus();
   }
@@ -73,6 +74,11 @@
         const target = current.querySelector<HTMLElement>(focusableSelector) ?? current;
         target.focus();
       });
+      return () => {
+        if (!dialog.open || !current.open) return;
+        current.close();
+        restoreFocus();
+      };
     } else if (!dialog.open && element.open) {
       element.close();
       restoreFocus();
@@ -91,10 +97,17 @@
     }}
     onkeydown={trapFocus}
   >
-    <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <button
+      type="button"
+      aria-label="Закрыть диалог"
+      tabindex="-1"
+      class="fixed inset-0 z-50 cursor-default bg-transparent"
+      onclick={close}
+    ></button>
+    <div class="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
         class={cn(
-          'max-h-[90vh] w-full max-w-3xl overflow-auto rounded-xl border border-border bg-surface p-4 shadow-xl',
+          'pointer-events-auto max-h-[90vh] w-full max-w-3xl overflow-auto rounded-xl border border-border bg-surface p-4 shadow-xl',
           className,
         )}
         {...rest}
