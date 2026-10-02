@@ -20,6 +20,7 @@
   const store = createEncounterStore(table);
   const checkStore = store.$check;
   const reactionStore = store.$reaction;
+  let checkHistory = $state<Array<{ sum: number; label: string }>>([]);
 
   const outcomeTone: Record<EncounterCheckOutcome, string> = {
     encounter: 'text-secondary',
@@ -27,8 +28,19 @@
     clear: 'text-text-muted',
   };
 
+  function rollCheck() {
+    store.rollCheck();
+    const nextCheck = store.$check.get();
+    if (!nextCheck) return;
+
+    checkHistory = [
+      { sum: nextCheck.sum, label: table.check.rows[nextCheck.rowIndex]!.ru },
+      ...checkHistory,
+    ].slice(0, 5);
+  }
+
   onMount(() => {
-    if (store.$check.get() === null) store.rollCheck();
+    if (store.$check.get() === null) rollCheck();
     if (store.$reaction.get() === null) store.rollReaction();
   });
 
@@ -41,9 +53,7 @@
 <div class="space-y-12">
   <section class="space-y-6">
     <h2 class="font-display text-2xl text-text">Проверка столкновения</h2>
-    <Button size="lg" onclick={store.rollCheck} data-testid="check-roll-button"
-      >Проверить (d6)</Button
-    >
+    <Button size="lg" onclick={rollCheck} data-testid="check-roll-button">Проверить (d6)</Button>
 
     <Card data-testid="check-result-card">
       <CardHeader>
@@ -69,6 +79,32 @@
         </div>
       </CardContent>
     </Card>
+
+    <div class="space-y-3">
+      <div class="flex items-center justify-between gap-3">
+        <h3 class="font-display text-lg text-text">Последние проверки</h3>
+        <Button
+          variant="outline"
+          size="sm"
+          onclick={() => (checkHistory = [])}
+          data-testid="check-history-clear"
+        >
+          Очистить
+        </Button>
+      </div>
+      <ul class="space-y-2" data-testid="check-history">
+        {#each checkHistory as item, index (`${item.sum}-${item.label}-${index}`)}
+          <li
+            class="flex items-center justify-between rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+          >
+            <!-- prettier-ignore -->
+            <span class="font-mono text-xs text-text-muted">d6 = {item.sum}</span><span
+              class="font-semibold text-text">{item.label}</span
+            >
+          </li>
+        {/each}
+      </ul>
+    </div>
 
     <ReferenceList
       title="Исходы · d6"
