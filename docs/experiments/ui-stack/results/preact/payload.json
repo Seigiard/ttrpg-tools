@@ -1,18 +1,18 @@
 {
-  "generatedAt": "2026-10-02T13:51:55.649Z",
+  "generatedAt": "2026-10-02T13:55:10.195Z",
   "method": "HTML is read from dist. Linked scripts, modulepreload links, stylesheets, Astro island component-url and renderer-url attributes are resolved. Static JS imports are counted as initial-load JS. Dynamic imports are counted as lazy JS. Library labels come from chunk filenames and content heuristics for React, Astro, Base UI, Nanostores, Lucide and pdf-lib.",
   "routes": [
     {
       "route": "/",
       "html": {
         "raw": 3173,
-        "gzip": 1140,
-        "brotli": 842
+        "gzip": 1139,
+        "brotli": 839
       },
       "css": {
-        "raw": 41601,
-        "gzip": 8034,
-        "brotli": 7045
+        "raw": 43575,
+        "gzip": 8124,
+        "brotli": 7124
       },
       "externalJs": {
         "raw": 0,
@@ -41,18 +41,18 @@
           "kind": "html",
           "sizes": {
             "raw": 3173,
-            "gzip": 1140,
-            "brotli": 842
+            "gzip": 1139,
+            "brotli": 839
           },
           "libraries": []
         },
         {
-          "path": "_astro/Layout.D5aWLnCN.css",
+          "path": "_astro/Layout.arTfdNW_.css",
           "kind": "css",
           "sizes": {
-            "raw": 41601,
-            "gzip": 8034,
-            "brotli": 7045
+            "raw": 43575,
+            "gzip": 8124,
+            "brotli": 7124
           },
           "libraries": []
         }
@@ -63,13 +63,13 @@
       "route": "/mausritter/encounters",
       "html": {
         "raw": 18937,
-        "gzip": 5225,
-        "brotli": 4256
+        "gzip": 5224,
+        "brotli": 4260
       },
       "css": {
-        "raw": 41601,
-        "gzip": 8034,
-        "brotli": 7045
+        "raw": 43575,
+        "gzip": 8124,
+        "brotli": 7124
       },
       "externalJs": {
         "raw": 56933,
@@ -98,8 +98,8 @@
           "kind": "html",
           "sizes": {
             "raw": 18937,
-            "gzip": 5225,
-            "brotli": 4256
+            "gzip": 5224,
+            "brotli": 4260
           },
           "libraries": []
         },
@@ -126,12 +126,12 @@
           ]
         },
         {
-          "path": "_astro/Layout.D5aWLnCN.css",
+          "path": "_astro/Layout.arTfdNW_.css",
           "kind": "css",
           "sizes": {
-            "raw": 41601,
-            "gzip": 8034,
-            "brotli": 7045
+            "raw": 43575,
+            "gzip": 8124,
+            "brotli": 7124
           },
           "libraries": []
         },
@@ -287,13 +287,13 @@
       "route": "/mausritter/locations",
       "html": {
         "raw": 40788,
-        "gzip": 7938,
-        "brotli": 6484
+        "gzip": 7937,
+        "brotli": 6477
       },
       "css": {
-        "raw": 41601,
-        "gzip": 8034,
-        "brotli": 7045
+        "raw": 43575,
+        "gzip": 8124,
+        "brotli": 7124
       },
       "externalJs": {
         "raw": 63809,
@@ -322,8 +322,8 @@
           "kind": "html",
           "sizes": {
             "raw": 40788,
-            "gzip": 7938,
-            "brotli": 6484
+            "gzip": 7937,
+            "brotli": 6477
           },
           "libraries": []
         },
@@ -350,12 +350,12 @@
           ]
         },
         {
-          "path": "_astro/Layout.D5aWLnCN.css",
+          "path": "_astro/Layout.arTfdNW_.css",
           "kind": "css",
           "sizes": {
-            "raw": 41601,
-            "gzip": 8034,
-            "brotli": 7045
+            "raw": 43575,
+            "gzip": 8124,
+            "brotli": 7124
           },
           "libraries": []
         },
@@ -511,13 +511,13 @@
       "route": "/mausritter/weather",
       "html": {
         "raw": 23901,
-        "gzip": 5642,
-        "brotli": 4612
+        "gzip": 5641,
+        "brotli": 4613
       },
       "css": {
-        "raw": 41601,
-        "gzip": 8034,
-        "brotli": 7045
+        "raw": 43575,
+        "gzip": 8124,
+        "brotli": 7124
       },
       "externalJs": {
         "raw": 60912,
@@ -546,8 +546,8 @@
           "kind": "html",
           "sizes": {
             "raw": 23901,
-            "gzip": 5642,
-            "brotli": 4612
+            "gzip": 5641,
+            "brotli": 4613
           },
           "libraries": []
         },
@@ -574,12 +574,12 @@
           ]
         },
         {
-          "path": "_astro/Layout.D5aWLnCN.css",
+          "path": "_astro/Layout.arTfdNW_.css",
           "kind": "css",
           "sizes": {
-            "raw": 41601,
-            "gzip": 8034,
-            "brotli": 7045
+            "raw": 43575,
+            "gzip": 8124,
+            "brotli": 7124
           },
           "libraries": []
         },
@@ -745,13 +745,13 @@
       "route": "/paper-minis",
       "html": {
         "raw": 15555,
-        "gzip": 5319,
-        "brotli": 4289
+        "gzip": 5318,
+        "brotli": 4269
       },
       "css": {
-        "raw": 41601,
-        "gzip": 8034,
-        "brotli": 7045
+        "raw": 43575,
+        "gzip": 8124,
+        "brotli": 7124
       },
       "externalJs": {
         "raw": 525728,
@@ -780,8 +780,8 @@
           "kind": "html",
           "sizes": {
             "raw": 15555,
-            "gzip": 5319,
-            "brotli": 4289
+            "gzip": 5318,
+            "brotli": 4269
           },
           "libraries": []
         },
@@ -808,12 +808,12 @@
           ]
         },
         {
-          "path": "_astro/Layout.D5aWLnCN.css",
+          "path": "_astro/Layout.arTfdNW_.css",
           "kind": "css",
           "sizes": {
-            "raw": 41601,
-            "gzip": 8034,
-            "brotli": 7045
+            "raw": 43575,
+            "gzip": 8124,
+            "brotli": 7124
           },
           "libraries": []
         },
@@ -953,13 +953,13 @@
       "route": "/the-black-hack/prices",
       "html": {
         "raw": 34894,
-        "gzip": 6180,
-        "brotli": 4956
+        "gzip": 6179,
+        "brotli": 4973
       },
       "css": {
-        "raw": 41601,
-        "gzip": 8034,
-        "brotli": 7045
+        "raw": 43575,
+        "gzip": 8124,
+        "brotli": 7124
       },
       "externalJs": {
         "raw": 62287,
@@ -988,8 +988,8 @@
           "kind": "html",
           "sizes": {
             "raw": 34894,
-            "gzip": 6180,
-            "brotli": 4956
+            "gzip": 6179,
+            "brotli": 4973
           },
           "libraries": []
         },
@@ -1016,12 +1016,12 @@
           ]
         },
         {
-          "path": "_astro/Layout.D5aWLnCN.css",
+          "path": "_astro/Layout.arTfdNW_.css",
           "kind": "css",
           "sizes": {
-            "raw": 41601,
-            "gzip": 8034,
-            "brotli": 7045
+            "raw": 43575,
+            "gzip": 8124,
+            "brotli": 7124
           },
           "libraries": []
         },
