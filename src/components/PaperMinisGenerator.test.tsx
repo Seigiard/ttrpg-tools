@@ -135,6 +135,47 @@ test('a thumbnail drop uses the first supported image even after an unsupported 
   }).toEqual({ rejected: null, back: true });
 });
 
+test('a JPEG labelled image/jpg is accepted', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  const bytes = await Bun.file(
+    new URL('../lib/paper-minis/fixtures/artwork-4x3.jpg', import.meta.url),
+  ).arrayBuffer();
+  // #when
+  await act(async () => {
+    fireEvent.change(screen.getByLabelText('Добавить изображения', { selector: 'input' }), {
+      target: { files: [new File([bytes], 'figure.jpg', { type: 'image/jpg' })] },
+    });
+  });
+  // #then
+  expect({
+    rejection:
+      screen.queryByText('Некоторые файлы пропущены: поддерживаются PNG, JPG и WebP.')
+        ?.textContent ?? null,
+    loadError:
+      screen.queryByText('Не удалось загрузить изображение. Попробуйте другой файл.')
+        ?.textContent ?? null,
+    rows: screen.queryAllByRole('article').length,
+  }).toEqual({ rejection: null, loadError: null, rows: 1 });
+});
+
+test('every artwork file input offers every supported MIME type', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  // #when
+  const accepts = Array.from(
+    document.querySelectorAll<HTMLInputElement>('input[type="file"]'),
+    (input) => input.accept,
+  );
+  // #then
+  expect(accepts).toEqual([
+    'image/png,image/jpeg,image/jpg,image/webp',
+    'image/png,image/jpeg,image/jpg,image/webp',
+    'image/png,image/jpeg,image/jpg,image/webp',
+  ]);
+});
+
 test('the drop zone explains the naming convention with every size id outside the button', () => {
   // #given
   render(<PaperMinisGenerator />);

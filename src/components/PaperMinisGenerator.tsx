@@ -2,20 +2,13 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode, type Re
 import { useStore } from '@nanostores/react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import {
-  createPaperMinisStore,
-  type CalibrationSession,
-} from '@/stores/paper-minis-store';
+import { createPaperMinisStore, type CalibrationSession } from '@/stores/paper-minis-store';
+import { ARTWORK_ACCEPT, artworkMimeType } from '@/lib/paper-minis/artwork-formats';
 import { isSupportedArtwork } from '@/lib/paper-minis/artwork';
 import type { CalibrationLine } from '@/lib/paper-minis/calibration';
 import { fitLimitWarning } from '@/lib/paper-minis/geometry';
 import { buildFilename } from '@/lib/paper-minis/pdf';
-import {
-  HEIGHT_SLOT_ORDER,
-  slotLabel,
-  slotGeometryLabel,
-  slotName,
-} from '@/lib/paper-minis/sizes';
+import { HEIGHT_SLOT_ORDER, slotLabel, slotGeometryLabel, slotName } from '@/lib/paper-minis/sizes';
 import type { HeightCalibration, MiniSize, PreparedArtwork } from '@/lib/paper-minis/types';
 
 const field =
@@ -31,7 +24,7 @@ function useArtworkUrl(artwork?: PreparedArtwork | null) {
     }
     const next = URL.createObjectURL(
       new Blob([artwork.bytes as BlobPart], {
-        type: artwork.format === 'jpg' ? 'image/jpeg' : 'image/png',
+        type: artworkMimeType(artwork.format),
       }),
     );
     setUrl(next);
@@ -178,7 +171,7 @@ function ArtworkSlot({
       <input
         ref={input}
         type="file"
-        accept="image/png,image/jpeg,image/webp"
+        accept={ARTWORK_ACCEPT}
         className="hidden"
         aria-label={label}
         onChange={(event) => {
@@ -613,7 +606,7 @@ export default function PaperMinisGenerator() {
               ref={files}
               type="file"
               multiple
-              accept="image/png,image/jpeg,image/webp"
+              accept={ARTWORK_ACCEPT}
               className="hidden"
               aria-label="Добавить изображения"
               onChange={(event) => {

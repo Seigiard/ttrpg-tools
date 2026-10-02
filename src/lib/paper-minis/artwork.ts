@@ -1,4 +1,5 @@
 import { PDFDocument } from 'pdf-lib';
+import { artworkFormatForMimeType, type PreparedArtworkFormat } from './artwork-formats';
 import { canvasToPngBytes } from './canvas';
 import { createArtworkNormalizer } from './normalization';
 import type { PreparedArtwork } from './types';
@@ -13,7 +14,7 @@ export type PaperMinisArtwork = {
 };
 
 export function isSupportedArtwork(file: File): boolean {
-  return ['image/png', 'image/jpeg', 'image/webp'].includes(file.type.toLowerCase());
+  return artworkFormatForMimeType(file.type) !== undefined;
 }
 
 export function createCanvasArtwork(): PaperMinisArtwork {
@@ -66,14 +67,14 @@ function pngDimensions(bytes: Uint8Array): { width: number; height: number } {
   return { width, height };
 }
 
-async function fileToImageBytes(file: File): Promise<{ bytes: Uint8Array; format: 'png' | 'jpg' }> {
-  const type = file.type.toLowerCase();
-  if (type === 'image/jpeg' || type === 'image/jpg') {
-    return { bytes: new Uint8Array(await file.arrayBuffer()), format: 'jpg' };
+async function fileToImageBytes(
+  file: File,
+): Promise<{ bytes: Uint8Array; format: PreparedArtworkFormat }> {
+  const format = artworkFormatForMimeType(file.type);
+  if (format === 'jpg' || format === 'png') {
+    return { bytes: new Uint8Array(await file.arrayBuffer()), format };
   }
-  if (type === 'image/png') {
-    return { bytes: new Uint8Array(await file.arrayBuffer()), format: 'png' };
-  }
+  if (format !== 'webp') throw new Error('Unsupported artwork type.');
   const bitmap = await createImageBitmap(file);
   const canvas = document.createElement('canvas');
   try {
