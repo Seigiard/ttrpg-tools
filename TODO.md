@@ -10,7 +10,7 @@ Review base: 8e5ec819a0bcf0114971db20f46aa9f62d4d01bc
       Done: `sizes.ts` keeps only size tables and labels; all checks green.
 - [x] G2 · one "resolve one mini" step in `geometry.ts` (faces, tabs, offsets, limits, orientation, state), run once before both layout candidates; `packRows` takes resolved minis and only lays out.
       Done: `packMinis` no longer gets geometry through `packRows`; all checks green.
-- [ ] G3 · `PackResult.entries` (`empty | loading | failed | upright | rotated | oversized` + `limits`) replaces `skipped`, `oversizedEntryIndices`, `limitedEntryFitLimits`; `frontError` moves onto `Entry`; `pdf.ts` filters nothing itself.
+- [x] G3 · `PackResult.entries` (`empty | loading | failed | upright | rotated | oversized` + `limits`) replaces `skipped`, `oversizedEntryIndices`, `limitedEntryFitLimits`; `frontError` moves onto `Entry`; `pdf.ts` filters nothing itself.
       Done: grep finds none of the old fields; all checks green.
 - [ ] G4 · the component renders row status from `entries[i]`; the calibration preview uses the resolve step.
       Done: the component computes no loading / error / oversized flags itself; all checks green.

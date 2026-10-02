@@ -1,11 +1,11 @@
 import type { Entry, PackingEntry } from './types';
 import {
-  type FigureFitLimit,
+  type EntryStatus,
   type PackOptions,
   type PackedMini,
   type ResolvedMini,
   footprintMm,
-  resolveMinis,
+  resolveMini,
   usableAreaMm,
 } from './geometry.ts';
 
@@ -25,27 +25,25 @@ export type Placement = {
 };
 export type PackedPage = { placements: Placement[] };
 
-// A mini that cannot fit a single page at all, attributed to its entry.
-export type SkippedMini = {
-  entryIndex: number;
-  copyIndex: number;
-  baseWidthMm: number;
-  totalHeightMm: number;
-};
-
 export type PackResult = {
   pages: PackedPage[];
   pageCount: number;
   miniCount: number; // minis actually placed (what will print)
-  skipped: SkippedMini[];
-  oversizedEntryIndices: number[]; // distinct entries with >=1 skipped mini
-  limitedEntryFitLimits: { entryIndex: number; limits: FigureFitLimit[] }[];
+  entries: EntryStatus[]; // indexed like the input entries
 };
 
 // A back file is chosen but not prepared yet. Such an entry is not ready, so
 // it does not print reflected for a moment and then jump to its own back.
-export function isBackArtworkLoading(entry: Entry): boolean {
+function isBackArtworkLoading(entry: Entry): boolean {
   return entry.backImage != null && entry.backArtwork == null;
+}
+
+function unpreparedState(entry: Entry): 'empty' | 'loading' | 'failed' | undefined {
+  if (entry.artwork == null) {
+    if (entry.frontError) return 'failed';
+    return entry.image == null ? 'empty' : 'loading';
+  }
+  return isBackArtworkLoading(entry) ? 'loading' : undefined;
 }
 
 export function toPackingEntry(entry: Entry): PackingEntry {
@@ -63,47 +61,48 @@ export function toPackingEntry(entry: Entry): PackingEntry {
 }
 
 // Project prepared artwork into packing geometry without changing entry indices.
+// An entry that is not prepared packs as having no image, then reports why.
 export function packEntries(entries: Entry[], opts: PackOptions): PackResult {
-  return packMinis(
-    entries.map((entry) =>
-      isBackArtworkLoading(entry)
+  const unprepared = entries.map(unpreparedState);
+  const result = packMinis(
+    entries.map((entry, i) =>
+      unprepared[i]
         ? { ...toPackingEntry(entry), naturalWidth: undefined, naturalHeight: undefined }
         : toPackingEntry(entry),
     ),
     opts,
   );
+  return {
+    ...result,
+    entries: result.entries.map((status, i) => {
+      const state = unprepared[i];
+      return state ? { state, limits: [] } : status;
+    }),
+  };
 }
 
 // Resolve every entry's geometry once, then compare the two layouts of the
 // same resolved minis. The row candidate is also a useful baseline for layout
 // regression tests.
 export function packMinis(entries: PackingEntry[], opts: PackOptions): PackResult {
-  const resolved = resolveMinis(entries, opts);
+  const minis = entries.map((entry, entryIndex) => resolveMini(entry, entryIndex, opts));
+  const resolved = minis.filter((mini) => mini !== undefined);
   const rows = packRows(resolved, opts);
   const { widthMm, heightMm } = usableAreaMm(opts.pageSize);
   const guillotine = packGuillotine(resolved, widthMm, heightMm);
   const pages = guillotine.length <= rows.pageCount ? guillotine : rowPlacements(rows.pages);
-  const placed = resolved.filter((mini) => mini.orientation !== 'oversized');
-  // Widest first, the order the row candidate used to report skips in.
-  const oversized = resolved
-    .filter((mini) => mini.orientation === 'oversized')
-    .toSorted((a, b) => b.copies[0].totalWidthMm - a.copies[0].totalWidthMm);
   return {
     pages,
     pageCount: pages.length,
-    miniCount: placed.reduce((sum, mini) => sum + mini.copies.length, 0),
-    skipped: oversized.flatMap(({ copies }) =>
-      copies.map(({ entryIndex, copyIndex, baseWidthMm, totalHeightMm }) => ({
-        entryIndex,
-        copyIndex,
-        baseWidthMm,
-        totalHeightMm,
-      })),
-    ),
-    oversizedEntryIndices: oversized.map((mini) => mini.entryIndex),
-    limitedEntryFitLimits: placed
-      .filter((mini) => mini.limits.length)
-      .map(({ entryIndex, limits }) => ({ entryIndex, limits })),
+    miniCount: resolved
+      .filter((mini) => mini.orientation !== 'oversized')
+      .reduce((sum, mini) => sum + mini.copies.length, 0),
+    entries: minis.map((mini) => {
+      if (!mini) return { state: 'empty', limits: [] };
+      // A cap on a mini that does not print shrank nothing on paper.
+      if (mini.orientation === 'oversized') return { state: 'oversized', limits: [] };
+      return { state: mini.orientation, limits: mini.limits };
+    }),
   };
 }
 

@@ -37,7 +37,7 @@ import type {
   PreparedArtwork,
 } from '@/lib/paper-minis/types';
 
-export type MiniRow = Entry & { id: number; frontError?: string };
+export type MiniRow = Entry & { id: number };
 export type PaperMinisSettings = {
   pageSize: PageSizeKey;
   marginMm: number;
@@ -223,7 +223,7 @@ export function createPaperMinisStore({
       rows: { ...inputs.rows, [id]: { ...row, ...fields } },
     });
   }
-  function updateRow(id: number, fields: Partial<Entry> & { frontError?: string }) {
+  function updateRow(id: number, fields: Partial<Entry>) {
     if ($busy.get()) return;
     const previous = $rows.get().find((row) => row.id === id);
     $rows.set($rows.get().map((row) => (row.id === id ? { ...row, ...fields } : row)));

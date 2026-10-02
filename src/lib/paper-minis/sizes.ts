@@ -216,8 +216,7 @@ export function resolveSizeDimensionsMm(
   return { baseWidthMm: resolveBaseWidthMm(e), figureHeightMm: resolveFigureHeightMm(e) };
 }
 
-// The dimension rule packing applies, shared so the PDF writer embeds artwork
-// for exactly the entries that will be drawn. A custom entry needs both of its
+// The dimension rule packing applies. A custom entry needs both of its
 // numbers: the height scales the figure, the width stands it up.
 export function hasPackableDimensions(
   e: Pick<Entry, 'heightSlot' | 'customWidthMm' | 'customHeightMm'>,

@@ -279,8 +279,8 @@ t('artwork for a mini that does not fit is not embedded in the PDF', async () =>
     ).length;
   // #then
   assert.deepEqual(
-    { miniCount: layout.miniCount, skipped: layout.skipped.length, imageObjects },
-    { miniCount: 1, skipped: 1, imageObjects: 1 },
+    { miniCount: layout.miniCount, states: layout.entries.map(({ state }) => state), imageObjects },
+    { miniCount: 1, states: ['upright', 'oversized'], imageObjects: 1 },
   );
 });
 

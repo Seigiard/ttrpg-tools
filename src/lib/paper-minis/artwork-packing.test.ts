@@ -66,9 +66,9 @@ t('unprepared entries preserve the source indices of packed and oversized entrie
   assert.deepEqual(
     {
       placed: result.pages[0].placements.map(({ mini }) => mini.entryIndex),
-      oversized: result.oversizedEntryIndices,
+      states: result.entries.map(({ state }) => state),
     },
-    { placed: [1], oversized: [2] },
+    { placed: [1], states: ['empty', 'upright', 'oversized'] },
   );
 });
 
@@ -100,6 +100,27 @@ t('an entry waits while its back artwork loads', () => {
   const result = packEntries([e], opts);
   // #then
   assert.deepEqual([result.miniCount, result.pageCount], [0, 0]);
+});
+
+t('each row reports why it does not print yet', () => {
+  // #given
+  const file = new File([], 'front.png');
+  const entries: Entry[] = [
+    entry(1, null),
+    { ...entry(1, null), image: file },
+    { ...entry(1, null), image: file, frontError: 'broken' },
+    { ...entry(1), image: file, backImage: new File([], 'back.png') },
+    { ...entry(1), heightSlot: 'custom', customWidthMm: 30 },
+    { ...entry(0), image: file },
+    { ...entry(1), image: file },
+  ];
+  // #when
+  const result = packEntries(entries, opts);
+  // #then
+  assert.deepEqual(
+    result.entries.map(({ state }) => state),
+    ['empty', 'loading', 'failed', 'loading', 'empty', 'empty', 'upright'],
+  );
 });
 
 t('prepared back artwork proportions reach fitting through packEntries', () => {
@@ -140,8 +161,7 @@ t(
         orientations: result.pages
           .flatMap((page) => page.placements.map((p) => [p.mini.entryIndex, p.rotated]))
           .toSorted(),
-        skipped: result.skipped.map((m) => [m.entryIndex, m.copyIndex]),
-        oversized: result.oversizedEntryIndices,
+        states: result.entries.map(({ state }) => state),
       },
       {
         minis: 2,
@@ -149,11 +169,7 @@ t(
           [0, true],
           [1, false],
         ],
-        skipped: [
-          [2, 0],
-          [2, 1],
-        ],
-        oversized: [2],
+        states: ['rotated', 'upright', 'oversized'],
       },
     );
   },

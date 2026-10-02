@@ -625,10 +625,8 @@ export default function PaperMinisGenerator() {
             <section aria-label="Миниатюры" className="space-y-5">
               <h2 className="sr-only">Миниатюры</h2>
               {rows.map((row, index) => {
-                const fitWarning = fitLimitWarning(
-                  packed.limitedEntryFitLimits.find((warning) => warning.entryIndex === index)
-                    ?.limits ?? [],
-                );
+                const status = packed.entries[index];
+                const fitWarning = fitLimitWarning(status?.limits ?? []);
                 const rowInputs = inputs.rows[row.id] ?? {
                   count: { text: String(row.count), valid: true },
                   customWidthMm: {
@@ -799,7 +797,7 @@ export default function PaperMinisGenerator() {
                         ? 'В PDF попадёт отдельное изображение оборота.'
                         : 'Без отдельного файла лицевая сторона будет отражена автоматически.'}
                     </p>
-                    {packed.oversizedEntryIndices.includes(index) && (
+                    {status?.state === 'oversized' && (
                       <p
                         role="status"
                         className="mt-3 border-l-2 border-danger pl-3 text-sm text-danger"

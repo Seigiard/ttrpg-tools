@@ -69,8 +69,8 @@ export async function generatePDF(
   const font = await pdf.embedFont(StandardFonts.HelveticaBold);
   const noteFont = await pdf.embedFont(StandardFonts.Helvetica);
 
-  // Embed only artwork used by a placement. Oversized and otherwise skipped
-  // rows must not add their image bytes to the document.
+  // Embed only artwork used by a placement. Rows the layout left out must not
+  // add their image bytes to the document.
   const faces = new Map<number, FaceImages>();
   const cache = new Map<PreparedArtwork, PDFImage>();
   const embed = async (artwork: PreparedArtwork) => {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { packMinis, GAP_MM } from './packing.ts';
 import { packRowCandidate } from '@/test-utils/pack-row-candidate';
-import { MARGIN_MM, PAGE_SIZES_MM } from './geometry.ts';
+import { MARGIN_MM, PAGE_SIZES_MM, resolveMini } from './geometry.ts';
 import { HEIGHT_SLOT_ORDER, slotGeometryLabel } from './sizes.ts';
 import type { PackingEntry as Entry } from './types.ts';
 
@@ -59,9 +59,9 @@ t('calibration scales the artwork height from the marked creature height', () =>
       mini.imageHeightMm,
       mini.faceHeightMm,
       mini.fitLimits,
-      result.limitedEntryFitLimits,
+      result.entries,
     ],
-    [35, 70, 70, [], []],
+    [35, 70, 70, [], [{ state: 'upright', limits: [] }]],
   );
 });
 
@@ -114,7 +114,7 @@ t('calibration that hits the width cap scales down whole and reports width', () 
   );
 });
 
-t('calibration too tall for the page scales to fit and is reported instead of skipped', () => {
+t('calibration too tall for the page scales to fit and is reported instead of left out', () => {
   // #given
   const entries = [
     entry({
@@ -133,13 +133,12 @@ t('calibration too tall for the page scales to fit and is reported instead of sk
   assert.deepEqual(
     [
       result.miniCount,
-      result.skipped.length,
       mini.imageHeightMm,
       mini.totalHeightMm,
       mini.fitLimits,
-      result.limitedEntryFitLimits,
+      result.entries,
     ],
-    [1, 0, 128.5, usableH, ['page'], [{ entryIndex: 0, limits: ['page'] }]],
+    [1, 128.5, usableH, ['page'], [{ state: 'upright', limits: ['page'] }]],
   );
 });
 
@@ -161,9 +160,7 @@ t('a calibrated custom figure fits both page dimensions without changing its asp
   assert.deepEqual(
     {
       count: result.miniCount,
-      skipped: result.skipped,
-      oversized: result.oversizedEntryIndices,
-      warnings: result.limitedEntryFitLimits,
+      entries: result.entries,
       geometry: result.pages.flatMap((page) =>
         page.placements.map(({ mini, rotated }) => [
           mini.imageWidthMm,
@@ -176,9 +173,7 @@ t('a calibrated custom figure fits both page dimensions without changing its asp
     },
     {
       count: 1,
-      skipped: [],
-      oversized: [],
-      warnings: [{ entryIndex: 0, limits: ['width', 'page'] }],
+      entries: [{ state: 'upright', limits: ['width', 'page'] }],
       geometry: [[186, 124, 190, 272, false]],
     },
   );
@@ -204,8 +199,7 @@ t('a page-width cap shrinks both calibrated faces to the same height', () => {
   assert.deepEqual(
     {
       count: result.miniCount,
-      skipped: result.skipped,
-      warnings: result.limitedEntryFitLimits,
+      entries: result.entries,
       geometry: result.pages.flatMap((page) =>
         page.placements.map(({ mini }) => [
           mini.imageWidthMm,
@@ -219,15 +213,14 @@ t('a page-width cap shrinks both calibrated faces to the same height', () => {
     },
     {
       count: 1,
-      skipped: [],
-      warnings: [{ entryIndex: 0, limits: ['width', 'page'] }],
+      entries: [{ state: 'upright', limits: ['width', 'page'] }],
       geometry: [[62, 124, 186, 124, 190, 272]],
     },
   );
 });
 
 t('page fit prints the former too-wide page-cap case at zero margin', () => {
-  // #given: this case used to lose its page warning and be skipped after a height-only cap.
+  // #given: this case used to lose its page warning and be left out after a height-only cap.
   const entries = [
     entry({
       heightSlot: 'custom',
@@ -243,8 +236,7 @@ t('page fit prints the former too-wide page-cap case at zero margin', () => {
   // #then: millimetres rounded to a micron for the repeating 3:2 height.
   assert.deepEqual(
     {
-      skipped: result.skipped,
-      warnings: result.limitedEntryFitLimits,
+      entries: result.entries,
       geometry: result.pages.flatMap((page) =>
         page.placements.map(({ mini }) => [
           mini.imageWidthMm,
@@ -255,8 +247,7 @@ t('page fit prints the former too-wide page-cap case at zero margin', () => {
       ),
     },
     {
-      skipped: [],
-      warnings: [{ entryIndex: 0, limits: ['width', 'page'] }],
+      entries: [{ state: 'upright', limits: ['width', 'page'] }],
       geometry: [[190, 126.667, 190, 273.333]],
     },
   );
@@ -281,8 +272,7 @@ t('page fit gives both calibrated faces the same height under the wider face cap
   // #then
   assert.deepEqual(
     {
-      skipped: result.skipped,
-      warnings: result.limitedEntryFitLimits,
+      entries: result.entries,
       geometry: result.pages.flatMap((page) =>
         page.placements.map(({ mini }) => [
           mini.imageWidthMm,
@@ -295,8 +285,7 @@ t('page fit gives both calibrated faces the same height under the wider face cap
       ),
     },
     {
-      skipped: [],
-      warnings: [{ entryIndex: 0, limits: ['width', 'page'] }],
+      entries: [{ state: 'upright', limits: ['width', 'page'] }],
       geometry: [[31, 124, 186, 124, 190, 272]],
     },
   );
@@ -313,19 +302,22 @@ t('an uncalibrated custom figure is not shrunk to the page', () => {
       naturalHeight: 100,
     }),
   ];
+  const opts = { pageSize: 'a4', numberDuplicates: false } as const;
   // #when
-  const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false });
+  const result = packMinis(entries, opts);
   // #then
   assert.deepEqual(
     {
       pages: result.pages,
-      skipped: result.skipped,
-      warnings: result.limitedEntryFitLimits,
+      entries: result.entries,
+      resolved: resolveMini(entries[0], 0, opts)?.copies.map(
+        ({ baseWidthMm, totalHeightMm }) => [baseWidthMm, totalHeightMm],
+      ),
     },
     {
       pages: [],
-      skipped: [{ entryIndex: 0, copyIndex: 0, baseWidthMm: 10, totalHeightMm: 304 }],
-      warnings: [],
+      entries: [{ state: 'oversized', limits: [] }],
+      resolved: [[10, 304]],
     },
   );
 });
@@ -396,17 +388,15 @@ t('a wide back stays printable with matching calibrated heights and unchanged pr
   assert.deepEqual(
     {
       count: result.miniCount,
-      skipped: result.skipped,
       front: [mini?.imageWidthMm, mini?.imageHeightMm],
       back: mini?.back,
-      warnings: result.limitedEntryFitLimits,
+      entries: result.entries,
     },
     {
       count: 1,
-      skipped: [],
       front: [8.75, 17.5],
       back: { imageWidthMm: 52.5, imageHeightMm: 17.5, imageOffsetXMm: 2 },
-      warnings: [{ entryIndex: 0, limits: ['width'] }],
+      entries: [{ state: 'upright', limits: ['width'] }],
     },
   );
 });
@@ -430,17 +420,15 @@ t('shared calibration is capped to the page and reports every active limit', () 
   assert.deepEqual(
     {
       count: result.miniCount,
-      skipped: result.skipped.length,
       front: mini?.imageHeightMm,
       back: mini?.back,
-      limits: result.limitedEntryFitLimits,
+      entries: result.entries,
     },
     {
       count: 1,
-      skipped: 0,
       front: 125.5,
       back: { imageWidthMm: 125.5, imageHeightMm: 125.5, imageOffsetXMm: 0 },
-      limits: [{ entryIndex: 0, limits: ['height', 'width', 'page'] }],
+      entries: [{ state: 'upright', limits: ['height', 'width', 'page'] }],
     },
   );
 });
@@ -466,19 +454,17 @@ t('shared calibration fits an oversized custom front and back onto the page', ()
   assert.deepEqual(
     {
       count: result.miniCount,
-      skipped: result.skipped,
       front: [mini?.imageWidthMm, mini?.imageHeightMm],
       back: [mini?.back?.imageWidthMm, mini?.back?.imageHeightMm],
       total: mini?.totalHeightMm,
-      warnings: result.limitedEntryFitLimits,
+      entries: result.entries,
     },
     {
       count: 1,
-      skipped: [],
       front: [64.25, 128.5],
       back: [32.125, 128.5],
       total: 277,
-      warnings: [{ entryIndex: 0, limits: ['page'] }],
+      entries: [{ state: 'upright', limits: ['page'] }],
     },
   );
 });
@@ -499,12 +485,12 @@ t('a calibrated mini with an oversized base does not claim it was fitted to the 
   const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 0 });
   // #then
   assert.deepEqual(
-    [result.miniCount, result.oversizedEntryIndices, result.limitedEntryFitLimits],
-    [0, [0], []],
+    [result.miniCount, result.entries],
+    [0, [{ state: 'oversized', limits: [] }]],
   );
 });
 
-t('fit warnings describe placed copies, not a skipped entry that hit the height cap', () => {
+t('fit warnings describe placed copies, not an oversized entry that hit the height cap', () => {
   // #given: the oversized base cannot fit either orientation, even after its height cap.
   const entries = [
     entry({
@@ -522,18 +508,14 @@ t('fit warnings describe placed copies, not a skipped entry that hit the height 
   assert.deepEqual(
     {
       count: result.miniCount,
-      skipped: result.skipped.map(({ entryIndex, copyIndex }) => [entryIndex, copyIndex]),
-      oversized: result.oversizedEntryIndices,
-      warnings: result.limitedEntryFitLimits,
+      entries: result.entries,
     },
     {
       count: 2,
-      skipped: [
-        [0, 0],
-        [0, 1],
+      entries: [
+        { state: 'oversized', limits: [] },
+        { state: 'upright', limits: ['height'] },
       ],
-      oversized: [0],
-      warnings: [{ entryIndex: 1, limits: ['height'] }],
     },
   );
 });
@@ -636,7 +618,7 @@ t('9 medium squares spill onto a second page', () => {
 
 // --- oversized reporting ---
 
-t('mini wider than the page is reported as skipped, not silently dropped', () => {
+t('mini wider than the page is reported as oversized, not silently dropped', () => {
   const r = packRowCandidate(
     // 200 mm base, 204 mm including margins > 190 usable width
     [entry({ heightSlot: 'custom', customWidthMm: 200, customHeightMm: 30 })],
@@ -644,23 +626,20 @@ t('mini wider than the page is reported as skipped, not silently dropped', () =>
   );
   assert.equal(r.miniCount, 0);
   assert.equal(r.pageCount, 0);
-  assert.equal(r.skipped.length, 1);
-  assert.equal(r.skipped[0].entryIndex, 0);
-  assert.deepEqual(r.oversizedEntryIndices, [0]);
+  assert.deepEqual(r.entries, [{ state: 'oversized', limits: [] }]);
 });
 
-t('mini taller than the page is reported as skipped', () => {
+t('mini taller than the page is reported as oversized', () => {
   // custom 140mm base and 140mm figure: image 140x140, totalHeight = 140*2 + 2*2 + 4*70 = 564 > 277.
-  const r = packRowCandidate([entry({ heightSlot: 'custom', customWidthMm: 140, customHeightMm: 140 })], {
-    pageSize: 'a4',
-    numberDuplicates: false,
-  });
+  const tall = entry({ heightSlot: 'custom', customWidthMm: 140, customHeightMm: 140 });
+  const opts = { pageSize: 'a4', numberDuplicates: false } as const;
+  const r = packRowCandidate([tall], opts);
   assert.equal(r.miniCount, 0);
-  assert.equal(r.skipped.length, 1);
-  assert.ok(r.skipped[0].totalHeightMm > usableH);
+  assert.deepEqual(r.entries, [{ state: 'oversized', limits: [] }]);
+  assert.ok(resolveMini(tall, 0, opts)!.copies[0].totalHeightMm > usableH);
 });
 
-t('oversized entry is skipped while a fitting entry in the same batch is placed', () => {
+t('oversized entry is left out while a fitting entry in the same batch is placed', () => {
   const r = packRowCandidate(
     [
       entry({ count: 2 }),
@@ -670,7 +649,10 @@ t('oversized entry is skipped while a fitting entry in the same batch is placed'
     { pageSize: 'a4', numberDuplicates: false },
   );
   assert.equal(r.miniCount, 5); // 2 + 3 placed
-  assert.deepEqual(r.oversizedEntryIndices, [1]);
+  assert.deepEqual(
+    r.entries.map(({ state }) => state),
+    ['upright', 'oversized', 'upright'],
+  );
 });
 
 // --- gap/margin math at boundaries ---
@@ -779,8 +761,8 @@ t('margin alone can make a mini too wide or too tall for A4', () => {
   const result = packRowCandidate(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 2 });
   // #then
   assert.deepEqual(
-    [result.pageCount, result.miniCount, result.oversizedEntryIndices],
-    [0, 0, [0, 1]],
+    [result.pageCount, result.miniCount, result.entries.map(({ state }) => state)],
+    [0, 0, ['oversized', 'oversized']],
   );
 });
 
@@ -1000,9 +982,12 @@ t('every slot’s unfolded mini fits both supported pages at the default margin'
   const results = (['a4', 'letter'] as const).map((pageSize) =>
     packRowCandidate(entries, { pageSize, numberDuplicates: false }),
   );
-  // #then  the tallest slot is cut to the paper, so none of them is skipped
+  // #then  the tallest slot is cut to the paper, so none of them is oversized
   assert.deepEqual(
-    results.map((result) => [result.miniCount, result.skipped.length]),
+    results.map((result) => [
+      result.miniCount,
+      result.entries.filter(({ state }) => state === 'oversized').length,
+    ]),
     [
       [HEIGHT_SLOT_ORDER.length, 0],
       [HEIGHT_SLOT_ORDER.length, 0],
@@ -1025,7 +1010,10 @@ t('no slot is lost when the figure margin is raised to 5 mm', () => {
   );
   // #then
   assert.deepEqual(
-    results.map((result) => [result.miniCount, result.skipped.length]),
+    results.map((result) => [
+      result.miniCount,
+      result.entries.filter(({ state }) => state === 'oversized').length,
+    ]),
     [
       [HEIGHT_SLOT_ORDER.length, 0],
       [HEIGHT_SLOT_ORDER.length, 0],

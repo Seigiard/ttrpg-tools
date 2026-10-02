@@ -18,8 +18,12 @@ for (const reconstruction of reconstructions) {
       const result = packRowCandidate(entries, { pageSize, numberDuplicates: false });
       // #then
       assert.deepEqual(
-        { pages: result.pageCount, placed: result.miniCount, skipped: result.skipped },
-        { pages: pageSize === 'a4' ? 4 : 5, placed: 25, skipped: [] },
+        {
+          pages: result.pageCount,
+          placed: result.miniCount,
+          oversized: result.entries.some(({ state }) => state === 'oversized'),
+        },
+        { pages: pageSize === 'a4' ? 4 : 5, placed: 25, oversized: false },
       );
     });
 
@@ -36,13 +40,13 @@ for (const reconstruction of reconstructions) {
             .flatMap((page) => page.placements.map(({ mini }) => [mini.entryIndex, mini.copyIndex]))
             .toSorted((a, b) => a[0] - b[0]),
           placed: result.miniCount,
-          skipped: result.skipped,
+          oversized: result.entries.some(({ state }) => state === 'oversized'),
         },
         {
           withinBudget: true,
           copies: Array.from({ length: 25 }, (_, index) => [index, 0]),
           placed: 25,
-          skipped: [],
+          oversized: false,
         },
       );
     });

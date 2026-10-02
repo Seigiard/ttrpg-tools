@@ -74,6 +74,11 @@ export type BackFace = { imageWidthMm: number; imageHeightMm: number; imageOffse
 // not at all. Both layout candidates take this as given.
 export type MiniOrientation = 'upright' | 'rotated' | 'oversized';
 
+// What one row will become in print. `empty` covers every row with nothing to
+// print yet: no image, or no copies or sizing dimensions to pack it with.
+export type EntryState = 'empty' | 'loading' | 'failed' | MiniOrientation;
+export type EntryStatus = { state: EntryState; limits: FigureFitLimit[] };
+
 // One entry resolved against the page options. Every copy shares the geometry,
 // so orientation and limits hold for the whole entry.
 export type ResolvedMini = {
