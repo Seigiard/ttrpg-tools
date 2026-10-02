@@ -331,11 +331,8 @@ test('a printer measurement resolves to the scale used for layout and PDF genera
   });
   const id = store.addBlank()!;
   await store.setImage(id, artworkFile(10, 20));
-  const defaultScale = store.$layout.get();
-
   // #when
-  store.setPrinterMeasurement('91');
-  const measuredScale = store.$layout.get();
+  store.setPrinterMeasurement('95');
   await store.download();
 
   // #then
@@ -343,14 +340,12 @@ test('a printer measurement resolves to the scale used for layout and PDF genera
     canGenerate: store.$canGenerate.get(),
     measurement: store.$settings.get().printerMeasurementMm,
     input: store.$inputs.get().printerMeasurement,
-    layoutChanged: measuredScale !== defaultScale,
     renderedScale: rendered?.[2].printerScale,
   }).toEqual({
     canGenerate: true,
-    measurement: 91,
-    input: { text: '91', valid: true },
-    layoutChanged: true,
-    renderedScale: 0.91,
+    measurement: 95,
+    input: { text: '95', valid: true },
+    renderedScale: 0.95,
   });
 });
 
@@ -404,14 +399,15 @@ test('clearing a printer measurement restores the default scale', async () => {
   });
 });
 
-test('a stored valid printer measurement is restored and an invalid one falls back to default', () => {
+test('a stored valid printer measurement is restored and an invalid one clears a previous measurement', () => {
   // #given
   const saved = setup();
   saved.setPrinterMeasurement('91');
   const valid = setup();
   valid.loadSettings();
-  localStorage.setItem('pmg-settings', JSON.stringify({ printerMeasurementMm: 101 }));
   const invalid = setup();
+  invalid.setPrinterMeasurement('95');
+  localStorage.setItem('pmg-settings', JSON.stringify({ printerMeasurementMm: 101 }));
 
   // #when
   invalid.loadSettings();

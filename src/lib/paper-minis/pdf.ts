@@ -36,12 +36,10 @@ const mm = (v: number) => v * MM_TO_PT;
 
 const MARK_GREY = 0.5;
 
-// The scale check printed in each sheet's top margin. A print dialog left on
-// "Fit to page" shrinks the whole sheet by a few per cent, which no amount of
-// care in the layout can undo, so the sheet has to let the user see it happen.
-// 100 mm makes a 3% shrink a 3 mm shortfall, visible against any ruler. It sits
-// in the top margin, clear of the first row, because a printer's unprintable
-// strip is narrower at the top than at the bottom on most home printers.
+// The scale check occupies a reserved band above the packed layout. A print
+// dialog shrinks the whole sheet by a few per cent, which no amount of care in
+// the layout can undo, so the sheet has to let the user see it happen.
+// 100 mm makes a 3% shrink a 3 mm shortfall, visible against any ruler.
 export const SCALE_BAR_MM = 100;
 const SCALE_BAR_Y_FROM_TOP_MM = 5.5;
 const SCALE_BAR_THICKNESS_MM = 0.4;
@@ -111,8 +109,8 @@ export async function generatePDF(
             -1,
             1,
             0,
-            mm(CUT_MARK_EXTENT_MM + xMm + CUT_MARK_EXTENT_MM),
-            mm(scaledPageHmm - SCALE_BAR_BAND_MM - CUT_MARK_EXTENT_MM - yMm - CUT_MARK_EXTENT_MM),
+            mm(xMm + CUT_MARK_EXTENT_MM),
+            mm(scaledPageHmm - SCALE_BAR_BAND_MM - yMm - CUT_MARK_EXTENT_MM),
           ),
         );
         drawMini(pdfPage, mini, faces.get(mini.entryIndex)!, 0, mini.totalHeightMm, font);

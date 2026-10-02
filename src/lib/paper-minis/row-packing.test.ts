@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { GAP_MM, packRows } from './packing.ts';
-import { type PackOptions, resolveMinis, usableAreaMm } from './geometry.ts';
+import { packableAreaMm, type PackOptions, resolveMinis } from './geometry.ts';
 import type { PackingEntry as Entry } from './types.ts';
 
 import { test as t } from 'bun:test';
@@ -21,7 +21,7 @@ const entry = (over: Partial<Entry>): Entry => ({
 const rowCandidate = (entries: Entry[], opts: PackOptions) =>
   packRows(resolveMinis(entries, opts), opts);
 
-const { widthMm: usableW, heightMm: usableH } = usableAreaMm({ pageSize: 'a4' });
+const { widthMm: usableW, heightMm: usableH } = packableAreaMm({ pageSize: 'a4' });
 
 const sheetOpts = { pageSize: 'a4', numberDuplicates: false } as const;
 
@@ -72,24 +72,24 @@ t('9 medium squares spill onto a second page', () => {
 // --- gap/margin math at boundaries ---
 
 t('a row exactly filling usable width packs as one row', () => {
-  // Widths that exactly hit the boundary: a 44.5mm base under a short figure,
-  // 4 of them: 4*44.5 + 3*4 = 190. Landscape art is capped at 30 x 10mm, well
-  // inside the base.
+  // Widths that exactly hit the 1:1-scale packable boundary: a 48.7mm base
+  // under a short figure, 4 of them: 4*48.7 + 3*4 = 206.8. Landscape art is
+  // capped at 30 x 10mm, well inside the base.
   const r = rowCandidate(
     [
       entry({
         heightSlot: 'custom',
-        customWidthMm: 44.5,
+        customWidthMm: 48.7,
         customHeightMm: 20,
         count: 4,
         naturalWidth: 300,
       }),
     ],
-    { pageSize: 'a4', numberDuplicates: false, marginMm: 0 },
+    { pageSize: 'a4', numberDuplicates: false, marginMm: 0, printerScale: 1 },
   );
   assert.deepEqual(
     r.pages[0].rows.map((row) => [row.items.length, row.widthMm]),
-    [[3, 141.5], [1, 44.5]],
+    [[4, 206.8]],
   );
 });
 

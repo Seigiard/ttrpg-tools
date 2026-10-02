@@ -294,7 +294,7 @@ export function createPaperMinisStore({
     const resolved = resolveEntry(
       { ...row, calibration, count: 1 },
       0,
-      $settings.get(),
+      packOptions($settings.get()),
     );
     const { mini } = resolved;
     if (!mini) return undefined;
@@ -696,12 +696,7 @@ export function createPaperMinisStore({
       fields.marginMm >= 0
     )
       next.marginMm = fields.marginMm;
-    if (
-      typeof fields.printerMeasurementMm === 'number' &&
-      Number.isFinite(fields.printerMeasurementMm) &&
-      fields.printerMeasurementMm >= 80 &&
-      fields.printerMeasurementMm <= 100
-    )
+    if (isValidPrinterMeasurement(fields.printerMeasurementMm))
       next.printerMeasurementMm = fields.printerMeasurementMm;
     if (typeof fields.numberDuplicates === 'boolean')
       next.numberDuplicates = fields.numberDuplicates;
@@ -796,6 +791,13 @@ export function createPaperMinisStore({
       const value = JSON.parse(localStorage.getItem(storageKey) ?? 'null');
       const previous = $settings.get();
       const next = validatedSettings(value, previous);
+      if (
+        value &&
+        typeof value === 'object' &&
+        'printerMeasurementMm' in value &&
+        !isValidPrinterMeasurement(value.printerMeasurementMm)
+      )
+        delete next.printerMeasurementMm;
       $settings.set(next);
       $inputs.set({
         ...$inputs.get(),
@@ -963,4 +965,8 @@ export function createPaperMinisStore({
       if (copy.backImage && !copy.backArtwork) void setImage(copy.id, copy.backImage, true);
     },
   };
+}
+
+function isValidPrinterMeasurement(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 80 && value <= 100;
 }
