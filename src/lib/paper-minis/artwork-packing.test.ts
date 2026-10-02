@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { packEntries } from './packing.ts';
+import { packEntries, resolveEntry } from './packing.ts';
 import type { PreparedArtwork, Entry } from './types.ts';
 
 import { test as t } from 'bun:test';
@@ -30,16 +30,6 @@ t('9 prepared medium squares require two A4 sheets', () => {
   const result = packEntries(entries, opts);
   // #then
   assert.deepEqual([result.miniCount, result.pageCount], [9, 2]);
-});
-
-t('packEntries omits entries with null artwork', () => {
-  // #given
-  const e = entry(29);
-  // #when
-  e.artwork = null;
-  const result = packEntries([e], opts);
-  // #then
-  assert.deepEqual([result.miniCount, result.pageCount], [0, 0]);
 });
 
 t('packEntries uses the current artwork height', () => {
@@ -93,15 +83,6 @@ t('a custom entry carries both of its dimensions into the fit and the stand', ()
   );
 });
 
-t('an entry waits while its back artwork loads', () => {
-  // #given  a back file is chosen but not prepared yet
-  const e: Entry = { ...entry(1), backImage: new File([], 'back.png') };
-  // #when
-  const result = packEntries([e], opts);
-  // #then
-  assert.deepEqual([result.miniCount, result.pageCount], [0, 0]);
-});
-
 t('each row reports why it does not print yet', () => {
   // #given
   const file = new File([], 'front.png');
@@ -121,6 +102,40 @@ t('each row reports why it does not print yet', () => {
   assert.deepEqual(
     result.entries.map(({ state }) => state),
     ['empty', 'loading', 'failed', 'failed', 'loading', 'empty', 'empty', 'upright'],
+  );
+});
+
+t('resolveEntry reports readiness and the geometry the sheet layout places', () => {
+  // #given
+  const loading: Entry = { ...entry(1), backImage: new File([], 'back.png') };
+  const oversized: Entry = {
+    ...entry(1),
+    heightSlot: 'custom',
+    customWidthMm: 200,
+    customHeightMm: 30,
+  };
+  const empty = entry(0);
+  const normal = entry(1);
+  // #when
+  const resolved = [loading, oversized, empty].map((candidate, entryIndex) =>
+    resolveEntry(candidate, entryIndex, opts),
+  );
+  const resolvedNormal = resolveEntry(normal, 0, opts);
+  const placed = packEntries([normal], opts).pages[0].placements[0].mini;
+  // #then
+  assert.deepEqual(
+    {
+      loading: resolved[0],
+      oversized: resolved[1].status,
+      empty: resolved[2],
+      normal: { status: resolvedNormal.status, copy: resolvedNormal.mini?.copies[0] },
+    },
+    {
+      loading: { status: { state: 'loading', limits: [] }, mini: undefined },
+      oversized: { state: 'oversized', limits: [] },
+      empty: { status: { state: 'empty', limits: [] }, mini: undefined },
+      normal: { status: { state: 'upright', limits: [] }, copy: placed },
+    },
   );
 });
 

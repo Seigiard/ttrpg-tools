@@ -350,7 +350,7 @@ test('applying untouched default lines closes the session without changing the r
   }).toEqual({ applied: true, session: undefined, calibration: undefined, revision });
 });
 
-test('an untouched session previews the uncalibrated fit and an edit exposes its limit warning', async () => {
+test('a calibration session replaces an oversized warning when edited geometry fits', async () => {
   // #given
   const store = setup();
   const id = store.addBlank()!;
@@ -373,7 +373,10 @@ test('an untouched session previews the uncalibrated fit and an edit exposes its
       warning: edited?.warning,
     },
   }).toEqual({
-    untouched: { printedHeightMm: 140, warning: undefined },
+    untouched: {
+      printedHeightMm: 140,
+      warning: 'Не помещается на лист. Уменьшите размер или поля. Эта миниатюра не попадёт в PDF.',
+    },
     edited: {
       printedHeightMm: 124,
       warning: 'Миниатюра уменьшена: лимит ширины, размер листа.',
@@ -448,6 +451,43 @@ test('calibration cannot open without prepared front artwork or during PDF gener
     session: undefined,
     acceptsWhileBusy: false,
     acceptsAfter: true,
+  });
+});
+
+test('calibration cannot open while the selected back artwork is loading', async () => {
+  // #given
+  const store = setup();
+  const id = store.addBlank()!;
+  await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
+  const slow = deferredFile();
+  const pending = store.setImage(id, slow.file, true);
+  // #when
+  const whileLoading = store.openCalibration(id);
+  slow.release();
+  await pending;
+  const afterLoading = store.openCalibration(id);
+  // #then
+  expect({ whileLoading, afterLoading, open: store.$calibration.get() !== undefined }).toEqual({
+    whileLoading: false,
+    afterLoading: true,
+    open: true,
+  });
+});
+
+test('a zero-copy oversized row can open calibration with the row warning', async () => {
+  // #given
+  const store = setup();
+  const id = store.addBlank()!;
+  await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
+  store.setSize(id, 'custom');
+  store.setCustomDimensions(id, { width: '300', height: '30' });
+  store.$rows.set(store.$rows.get().map((row) => Object.assign({}, row, { count: 0 })));
+  // #when
+  const opened = store.openCalibration(id);
+  // #then
+  expect({ opened, warning: store.$calibration.get()?.warning }).toEqual({
+    opened: true,
+    warning: 'Не помещается на лист. Уменьшите размер или поля. Эта миниатюра не попадёт в PDF.',
   });
 });
 

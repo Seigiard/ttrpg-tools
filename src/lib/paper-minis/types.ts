@@ -54,7 +54,7 @@ export type PreparedArtwork = {
   readonly height: number;
 };
 
-// Geometry-only input keeps packing independent of image preparation.
+// Test seam for exercising geometry without constructing prepared artwork.
 export type PackingEntry = Pick<
   Entry,
   'heightSlot' | 'customWidthMm' | 'customHeightMm' | 'count' | 'calibration'

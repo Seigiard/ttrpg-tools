@@ -25,7 +25,7 @@ export const PAGE_SIZES_MM = {
 
 export type PageSizeKey = keyof typeof PAGE_SIZES_MM;
 
-export const MARGIN_MM = 10;
+export const SHEET_MARGIN_MM = 10;
 export const DEFAULT_FIGURE_MARGIN_MM = 2;
 
 export type PackOptions = {
@@ -36,7 +36,7 @@ export type PackOptions = {
 
 export function usableAreaMm(pageSize: PageSizeKey): { widthMm: number; heightMm: number } {
   const { w, h } = PAGE_SIZES_MM[pageSize];
-  return { widthMm: w - MARGIN_MM * 2, heightMm: h - MARGIN_MM * 2 };
+  return { widthMm: w - SHEET_MARGIN_MM * 2, heightMm: h - SHEET_MARGIN_MM * 2 };
 }
 
 export const CUT_MARK_ARM_MM = 1.5;
@@ -198,8 +198,7 @@ function fitMiniFaces(
   opts: PackOptions,
 ): { front: FigureFitMm; back?: FigureFitMm } {
   const dimensions = resolveSizeDimensionsMm(e);
-  const usableHeightMm = PAGE_SIZES_MM[opts.pageSize].h - MARGIN_MM * 2;
-  const usableWidthMm = PAGE_SIZES_MM[opts.pageSize].w - MARGIN_MM * 2;
+  const { widthMm: usableWidthMm, heightMm: usableHeightMm } = usableAreaMm(opts.pageSize);
   const marginMm = opts.marginMm ?? DEFAULT_FIGURE_MARGIN_MM;
   const imageSpaceMm = (usableHeightMm - marginMm * 2 - resolveTabHeightMm(e) * 4) / 2;
   const calibrated = calibrationGap(e.calibration);
@@ -255,9 +254,15 @@ const fitLimitLabels: Record<FigureFitLimit, string> = {
   page: 'размер листа',
 };
 
-export function fitLimitWarning(limits: readonly FigureFitLimit[]): string | undefined {
+function fitLimitWarning(limits: readonly FigureFitLimit[]): string | undefined {
   if (!limits.length) return undefined;
   return `Миниатюра уменьшена: ${limits.map((limit) => fitLimitLabels[limit]).join(', ')}.`;
+}
+
+export function entryStatusWarning(status: EntryStatus): string | undefined {
+  if (status.state === 'oversized')
+    return 'Не помещается на лист. Уменьшите размер или поля. Эта миниатюра не попадёт в PDF.';
+  return fitLimitWarning(status.limits);
 }
 
 // Resolves one entry into the geometry every copy prints with and how it sits

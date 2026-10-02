@@ -6,7 +6,7 @@ import { createPaperMinisStore, type CalibrationSession } from '@/stores/paper-m
 import { ARTWORK_ACCEPT, artworkMimeType } from '@/lib/paper-minis/artwork-formats';
 import { isSupportedArtwork } from '@/lib/paper-minis/artwork';
 import type { CalibrationLine } from '@/lib/paper-minis/calibration';
-import { fitLimitWarning } from '@/lib/paper-minis/geometry';
+import { entryStatusWarning } from '@/lib/paper-minis/geometry';
 import { buildFilename } from '@/lib/paper-minis/pdf';
 import { HEIGHT_SLOT_ORDER, slotLabel, slotGeometryLabel, slotName } from '@/lib/paper-minis/sizes';
 import type { HeightCalibration, MiniSize, PreparedArtwork } from '@/lib/paper-minis/types';
@@ -273,7 +273,10 @@ function HeightCalibrationDialog({
           </p>
         </div>
         {session.warning && (
-          <p role="status" className="mt-3 border-l-2 border-warning pl-3 text-sm text-warning">
+          <p
+            role="status"
+            className={`mt-3 border-l-2 pl-3 text-sm ${session.warningTone === 'danger' ? 'border-danger text-danger' : 'border-warning text-warning'}`}
+          >
             {session.warning}
           </p>
         )}
@@ -619,7 +622,7 @@ export default function PaperMinisGenerator() {
               <h2 className="sr-only">Миниатюры</h2>
               {rows.map((row, index) => {
                 const status = packed.entries[index];
-                const fitWarning = fitLimitWarning(status?.limits ?? []);
+                const statusWarning = status && entryStatusWarning(status);
                 const rowInputs = inputs.rows[row.id] ?? {
                   count: { text: String(row.count), valid: true },
                   customWidthMm: {
@@ -700,7 +703,7 @@ export default function PaperMinisGenerator() {
                           <Button
                             variant="outline"
                             className="min-h-11"
-                            disabled={!row.artwork}
+                            disabled={!row.artwork || status?.state === 'loading'}
                             onClick={(event) => {
                               calibrationOpener.current = event.currentTarget;
                               store.openCalibration(row.id);
@@ -790,21 +793,12 @@ export default function PaperMinisGenerator() {
                         ? 'В PDF попадёт отдельное изображение оборота.'
                         : 'Без отдельного файла лицевая сторона будет отражена автоматически.'}
                     </p>
-                    {status?.state === 'oversized' && (
+                    {statusWarning && (
                       <p
                         role="status"
-                        className="mt-3 border-l-2 border-danger pl-3 text-sm text-danger"
+                        className={`mt-3 border-l-2 pl-3 text-sm ${status.state === 'oversized' ? 'border-danger text-danger' : 'border-warning text-warning'}`}
                       >
-                        Не помещается на лист. Уменьшите размер или поля. Эта миниатюра не попадёт в
-                        PDF.
-                      </p>
-                    )}
-                    {fitWarning && (
-                      <p
-                        role="status"
-                        className="mt-3 border-l-2 border-warning pl-3 text-sm text-warning"
-                      >
-                        {fitWarning}
+                        {statusWarning}
                       </p>
                     )}
                     {[

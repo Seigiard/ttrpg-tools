@@ -32,6 +32,8 @@ export type PackResult = {
   entries: EntryStatus[]; // indexed like the input entries
 };
 
+export type ResolvedEntry = { status: EntryStatus; mini: ResolvedMini | undefined };
+
 // A back file is chosen but not prepared yet. Such an entry is not ready, so
 // it does not print reflected for a moment and then jump to its own back.
 function isBackArtworkLoading(entry: Entry): boolean {
@@ -46,7 +48,7 @@ function unpreparedState(entry: Entry): 'empty' | 'loading' | 'failed' | undefin
   return isBackArtworkLoading(entry) ? 'loading' : undefined;
 }
 
-export function toPackingEntry(entry: Entry): PackingEntry {
+function toPackingEntry(entry: Entry): PackingEntry {
   return {
     heightSlot: entry.heightSlot,
     customWidthMm: entry.customWidthMm,
@@ -60,33 +62,48 @@ export function toPackingEntry(entry: Entry): PackingEntry {
   };
 }
 
+function resolvePackingEntry(
+  entry: PackingEntry,
+  entryIndex: number,
+  opts: PackOptions,
+): ResolvedEntry {
+  const mini = resolveMini(entry, entryIndex, opts);
+  if (!mini) return { status: { state: 'empty', limits: [] }, mini: undefined };
+  const status: EntryStatus =
+    mini.orientation === 'oversized'
+      ? { state: 'oversized', limits: [] }
+      : { state: mini.orientation, limits: mini.limits };
+  return { status, mini };
+}
+
+// Resolve the prepared state, packing geometry and print status of one row.
+export function resolveEntry(entry: Entry, entryIndex: number, opts: PackOptions): ResolvedEntry {
+  const state = unpreparedState(entry);
+  return state
+    ? { status: { state, limits: [] }, mini: undefined }
+    : resolvePackingEntry(toPackingEntry(entry), entryIndex, opts);
+}
+
 // Project prepared artwork into packing geometry without changing entry indices.
-// An entry that is not prepared packs as having no image, then reports why.
 export function packEntries(entries: Entry[], opts: PackOptions): PackResult {
-  const unprepared = entries.map(unpreparedState);
-  const result = packMinis(
-    entries.map((entry, i) =>
-      unprepared[i]
-        ? { ...toPackingEntry(entry), naturalWidth: undefined, naturalHeight: undefined }
-        : toPackingEntry(entry),
-    ),
+  return packResolvedEntries(
+    entries.map((entry, entryIndex) => resolveEntry(entry, entryIndex, opts)),
     opts,
   );
-  return {
-    ...result,
-    entries: result.entries.map((status, i) => {
-      const state = unprepared[i];
-      return state ? { state, limits: [] } : status;
-    }),
-  };
 }
 
 // Resolve every entry's geometry once, then compare the two layouts of the
 // same resolved minis. The row candidate is also a useful baseline for layout
 // regression tests.
 export function packMinis(entries: PackingEntry[], opts: PackOptions): PackResult {
-  const minis = entries.map((entry, entryIndex) => resolveMini(entry, entryIndex, opts));
-  const resolved = minis.filter((mini) => mini !== undefined);
+  return packResolvedEntries(
+    entries.map((entry, entryIndex) => resolvePackingEntry(entry, entryIndex, opts)),
+    opts,
+  );
+}
+
+function packResolvedEntries(entries: ResolvedEntry[], opts: PackOptions): PackResult {
+  const resolved = entries.flatMap(({ mini }) => (mini ? [mini] : []));
   const rows = packRows(resolved, opts);
   const { widthMm, heightMm } = usableAreaMm(opts.pageSize);
   const guillotine = packGuillotine(resolved, widthMm, heightMm);
@@ -97,12 +114,7 @@ export function packMinis(entries: PackingEntry[], opts: PackOptions): PackResul
     miniCount: resolved
       .filter((mini) => mini.orientation !== 'oversized')
       .reduce((sum, mini) => sum + mini.copies.length, 0),
-    entries: minis.map((mini) => {
-      if (!mini) return { state: 'empty', limits: [] };
-      // A cap on a mini that does not print shrank nothing on paper.
-      if (mini.orientation === 'oversized') return { state: 'oversized', limits: [] };
-      return { state: mini.orientation, limits: mini.limits };
-    }),
+    entries: entries.map(({ status }) => status),
   };
 }
 

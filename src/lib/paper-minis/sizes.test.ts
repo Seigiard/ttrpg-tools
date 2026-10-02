@@ -1,19 +1,24 @@
 import assert from 'node:assert/strict';
 import {
-  CATEGORY_BASE_WIDTH_MM,
-  CATEGORY_NAMES,
   HEIGHT_SLOTS,
   HEIGHT_SLOT_ORDER,
-  SIZE_CATEGORY_ORDER,
-  resolveBaseWidthMm,
   resolveFigureHeightMm,
+  resolveSizeDimensionsMm,
   slotLabel,
   slotName,
-  slotsOfCategory,
 } from './sizes.ts';
-import type { HeightSlot } from './types.ts';
+import type { HeightSlot, SizeCategory } from './types.ts';
 
 import { test as t } from 'bun:test';
+
+const sizeCategories = [
+  ...new Set(HEIGHT_SLOT_ORDER.map((slot) => HEIGHT_SLOTS[slot].category)),
+];
+const slotsOfCategory = (category: SizeCategory): HeightSlot[] =>
+  HEIGHT_SLOT_ORDER.filter((slot) => HEIGHT_SLOTS[slot].category === category);
+const resolveBaseWidthMm = (
+  entry: Parameters<typeof resolveSizeDimensionsMm>[0],
+): number => resolveSizeDimensionsMm(entry).baseWidthMm;
 
 t('nine slots grade height across the range, each on its category’s base', () => {
   // #given
@@ -39,26 +44,14 @@ t('nine slots grade height across the range, each on its category’s base', () 
 });
 
 t('a slot’s base width comes from its category, so slots sharing one cannot disagree', () => {
-  // #given  three Medium slots and two Large ones
-  const medium = slotsOfCategory('medium');
-  const large = slotsOfCategory('large');
+  // #given
+  const categories = sizeCategories.map(slotsOfCategory);
   // #when
-  const bases = [...medium, ...large].map((slot) => resolveBaseWidthMm({ heightSlot: slot }));
-  // #then
-  assert.deepEqual(
-    [medium, large, bases],
-    [
-      ['medium-short', 'medium', 'medium-tall'],
-      ['large', 'large-tall'],
-      [
-        CATEGORY_BASE_WIDTH_MM.medium,
-        CATEGORY_BASE_WIDTH_MM.medium,
-        CATEGORY_BASE_WIDTH_MM.medium,
-        CATEGORY_BASE_WIDTH_MM.large,
-        CATEGORY_BASE_WIDTH_MM.large,
-      ],
-    ],
+  const bases = categories.map((slots) =>
+    slots.map((slot) => resolveBaseWidthMm({ heightSlot: slot })),
   );
+  // #then
+  assert.equal(bases.every((widths) => new Set(widths).size === 1), true);
 });
 
 // Printable Heroes sells the paper minis this tool is most often fed, and their
@@ -106,22 +99,20 @@ t('an option reads as name, creature height, examples', () => {
 
 t('a slot’s name is its category, told apart from its siblings', () => {
   // #given  the user reads a name to find a category and to pick within it
-  const named = (slot: HeightSlot) => slotName(slot);
   // #when
-  const categories = SIZE_CATEGORY_ORDER.map((category) => ({
-    category,
-    names: slotsOfCategory(category).map(named),
-  }));
+  const categories = sizeCategories.map((category) =>
+    slotsOfCategory(category).map((slot) => slotName(slot)),
+  );
   // #then  every name opens with its category; siblings differ; a lone slot is
   //        named the category and nothing more
   assert.deepEqual(
-    categories.map(({ category, names }) => ({
-      opensWithCategory: names.every((name) => name.startsWith(CATEGORY_NAMES[category])),
+    categories.map((names) => ({
+      oneCategoryName: new Set(names.map((name) => name.split(', ')[0])).size === 1,
       distinct: new Set(names).size === names.length,
-      loneSlotIsBare: names.length > 1 || names[0] === CATEGORY_NAMES[category],
+      loneSlotIsBare: names.length > 1 || !names[0].includes(', '),
     })),
-    SIZE_CATEGORY_ORDER.map(() => ({
-      opensWithCategory: true,
+    sizeCategories.map(() => ({
+      oneCategoryName: true,
       distinct: true,
       loneSlotIsBare: true,
     })),

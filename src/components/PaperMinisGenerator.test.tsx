@@ -432,6 +432,35 @@ test('height calibration stays disabled while the front loads and does not open 
   }).toEqual({ disabledDuringLoad: true, disabledAfter: false, dialog: false });
 });
 
+test('height calibration stays disabled until the selected back artwork is ready', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  let release!: (bytes: ArrayBuffer) => void;
+  const file = new File([png], 'pending-back.png', { type: 'image/png' });
+  file.arrayBuffer = () =>
+    new Promise((resolve) => {
+      release = resolve;
+    });
+  fireEvent.change(
+    screen.getByLabelText('Оборот: отражение лицевой стороны', { selector: 'input' }),
+    { target: { files: [file] } },
+  );
+  const button = screen.getByRole<HTMLButtonElement>('button', { name: 'Задать рост' });
+  // #when
+  const disabledDuringLoad = button.disabled;
+  fireEvent.click(button);
+  await act(async () => {
+    release(Uint8Array.from(png).buffer);
+  });
+  // #then
+  expect({
+    disabledDuringLoad,
+    disabledAfter: button.disabled,
+    dialog: screen.queryByRole('dialog') !== null,
+  }).toEqual({ disabledDuringLoad: true, disabledAfter: false, dialog: false });
+});
+
 const overlay = (slot: HTMLElement) =>
   ['head', 'feet'].map(
     (key) => within(slot).queryByTestId(`calibration-${key}`)?.style.top ?? null,
@@ -481,6 +510,29 @@ test('a front-only calibration dialog exposes sliders without an orphan tab stop
     panels: dialog.queryAllByRole('tabpanel').length,
     sliders: dialog.getAllByRole('slider').map((el) => el.getAttribute('aria-label')),
   }).toEqual({ tabs: 0, panels: 0, sliders: ['Голова', 'Ступни'] });
+});
+
+test('an oversized mini uses danger styling in both the row and calibration dialog', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  fireEvent.change(screen.getByRole('combobox', { name: 'Высота существа' }), {
+    target: { value: 'custom' },
+  });
+  fireEvent.change(screen.getByRole('spinbutton', { name: 'Основание, мм' }), {
+    target: { value: '300' },
+  });
+  fireEvent.change(screen.getByRole('spinbutton', { name: 'Фигурка, мм' }), {
+    target: { value: '30' },
+  });
+  const warning = 'Не помещается на лист. Уменьшите размер или поля. Эта миниатюра не попадёт в PDF.';
+  // #when
+  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
+  // #then
+  expect(screen.getAllByText(warning).map((element) => element.classList.contains('text-danger'))).toEqual([
+    true,
+    true,
+  ]);
 });
 
 test('front height dialog applies pointer calibration and row reset clears it', async () => {
