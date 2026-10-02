@@ -414,6 +414,33 @@ test('a zip with a non-image entry reports skipped files', async () => {
   });
 });
 
+test('zip folders and macOS metadata entries are ignored silently', async () => {
+  // #given
+  const store = setup();
+  const zip = zipFile({
+    'folder/': Uint8Array.from([]),
+    '__MACOSX/._goblin-small-front.png': Uint8Array.from([1, 2, 3]),
+    '.DS_Store': Uint8Array.from([1, 2, 3]),
+    'folder/goblin-small-front.png': Uint8Array.from(png),
+  });
+
+  // #when
+  await store.ingest([zip]);
+
+  // #then
+  expect({
+    message: store.$message.get(),
+    rows: store.$rows.get().map((row) => ({
+      name: row.name,
+      heightSlot: row.heightSlot,
+      front: row.image?.name,
+    })),
+  }).toEqual({
+    message: '',
+    rows: [{ name: 'Goblin', heightSlot: 'small', front: 'goblin-small-front.png' }],
+  });
+});
+
 test('export zip includes oversized artwork and skips rows without artwork', async () => {
   // #given
   const store = setup();

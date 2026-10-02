@@ -651,7 +651,7 @@ export default function PaperMinisGenerator() {
               ref={files}
               type="file"
               multiple
-              accept="image/png,image/jpeg,image/webp"
+              accept="image/png,image/jpeg,image/webp,.zip,application/zip"
               className="hidden"
               aria-label="Добавить изображения"
               onChange={(event) => {

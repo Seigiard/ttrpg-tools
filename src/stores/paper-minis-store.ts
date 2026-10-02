@@ -129,6 +129,17 @@ function flattenedFileName(path: string): string | undefined {
   return path.split(/[\\/]/).findLast((part) => part !== '');
 }
 
+function isIgnoredZipEntry(path: string): boolean {
+  const name = flattenedFileName(path);
+  return (
+    path.endsWith('/') ||
+    path.startsWith('__MACOSX/') ||
+    name === undefined ||
+    name.startsWith('._') ||
+    name === '.DS_Store'
+  );
+}
+
 function isZipFile(file: File): boolean {
   return file.type.toLowerCase() === 'application/zip' || fileExtension(file.name) === 'zip';
 }
@@ -535,6 +546,7 @@ export function createPaperMinisStore({
           const extracted: File[] = [];
           let skipped = false;
           for (const [path, bytes] of Object.entries(entries)) {
+            if (isIgnoredZipEntry(path)) continue;
             const name = flattenedFileName(path);
             const type = name && artworkTypeFromName(name);
             if (!name || !type) {
