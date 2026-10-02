@@ -1,21 +1,42 @@
 import { PDFDocument } from 'pdf-lib';
+import { canvasToPngBytes } from './canvas';
+import { createArtworkNormalizer } from './normalization';
 import type { PreparedArtwork } from './types';
 
-const cache = new WeakMap<File, Promise<PreparedArtwork>>();
+export type ArtworkPreparation = { artwork: PreparedArtwork; warning?: string };
+export type ArtworkPreparationOptions = {
+  normalize: boolean;
+  isCurrent: () => boolean;
+};
+export type PaperMinisArtwork = {
+  prepare(file: File, options: ArtworkPreparationOptions): Promise<ArtworkPreparation>;
+};
 
 export function isSupportedArtwork(file: File): boolean {
   return ['image/png', 'image/jpeg', 'image/webp'].includes(file.type.toLowerCase());
 }
 
-// Keep the dimensions of the printed bytes, not browser EXIF-rotated dimensions.
-export function prepareArtwork(file: File): Promise<PreparedArtwork> {
-  let pending = cache.get(file);
-  if (!pending) {
-    pending = decodeArtwork(file);
-    cache.set(file, pending);
-    void pending.catch(() => cache.delete(file));
+export function createCanvasArtwork(): PaperMinisArtwork {
+  const cache = new WeakMap<File, Promise<PreparedArtwork>>();
+  const normalizeArtwork = createArtworkNormalizer();
+
+  // Keep the dimensions of the printed bytes, not browser EXIF-rotated dimensions.
+  function prepareOriginal(file: File): Promise<PreparedArtwork> {
+    let pending = cache.get(file);
+    if (!pending) {
+      pending = decodeArtwork(file);
+      cache.set(file, pending);
+      void pending.catch(() => cache.delete(file));
+    }
+    return pending;
   }
-  return pending;
+
+  return {
+    async prepare(file, { normalize, isCurrent }) {
+      const original = await prepareOriginal(file);
+      return normalize && isCurrent() ? normalizeArtwork(original) : { artwork: original };
+    },
+  };
 }
 
 async function decodeArtwork(file: File): Promise<PreparedArtwork> {
@@ -66,14 +87,4 @@ async function fileToImageBytes(file: File): Promise<{ bytes: Uint8Array; format
     bitmap.close();
     canvas.width = canvas.height = 0;
   }
-}
-
-export async function canvasToPngBytes(canvas: HTMLCanvasElement): Promise<Uint8Array> {
-  const blob: Blob = await new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (result) => (result ? resolve(result) : reject(new Error('canvas.toBlob failed'))),
-      'image/png',
-    );
-  });
-  return new Uint8Array(await blob.arrayBuffer());
 }
