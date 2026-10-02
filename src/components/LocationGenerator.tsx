@@ -1,11 +1,12 @@
 import { useStore } from '@nanostores/react';
 import { RefreshCw } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
+import { ReferenceList } from '@/components/ReferenceList';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import type { LocationRow, LocationTable } from '@/data/types';
+import type { LocationTable } from '@/data/types';
 import { createLocationStore, type Roll } from '@/stores/location-store';
 
 interface Props<Biome extends string> {
@@ -190,53 +191,24 @@ function ReferenceTables<Biome extends string>({
   const highlightDetail = roll ? roll.detailIndex : null;
   return (
     <div className="grid gap-8 md:grid-cols-2">
-      <ReferenceTable
+      <ReferenceList
         title={`Ориентир · ${table.biomeLabels[biome]}`}
         rows={table.landmarks[biome].rows}
-        highlightIndex={highlightLandmark}
+        hitIndex={highlightLandmark}
         testId="reference-landmarks"
-      />
-      <ReferenceTable
+        label={(_, i) => i + 1}
+      >
+        {(row) => row.ru}
+      </ReferenceList>
+      <ReferenceList
         title="Деталь локации"
         rows={table.details.rows}
-        highlightIndex={highlightDetail}
+        hitIndex={highlightDetail}
         testId="reference-details"
-      />
+        label={(_, i) => i + 1}
+      >
+        {(row) => row.ru}
+      </ReferenceList>
     </div>
-  );
-}
-
-interface ReferenceTableProps {
-  title: string;
-  rows: readonly LocationRow[];
-  highlightIndex: number | null;
-  testId: string;
-}
-
-function ReferenceTable({ title, rows, highlightIndex, testId }: ReferenceTableProps) {
-  return (
-    <section data-testid={testId}>
-      <h3 className="font-mono text-xs uppercase tracking-wider text-text-muted">{title}</h3>
-      <ul className="mt-3 divide-y divide-border">
-        {rows.map((row, i) => {
-          const isHit = i === highlightIndex;
-          return (
-            <li
-              key={i}
-              data-row-index={i}
-              data-hit={isHit ? 'true' : undefined}
-              className={`flex gap-3 px-2 py-1.5 ${
-                isHit
-                  ? 'border-l-2 border-primary bg-primary/10 font-semibold text-text'
-                  : 'text-text-muted'
-              }`}
-            >
-              <span className="w-6 font-mono text-xs">{i + 1}</span>
-              <span className="flex-1 text-sm">{row.ru}</span>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
   );
 }

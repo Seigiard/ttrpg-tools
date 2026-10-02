@@ -1,11 +1,13 @@
 import { useStore } from '@nanostores/react';
 import { useEffect, useMemo } from 'react';
+import { referenceHitClass } from '@/components/ReferenceList';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { Season, WeatherTable } from '@/data/types';
-import { createWeatherStore, type WeatherRoll } from '@/stores/weather-store';
+import { formatRangeLabel, type RangePick } from '@/data/range-table';
+import { createWeatherStore } from '@/stores/weather-store';
 
 interface Props {
   table: WeatherTable;
@@ -59,7 +61,7 @@ export function WeatherGenerator({ table }: Props) {
 interface ResultCardProps {
   table: WeatherTable;
   season: Season;
-  roll: WeatherRoll | null;
+  roll: RangePick | null;
 }
 
 function ResultCard({ table, season, roll }: ResultCardProps) {
@@ -98,7 +100,7 @@ function ResultCard({ table, season, roll }: ResultCardProps) {
 interface ReferenceTableProps {
   table: WeatherTable;
   season: Season;
-  roll: WeatherRoll | null;
+  roll: RangePick | null;
 }
 
 function ReferenceTable({ table, season, roll }: ReferenceTableProps) {
@@ -130,7 +132,7 @@ function ReferenceTable({ table, season, roll }: ReferenceTableProps) {
           </thead>
           <tbody>
             {table.rows.map((row, i) => {
-              const rangeLabel = row.min === row.max ? String(row.min) : `${row.min}–${row.max}`;
+              const rangeLabel = formatRangeLabel(row);
               const isHitRow = i === hitRow;
               return (
                 <tr
@@ -142,11 +144,7 @@ function ReferenceTable({ table, season, roll }: ReferenceTableProps) {
                   {table.seasons.map((s) => {
                     const c = row.cells[s];
                     const isHit = isHitRow && s === season;
-                    const tone = isHit
-                      ? 'border-l-2 border-primary bg-primary/10 text-text'
-                      : s === season
-                        ? 'text-text'
-                        : 'text-text-muted';
+                    const tone = !isHit && s === season ? 'text-text' : referenceHitClass(isHit);
                     return (
                       <td
                         key={s}

@@ -68,4 +68,4 @@ useEffect(() => {
 
 ## Дизайн
 
-Токены — `src/styles/global.css` (`@theme` Tailwind v4), правила и палитра — `docs/DESIGN.md`. Используй семантические классы (`bg-primary`, `text-text-muted`, `font-display`), не сырые hex. Только системные шрифты. Цвет — не единственный носитель смысла (подсветка строки = цвет + левая граница + bold).
+Токены — `src/styles/global.css` (`@theme` Tailwind v4), правила и палитра — `docs/DESIGN.md`. Используй семантические классы (`bg-primary`, `text-text-muted`, `font-display`), не сырые hex. Только системные шрифты. Цвет — не единственный носитель смысла (подсветка строки = цвет + левая граница).
