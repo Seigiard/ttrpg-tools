@@ -612,7 +612,12 @@ export default function PaperMinisGenerator({ store: providedStore }: { store?: 
                     step="any"
                     value={inputs.printerMeasurement.text}
                     aria-invalid={!inputs.printerMeasurement.valid}
-                    onChange={(event) => store.setPrinterMeasurement(event.target.value)}
+                    onInput={(event) =>
+                      store.setPrinterMeasurement((event.target as HTMLInputElement).value)
+                    }
+                    onChange={(event) =>
+                      store.setPrinterMeasurement((event.target as HTMLInputElement).value)
+                    }
                     onBlur={store.commitPrinterMeasurement}
                   />
                 </label>

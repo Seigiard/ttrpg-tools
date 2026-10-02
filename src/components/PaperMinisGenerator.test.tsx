@@ -118,7 +118,7 @@ async function chooseBatchFiles(files: File[]) {
   });
 }
 
-test('printer scale shows approximate sizing until a measurement is entered and can be cleared', () => {
+test('printer scale shows approximate sizing until a measurement is entered and can be cleared', async () => {
   // #given
   render(<PaperMinisGenerator />);
   const measurement = screen.getByRole<HTMLInputElement>('spinbutton', {
@@ -127,9 +127,13 @@ test('printer scale shows approximate sizing until a measurement is entered and 
 
   // #when
   const defaultState = screen.getByText('Принтер не измерен: размеры приблизительные.').textContent;
-  fireEvent.change(measurement, { target: { value: '91' } });
+  changeValue(measurement, '91');
+  await waitFor(() => expect(screen.queryByText('Линейка измерена: 91 мм.')).toBeTruthy());
   const measuredState = screen.getByText('Линейка измерена: 91 мм.').textContent;
   fireEvent.click(screen.getByRole('button', { name: 'Сбросить измерение' }));
+  await waitFor(() =>
+    expect(screen.queryByText('Принтер не измерен: размеры приблизительные.')).toBeTruthy(),
+  );
 
   // #then
   expect({
