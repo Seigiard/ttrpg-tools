@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { PDFDocument, PDFArray, PDFDict, PDFName, PDFRawStream, decodePDFRawStream } from 'pdf-lib';
-import { generatePDF as renderPDF } from './pdf.ts';
+import { generatePDF as renderPDF, generatePrinterScaleTestSheet } from './pdf.ts';
 import { packEntries } from './packing.ts';
 import type { MiniLevels, PackOptions } from './geometry.ts';
 import type { Entry } from './types.ts';
@@ -85,6 +85,7 @@ async function read(bytes: Uint8Array, readUprightMinis = true) {
   const pdf = await PDFDocument.load(bytes);
   const shapes: Shape[] = [];
   const scaleBars: ScaleBar[] = [];
+  const pageSizes: { width: number; height: number }[] = [];
   // pdf-lib gives every draw its own random resource name, so an image is
   // known by the object its name points at, numbered in order of first use.
   const xobjects = new Map<string, string>();
@@ -94,6 +95,7 @@ async function read(bytes: Uint8Array, readUprightMinis = true) {
     return xobjects.get(ref)!;
   };
   for (const [pageIndex, page] of pdf.getPages().entries()) {
+    pageSizes.push(page.getSize());
     const scaleBar: ScaleBar = { page: pageIndex, marks: [], notes: [] };
     scaleBars.push(scaleBar);
     const fonts = page.node.Resources()!.lookup(PDFName.of('Font'), PDFDict);
@@ -178,6 +180,7 @@ async function read(bytes: Uint8Array, readUprightMinis = true) {
     minis: readUprightMinis ? minis(shapes) : [],
     texts: shapes.filter((s) => s.role === 'text').map((s) => s.text!),
     pages: pdf.getPageCount(),
+    pageSizes,
     scaleBars,
     printScaling: pdf.catalog.getViewerPreferences()?.getPrintScaling(),
   };
@@ -756,6 +759,49 @@ t('the scale bar expands by the inverse printer scale before printing', async ()
   );
   // #then  the print dialog reduces this PDF length to 100 mm on paper
   assert.equal(widthMm(sheet.scaleBars[0].marks[0]), Number((100 / printerScale).toFixed(6)));
+});
+
+t('the printer scale test sheet has a 100 mm ruler inside one selected-size page', async () => {
+  // #given
+  const selectedSizes = [
+    ['a4', [210, 297]],
+    ['letter', [216, 279]],
+  ] as const;
+  // #when
+  const sheets = await Promise.all(
+    selectedSizes.map(async ([pageSize]) => read(await generatePrinterScaleTestSheet(pageSize))),
+  );
+  // #then
+  assert.deepEqual(
+    sheets.map((sheet) => {
+      const ruler = sheet.scaleBars[0].marks[0];
+      const page = sheet.pageSizes[0];
+      return {
+        pages: sheet.pages,
+        sizeMm: [asMm(page.width), asMm(page.height)],
+        rulerLengthMm: widthMm(ruler),
+        rulerInsidePage:
+          ruler.left > 0 && ruler.right < page.width && ruler.bottom > 0 && ruler.top < page.height,
+        instruction: sheet.scaleBars[0].notes.map((note) => note.label),
+      };
+    }),
+    [
+      {
+        pages: 1,
+        sizeMm: selectedSizes[0][1],
+        rulerLengthMm: 100,
+        rulerInsidePage: true,
+        instruction: ['Print with Scale to Fit, measure the ruler, then enter the measured length.'],
+      },
+      {
+        pages: 1,
+        sizeMm: selectedSizes[1][1],
+        rulerLengthMm: 100,
+        rulerInsidePage: true,
+        instruction: ['Print with Scale to Fit, measure the ruler, then enter the measured length.'],
+      },
+    ],
+  );
 });
 
 t('every cut mark stays inside the PDF page at the default printer scale', async () => {
