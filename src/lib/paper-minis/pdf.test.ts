@@ -9,7 +9,8 @@ import {
   decodePDFRawStream,
 } from 'pdf-lib';
 import { generatePDF as renderPDF } from './pdf.ts';
-import { packEntries, type PackOptions } from './packing.ts';
+import { packEntries } from './packing.ts';
+import type { PackOptions } from './geometry.ts';
 import type { Entry } from './types.ts';
 
 import { test as t } from 'bun:test';
@@ -278,8 +279,8 @@ t('artwork for a mini that does not fit is not embedded in the PDF', async () =>
     ).length;
   // #then
   assert.deepEqual(
-    { miniCount: layout.miniCount, skipped: layout.skipped.length, imageObjects },
-    { miniCount: 1, skipped: 1, imageObjects: 1 },
+    { miniCount: layout.miniCount, states: layout.entries.map(({ state }) => state), imageObjects },
+    { miniCount: 1, states: ['upright', 'oversized'], imageObjects: 1 },
   );
 });
 

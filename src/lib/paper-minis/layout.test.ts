@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import { packMinis, packRows, type Placement } from './packing';
+import { resolveMinis } from './geometry';
 import { HEIGHT_SLOT_ORDER } from './sizes';
 import type { PackingEntry } from './types';
 
@@ -23,7 +24,7 @@ for (const pageSize of ['a4', 'letter'] as const) {
     const opts = { pageSize, numberDuplicates: false };
     // #when
     const result = packMinis(entries, opts);
-    const rows = packRows(entries, opts);
+    const rows = packRows(resolveMinis(entries, opts), opts);
     // #then
     expect({
       pages: result.pages.map((page) => page.placements.map((p) => [p.mini.entryIndex, p.rotated])),
@@ -76,7 +77,8 @@ test('row rescues scan earlier sheets before opening another dedicated strip', (
     rescue,
   ];
   // #when
-  const result = packRows(entries, { pageSize: 'a4', numberDuplicates: false });
+  const opts = { pageSize: 'a4', numberDuplicates: false } as const;
+  const result = packRows(resolveMinis(entries, opts), opts);
   // #then
   expect(result.pages.map((p) => p.rows.map((r) => r.items.map((m) => m.entryIndex)))).toEqual([
     [[0], [2]],
@@ -98,8 +100,8 @@ test('rescue fitting includes the stroked marks at the usable height boundary', 
     placed: result.pages.flatMap((page) =>
       page.placements.map((p) => [p.mini.entryIndex, p.rotated]),
     ),
-    oversized: result.oversizedEntryIndices,
-  }).toEqual({ placed: [[0, true]], oversized: [1] });
+    states: result.entries.map(({ state }) => state),
+  }).toEqual({ placed: [[0, true]], states: ['rotated', 'oversized'] });
 });
 
 test('short minis stack beside a tall mini instead of opening a second sheet', () => {
@@ -189,21 +191,26 @@ for (const pageSize of ['a4', 'letter'] as const) {
       const result = packMinis(entries, opts);
       const width = pageSize === 'a4' ? 190 : 196;
       const height = pageSize === 'a4' ? 277 : 259;
-      if (result.pageCount > packRows(entries, opts).pageCount) violations.push('more sheets');
+      if (result.pageCount > packRows(resolveMinis(entries, opts), opts).pageCount) violations.push('more sheets');
       if (JSON.stringify(result) !== JSON.stringify(packMinis(entries, opts)))
         violations.push('nondeterministic');
       const placed = result.pages.flatMap((page) => page.placements);
+      const oversized = result.entries.flatMap(({ state }, i) =>
+        state === 'oversized' ? [i] : [],
+      );
       const expected = entries
-        .flatMap((e, i) => Array.from({ length: e.count }, (_, j) => `${i}:${j}`))
+        .flatMap((e, i) =>
+          oversized.includes(i) ? [] : Array.from({ length: e.count }, (_, j) => `${i}:${j}`),
+        )
         .toSorted();
-      const actual = [...placed.map((p) => p.mini), ...result.skipped]
-        .map((m) => `${m.entryIndex}:${m.copyIndex}`)
+      const actual = placed
+        .map(({ mini }) => `${mini.entryIndex}:${mini.copyIndex}`)
         .toSorted();
       if (JSON.stringify(actual) !== JSON.stringify(expected))
         violations.push('lost or repeated copy');
       if (placed.length !== result.miniCount || result.pages.length !== result.pageCount)
         violations.push('count');
-      if (JSON.stringify(result.oversizedEntryIndices) !== '[10]') violations.push('oversize');
+      if (JSON.stringify(oversized) !== '[10]') violations.push('oversize');
       for (const page of result.pages) {
         for (const [i, a] of page.placements.entries()) {
           if (
@@ -240,7 +247,7 @@ for (const pageSize of ['a4', 'letter'] as const) {
   });
 }
 
-test('empty and unprepared inputs have no placements or skipped copies', () => {
+test('empty and unprepared inputs have no placements, and unprepared rows report empty', () => {
   // #given
   const inputs: PackingEntry[][] = [[], [{ heightSlot: 'medium', count: 1 }]];
   // #when
@@ -248,16 +255,10 @@ test('empty and unprepared inputs have no placements or skipped copies', () => {
     packMinis(entries, { pageSize: 'a4', numberDuplicates: false }),
   );
   // #then
-  expect(results).toEqual(
-    Array.from({ length: 2 }, () => ({
-      pages: [],
-      pageCount: 0,
-      miniCount: 0,
-      skipped: [],
-      oversizedEntryIndices: [],
-      limitedEntryFitLimits: [],
-    })),
-  );
+  expect(results).toEqual([
+    { pages: [], pageCount: 0, miniCount: 0, entries: [] },
+    { pages: [], pageCount: 0, miniCount: 0, entries: [{ state: 'empty', limits: [] }] },
+  ]);
 });
 
 test('an uncalibrated wide mini keeps its dimensions through rotation and strip packing', () => {
@@ -281,8 +282,7 @@ test('an uncalibrated wide mini keeps its dimensions through rotation and strip 
   // #then
   expect({
     count: result.miniCount,
-    skipped: result.skipped,
-    warnings: result.limitedEntryFitLimits,
+    entries: result.entries,
     pages: result.pages.map((page) =>
       page.placements.map(({ mini, rotated, xMm, yMm }) => ({
         entry: mini.entryIndex,
@@ -295,8 +295,10 @@ test('an uncalibrated wide mini keeps its dimensions through rotation and strip 
     ),
   }).toEqual({
     count: 2,
-    skipped: [],
-    warnings: [],
+    entries: [
+      { state: 'rotated', limits: [] },
+      { state: 'upright', limits: [] },
+    ],
     pages: [
       [
         {

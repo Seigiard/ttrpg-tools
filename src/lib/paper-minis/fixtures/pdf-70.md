@@ -11,7 +11,7 @@ This is a geometry reconstruction, not an exact archive of the original set. The
 
 ## Resolving the slot ambiguity
 
-The user's rough heights of 84, 58, 45 and 37 mm match artwork heights of 82, 56, 43 and 35 mm plus a 2 mm figure margin. `sizes.ts` fits to the slot height and only scales **down** if art exceeds the width cap (1.5 times slot height). Wide art cannot make a Medium taller.
+The user's rough heights of 84, 58, 45 and 37 mm match artwork heights of 82, 56, 43 and 35 mm plus a 2 mm figure margin. `fitFigure` in `geometry.ts` fits to the slot height and only scales **down** if art exceeds the width cap (1.5 times slot height). Wide art cannot make a Medium taller.
 
 The supplied dwarf y measurements give `(402−130)×100/629 = 43.243 mm` and `(698−427)×100/629 = 43.084 mm`. Normal art gives `(351−130)×100/629 = 35.135 mm`. The dwarf is therefore Medium-tall (43 mm art), not Large or Medium. Its measured outline is only `234×100/629 = 37.202 mm` wide; Large requires at least 37+4 = 41 mm.
 

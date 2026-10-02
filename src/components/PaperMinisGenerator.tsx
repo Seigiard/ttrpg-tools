@@ -8,7 +8,7 @@ import {
 } from '@/stores/paper-minis-store';
 import { isSupportedArtwork } from '@/lib/paper-minis/artwork';
 import type { CalibrationLine } from '@/lib/paper-minis/calibration';
-import { fitLimitWarning } from '@/lib/paper-minis/fit-limits';
+import { fitLimitWarning } from '@/lib/paper-minis/geometry';
 import { buildFilename } from '@/lib/paper-minis/pdf';
 import {
   HEIGHT_SLOT_ORDER,
@@ -625,10 +625,8 @@ export default function PaperMinisGenerator() {
             <section aria-label="Миниатюры" className="space-y-5">
               <h2 className="sr-only">Миниатюры</h2>
               {rows.map((row, index) => {
-                const fitWarning = fitLimitWarning(
-                  packed.limitedEntryFitLimits.find((warning) => warning.entryIndex === index)
-                    ?.limits ?? [],
-                );
+                const status = packed.entries[index];
+                const fitWarning = fitLimitWarning(status?.limits ?? []);
                 const rowInputs = inputs.rows[row.id] ?? {
                   count: { text: String(row.count), valid: true },
                   customWidthMm: {
@@ -674,7 +672,7 @@ export default function PaperMinisGenerator() {
                         calibration={row.calibration}
                         label="Лицевая сторона"
                         hint="Выбрать лицевую сторону"
-                        loading={!!row.image && !row.artwork && !row.frontError}
+                        loading={status?.state === 'loading'}
                         onFile={(file) => void store.setImage(row.id, file)}
                       />
                       <div className="space-y-2">
@@ -688,7 +686,7 @@ export default function PaperMinisGenerator() {
                           }
                           displayLabel="Оборот"
                           hint="Добавить свой оборот или оставить отражение"
-                          loading={!!row.backImage && !row.backArtwork}
+                          loading={status?.state === 'loading' && !!row.backImage}
                           onFile={(file) => void store.setImage(row.id, file, true)}
                         />
                         {(row.backImage || row.backWarning) && (
@@ -799,7 +797,7 @@ export default function PaperMinisGenerator() {
                         ? 'В PDF попадёт отдельное изображение оборота.'
                         : 'Без отдельного файла лицевая сторона будет отражена автоматически.'}
                     </p>
-                    {packed.oversizedEntryIndices.includes(index) && (
+                    {status?.state === 'oversized' && (
                       <p
                         role="status"
                         className="mt-3 border-l-2 border-danger pl-3 text-sm text-danger"
@@ -816,7 +814,11 @@ export default function PaperMinisGenerator() {
                         {fitWarning}
                       </p>
                     )}
-                    {[row.frontError, row.normalizationWarning, row.backWarning]
+                    {[
+                      status?.state === 'failed' && row.frontError,
+                      row.normalizationWarning,
+                      row.backWarning,
+                    ]
                       .filter(Boolean)
                       .map((warning, i) => (
                         <p

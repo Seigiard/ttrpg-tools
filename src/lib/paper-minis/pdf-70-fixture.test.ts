@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'bun:test';
 import { pdf70Entries, type Pdf70Reconstruction } from './fixtures/pdf-70.ts';
+import { resolveMinis } from './geometry.ts';
 import { packMinis, packRows } from './packing.ts';
 
 // #70's budget describes the observed set, not every possible perturbation.
@@ -14,11 +15,17 @@ for (const reconstruction of reconstructions) {
       // #given: #70 reports four A4 sheets and five Letter sheets with rows.
       const entries = pdf70Entries(reconstruction);
       // #when
-      const result = packRows(entries, { pageSize, numberDuplicates: false });
+      const opts = { pageSize, numberDuplicates: false };
+      const minis = resolveMinis(entries, opts);
+      const result = packRows(minis, opts);
       // #then
       assert.deepEqual(
-        { pages: result.pageCount, placed: result.miniCount, skipped: result.skipped },
-        { pages: pageSize === 'a4' ? 4 : 5, placed: 25, skipped: [] },
+        {
+          pages: result.pageCount,
+          placed: result.pages.flatMap((page) => page.rows.flatMap((row) => row.items)).length,
+          oversized: minis.some(({ orientation }) => orientation === 'oversized'),
+        },
+        { pages: pageSize === 'a4' ? 4 : 5, placed: 25, oversized: false },
       );
     });
 
@@ -35,13 +42,13 @@ for (const reconstruction of reconstructions) {
             .flatMap((page) => page.placements.map(({ mini }) => [mini.entryIndex, mini.copyIndex]))
             .toSorted((a, b) => a[0] - b[0]),
           placed: result.miniCount,
-          skipped: result.skipped,
+          oversized: result.entries.some(({ state }) => state === 'oversized'),
         },
         {
           withinBudget: true,
           copies: Array.from({ length: 25 }, (_, index) => [index, 0]),
           placed: 25,
-          skipped: [],
+          oversized: false,
         },
       );
     });

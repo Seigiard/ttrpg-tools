@@ -15,16 +15,14 @@ import {
   type CalibrationLine,
   type CalibrationRange,
 } from '@/lib/paper-minis/calibration';
-import { fitLimitWarning } from '@/lib/paper-minis/fit-limits';
-import { generatePDF } from '@/lib/paper-minis/pdf';
 import {
   DEFAULT_FIGURE_MARGIN_MM,
-  fitMiniFaces,
-  packEntries,
-  toPackingEntry,
-  type PackResult,
+  fitLimitWarning,
+  resolveMini,
   type PageSizeKey,
-} from '@/lib/paper-minis/packing';
+} from '@/lib/paper-minis/geometry';
+import { generatePDF } from '@/lib/paper-minis/pdf';
+import { packEntries, toPackingEntry, type PackResult } from '@/lib/paper-minis/packing';
 import {
   DEFAULT_CUSTOM_HEIGHT_MM,
   DEFAULT_CUSTOM_WIDTH_MM,
@@ -39,7 +37,7 @@ import type {
   PreparedArtwork,
 } from '@/lib/paper-minis/types';
 
-export type MiniRow = Entry & { id: number; frontError?: string };
+export type MiniRow = Entry & { id: number };
 export type PaperMinisSettings = {
   pageSize: PageSizeKey;
   marginMm: number;
@@ -140,31 +138,33 @@ export function createPaperMinisStore({
   let packed: PackResult | undefined;
   let initialCalibration: HeightCalibration | undefined;
 
-  function calibrationSession(row: MiniRow, lines: HeightCalibration): CalibrationSession {
+  function calibrationSession(
+    row: MiniRow,
+    lines: HeightCalibration,
+  ): CalibrationSession | undefined {
+    if (!row.artwork) return undefined;
     const calibration = calibrationChanged(lines, initialCalibration) ? lines : initialCalibration;
-    const packingEntry = { ...toPackingEntry(row), calibration };
-    const fits = fitMiniFaces(
-      {
-        ...packingEntry,
-        naturalWidth: row.artwork!.width,
-        naturalHeight: row.artwork!.height,
-      },
+    // Every copy shares one geometry, so a single copy is enough to preview it.
+    const mini = resolveMini(
+      { ...toPackingEntry(row), calibration, count: 1 },
+      0,
       $settings.get(),
     );
+    if (!mini) return undefined;
     return {
       rowId: row.id,
       rowLabel: row.name || 'Миниатюра',
-      artwork: row.artwork!,
+      artwork: row.artwork,
       backArtwork: row.backArtwork,
       lines,
-      artworkHeight: Math.max(row.artwork!.height, row.backArtwork?.height ?? 0),
+      artworkHeight: Math.max(row.artwork.height, row.backArtwork?.height ?? 0),
       ranges: {
         head: calibrationRange(lines, 'head'),
         feet: calibrationRange(lines, 'feet'),
       },
       slotHeightMm: resolveFigureHeightMm(row),
-      printedHeightMm: fits.front.imageHeightMm,
-      warning: fitLimitWarning([...new Set([...fits.front.limits, ...(fits.back?.limits ?? [])])]),
+      printedHeightMm: mini.copies[0].imageHeightMm,
+      warning: fitLimitWarning(mini.limits),
     };
   }
 
@@ -176,10 +176,14 @@ export function createPaperMinisStore({
   function openCalibration(id: number) {
     if ($busy.get()) return false;
     const row = $rows.get().find((candidate) => candidate.id === id);
-    if (!row?.artwork) return false;
+    if (!row) return false;
     initialCalibration = calibrationGap(row.calibration) === undefined ? undefined : row.calibration;
-    const lines = { ...(initialCalibration ?? DEFAULT_CALIBRATION) };
-    $calibration.set(calibrationSession(row, lines));
+    const session = calibrationSession(row, { ...(initialCalibration ?? DEFAULT_CALIBRATION) });
+    if (!session) {
+      initialCalibration = undefined;
+      return false;
+    }
+    $calibration.set(session);
     return true;
   }
 
@@ -192,7 +196,10 @@ export function createPaperMinisStore({
       return;
     }
     const lines = setLine(session.lines, line, fraction);
-    if (lines !== session.lines) $calibration.set(calibrationSession(row, lines));
+    if (lines === session.lines) return;
+    const next = calibrationSession(row, lines);
+    if (next) $calibration.set(next);
+    else cancelCalibration();
   }
 
   function applyCalibration() {
@@ -225,7 +232,7 @@ export function createPaperMinisStore({
       rows: { ...inputs.rows, [id]: { ...row, ...fields } },
     });
   }
-  function updateRow(id: number, fields: Partial<Entry> & { frontError?: string }) {
+  function updateRow(id: number, fields: Partial<Entry>) {
     if ($busy.get()) return;
     const previous = $rows.get().find((row) => row.id === id);
     $rows.set($rows.get().map((row) => (row.id === id ? { ...row, ...fields } : row)));

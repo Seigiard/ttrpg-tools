@@ -1,59 +1,17 @@
-import type { Entry, MiniSize, PackingEntry } from './types';
-import { calibrationGap } from './calibration';
+import type { Entry, PackingEntry } from './types';
 import {
-  type FigureFitLimit,
-  type FigureFitMm,
-  fitFigure,
-  hasPackableDimensions,
-  resolveSizeDimensionsMm,
-  resolveTabHeightMm,
-} from './sizes.ts';
+  type EntryStatus,
+  type PackOptions,
+  type PackedMini,
+  type ResolvedMini,
+  footprintMm,
+  resolveMini,
+  usableAreaMm,
+} from './geometry.ts';
 
-// Page and layout constants. These live here (not in pdf.ts) so the packing
-// math is a pure, DOM/PDF-free module that both the live page-count estimate
-// and the PDF generator share.
-export const PAGE_SIZES_MM = {
-  a4: { w: 210, h: 297 },
-  letter: { w: 216, h: 279 },
-} as const;
-
-export type PageSizeKey = keyof typeof PAGE_SIZES_MM;
-
-export const MARGIN_MM = 10;
 // Wide enough that two neighbours' cut marks, each reaching CUT_MARK_ARM_MM
 // out from its own edge, never touch and read as one mark.
 export const GAP_MM = 4;
-export const CUT_MARK_ARM_MM = 1.5;
-export const CUT_MARK_STROKE_MM = 0.2;
-export const CUT_MARK_EXTENT_MM = CUT_MARK_ARM_MM + CUT_MARK_STROKE_MM / 2;
-export const DEFAULT_FIGURE_MARGIN_MM = 2;
-
-// A single placed copy of an entry, with its resolved geometry. entryIndex maps
-// back to the source entry so callers (the PDF drawer, the warning UI) can
-// attribute each mini to its row.
-export type PackedMini = {
-  entryIndex: number;
-  copyIndex: number; // 0-based copy within the entry
-  heightSlot: MiniSize;
-  baseWidthMm: number; // the category's base, which sizes the stand and the badge
-  totalWidthMm: number; // the widest of base and both figures, plus margins — the cut-out's width, and every strip's
-  baseOffsetXMm: number; // offset of the base from the reserved column's left edge
-  tabHeightMm: number; // each end strip; the floor strip under the front tab is twice this
-  marginMm: number;
-  imageWidthMm: number; // the front image's drawn width; may exceed baseWidthMm. `back` holds the back's
-  imageHeightMm: number;
-  imageOffsetXMm: number; // offset from the outline's left edge, including margin and centering
-  // Each face's paper between its tab and the fold: the taller of the two
-  // images, so both halves fold to the same length and both tabs meet the floor.
-  faceHeightMm: number;
-  back?: BackFace; // present only for an entry with back artwork
-  fitLimits: FigureFitLimit[];
-  totalHeightMm: number;
-  label?: string;
-};
-
-// The front's three image fields again, for the back artwork.
-export type BackFace = { imageWidthMm: number; imageHeightMm: number; imageOffsetXMm: number };
 
 export type PackedRow = { items: PackedMini[]; widthMm: number; heightMm: number; rotated?: true };
 export type RowPage = { rows: PackedRow[]; heightMm: number };
@@ -67,92 +25,25 @@ export type Placement = {
 };
 export type PackedPage = { placements: Placement[] };
 
-// A mini that cannot fit a single page at all, attributed to its entry.
-export type SkippedMini = {
-  entryIndex: number;
-  copyIndex: number;
-  baseWidthMm: number;
-  totalHeightMm: number;
-};
-
 export type PackResult = {
   pages: PackedPage[];
   pageCount: number;
   miniCount: number; // minis actually placed (what will print)
-  skipped: SkippedMini[];
-  oversizedEntryIndices: number[]; // distinct entries with >=1 skipped mini
-  limitedEntryFitLimits: { entryIndex: number; limits: FigureFitLimit[] }[];
+  entries: EntryStatus[]; // indexed like the input entries
 };
-
-export type PackOptions = {
-  pageSize: PageSizeKey;
-  numberDuplicates: boolean;
-  marginMm?: number;
-};
-
-// Resolve both faces together for packing and the calibration preview. A shared
-// calibration gives both faces the same printed height. The wider face's cap
-// shrinks both by the same factor so neither artwork distorts.
-export function fitMiniFaces(
-  e: PackingEntry & { naturalWidth: number; naturalHeight: number },
-  opts: PackOptions,
-): { front: FigureFitMm; back?: FigureFitMm } {
-  const dimensions = resolveSizeDimensionsMm(e);
-  const usableHeightMm = PAGE_SIZES_MM[opts.pageSize].h - MARGIN_MM * 2;
-  const usableWidthMm = PAGE_SIZES_MM[opts.pageSize].w - MARGIN_MM * 2;
-  const marginMm = opts.marginMm ?? DEFAULT_FIGURE_MARGIN_MM;
-  const imageSpaceMm = (usableHeightMm - marginMm * 2 - resolveTabHeightMm(e) * 4) / 2;
-  const calibrated = calibrationGap(e.calibration);
-  // Page fitting belongs to the whole calibrated mini. Do not promise a page
-  // fit when the base/tabs alone cannot fit.
-  const maxImageHeightMm = (aspect: number) =>
-    calibrated && imageSpaceMm > 0 && dimensions.baseWidthMm + marginMm * 2 <= usableWidthMm
-      ? Math.min(imageSpaceMm, (usableWidthMm - marginMm * 2) / aspect)
-      : undefined;
-  let faces: { front: FigureFitMm; back?: FigureFitMm };
-  if (e.backNaturalWidth && e.backNaturalHeight && calibrated) {
-    const frontAspect = e.naturalWidth / e.naturalHeight;
-    const backAspect = e.backNaturalWidth / e.backNaturalHeight;
-    // Fit the wider face first so width still precedes page in the cap order.
-    const shared = fitFigure(
-      dimensions,
-      Math.max(frontAspect, backAspect),
-      1,
-      e.calibration,
-      maxImageHeightMm(Math.max(frontAspect, backAspect)),
-    );
-    faces = {
-      front: { ...shared, imageWidthMm: frontAspect * shared.imageHeightMm },
-      back: { ...shared, imageWidthMm: backAspect * shared.imageHeightMm },
-    };
-  } else {
-    faces = {
-      front: fitFigure(
-        dimensions,
-        e.naturalWidth,
-        e.naturalHeight,
-        e.calibration,
-        maxImageHeightMm(e.naturalWidth / e.naturalHeight),
-      ),
-      back:
-        e.backNaturalWidth && e.backNaturalHeight
-          ? fitFigure(
-              dimensions,
-              e.backNaturalWidth,
-              e.backNaturalHeight,
-              e.calibration,
-              maxImageHeightMm(e.backNaturalWidth / e.backNaturalHeight),
-            )
-          : undefined,
-    };
-  }
-  return faces;
-}
 
 // A back file is chosen but not prepared yet. Such an entry is not ready, so
 // it does not print reflected for a moment and then jump to its own back.
-export function isBackArtworkLoading(entry: Entry): boolean {
+function isBackArtworkLoading(entry: Entry): boolean {
   return entry.backImage != null && entry.backArtwork == null;
+}
+
+function unpreparedState(entry: Entry): 'empty' | 'loading' | 'failed' | undefined {
+  if (entry.artwork == null) {
+    if (entry.frontError) return 'failed';
+    return entry.image == null ? 'empty' : 'loading';
+  }
+  return isBackArtworkLoading(entry) ? 'loading' : undefined;
 }
 
 export function toPackingEntry(entry: Entry): PackingEntry {
@@ -170,26 +61,49 @@ export function toPackingEntry(entry: Entry): PackingEntry {
 }
 
 // Project prepared artwork into packing geometry without changing entry indices.
+// An entry that is not prepared packs as having no image, then reports why.
 export function packEntries(entries: Entry[], opts: PackOptions): PackResult {
-  return packMinis(
-    entries.map((entry) =>
-      isBackArtworkLoading(entry)
+  const unprepared = entries.map(unpreparedState);
+  const result = packMinis(
+    entries.map((entry, i) =>
+      unprepared[i]
         ? { ...toPackingEntry(entry), naturalWidth: undefined, naturalHeight: undefined }
         : toPackingEntry(entry),
     ),
     opts,
   );
+  return {
+    ...result,
+    entries: result.entries.map((status, i) => {
+      const state = unprepared[i];
+      return state ? { state, limits: [] } : status;
+    }),
+  };
 }
 
-// Resolve geometry once through the legacy candidate, then compare layouts.
-// The row candidate is also a useful baseline for layout regression tests.
+// Resolve every entry's geometry once, then compare the two layouts of the
+// same resolved minis. The row candidate is also a useful baseline for layout
+// regression tests.
 export function packMinis(entries: PackingEntry[], opts: PackOptions): PackResult {
-  const rows = packRows(entries, opts);
-  const { w, h } = PAGE_SIZES_MM[opts.pageSize];
-  const minis = rows.pages.flatMap((page) => page.rows.flatMap((row) => row.items));
-  const guillotine = packGuillotine(minis, w - MARGIN_MM * 2, h - MARGIN_MM * 2);
+  const minis = entries.map((entry, entryIndex) => resolveMini(entry, entryIndex, opts));
+  const resolved = minis.filter((mini) => mini !== undefined);
+  const rows = packRows(resolved, opts);
+  const { widthMm, heightMm } = usableAreaMm(opts.pageSize);
+  const guillotine = packGuillotine(resolved, widthMm, heightMm);
   const pages = guillotine.length <= rows.pageCount ? guillotine : rowPlacements(rows.pages);
-  return { ...rows, pages, pageCount: pages.length };
+  return {
+    pages,
+    pageCount: pages.length,
+    miniCount: resolved
+      .filter((mini) => mini.orientation !== 'oversized')
+      .reduce((sum, mini) => sum + mini.copies.length, 0),
+    entries: minis.map((mini) => {
+      if (!mini) return { state: 'empty', limits: [] };
+      // A cap on a mini that does not print shrank nothing on paper.
+      if (mini.orientation === 'oversized') return { state: 'oversized', limits: [] };
+      return { state: mini.orientation, limits: mini.limits };
+    }),
+  };
 }
 
 function rowPlacements(pages: RowPage[]): PackedPage[] {
@@ -218,24 +132,11 @@ type Strip = {
 };
 type LayoutSheet = { strips: Strip[]; usedHeightMm: number; placements: Placement[] };
 
-function fitsStanding(mini: PackedMini, widthMm: number, heightMm: number): boolean {
-  return mini.totalWidthMm <= widthMm && mini.totalHeightMm <= heightMm;
-}
-
-function footprint(mini: PackedMini, rotated: boolean) {
-  return rotated
-    ? {
-        widthMm: mini.totalHeightMm + CUT_MARK_EXTENT_MM * 2,
-        heightMm: mini.totalWidthMm + CUT_MARK_EXTENT_MM * 2,
-      }
-    : { widthMm: mini.totalWidthMm, heightMm: mini.totalHeightMm };
-}
-
-function packGuillotine(minis: PackedMini[], widthMm: number, heightMm: number): PackedPage[] {
-  const candidates = minis
-    .map((mini) => {
-      const rotated = !fitsStanding(mini, widthMm, heightMm);
-      return { mini, rotated, ...footprint(mini, rotated) };
+function packGuillotine(minis: ResolvedMini[], widthMm: number, heightMm: number): PackedPage[] {
+  const candidates = placeableCopies(minis)
+    .map(({ mini, rotated }) => {
+      const footprint = footprintMm(mini, rotated);
+      return { mini, rotated, widthMm: footprint.widthMm, heightMm: footprint.heightMm };
     })
     .toSorted((a, b) => b.heightMm - a.heightMm || b.widthMm - a.widthMm);
   const sheets: LayoutSheet[] = [];
@@ -291,7 +192,7 @@ function packGuillotine(minis: PackedMini[], widthMm: number, heightMm: number):
 }
 
 function addStrip(sheet: LayoutSheet, mini: PackedMini, yMm: number, rotated: boolean) {
-  const { widthMm, heightMm } = footprint(mini, rotated);
+  const { widthMm, heightMm } = footprintMm(mini, rotated);
   sheet.strips.push({
     yMm,
     heightMm,
@@ -303,97 +204,31 @@ function addStrip(sheet: LayoutSheet, mini: PackedMini, yMm: number, rotated: bo
   sheet.placements.push({ mini, xMm: 0, yMm, rotated });
 }
 
-// Expands entries into individual minis with resolved geometry, sorted by
-// reserved width descending, then bin-packs them into rows and pages within the
-// usable area. Entries lacking an image's natural dimensions or the dimensions
-// sizing needs are simply omitted (not yet packable) — that includes a custom
-// entry with no figure height, which is why a row can vanish from the count
-// with a perfectly good base width. Minis too large for a single page are
-// reported as skipped rather than silently dropped.
-export function packRows(
-  entries: PackingEntry[],
-  opts: PackOptions,
-): Omit<PackResult, 'pages'> & { pages: RowPage[] } {
-  const { w: pageWmm, h: pageHmm } = PAGE_SIZES_MM[opts.pageSize];
-  const usableWmm = pageWmm - MARGIN_MM * 2;
-  const usableHmm = pageHmm - MARGIN_MM * 2;
-  const marginMm = opts.marginMm ?? DEFAULT_FIGURE_MARGIN_MM;
+function placeableCopies(minis: ResolvedMini[]): { mini: PackedMini; rotated: boolean }[] {
+  return minis.flatMap(({ orientation, copies }) =>
+    orientation === 'oversized'
+      ? []
+      : copies.map((mini) => ({ mini, rotated: orientation === 'rotated' })),
+  );
+}
 
-  const minis: PackedMini[] = [];
-  entries.forEach((e, entryIndex) => {
-    const dimensions = resolveSizeDimensionsMm(e);
-    const { baseWidthMm } = dimensions;
-    if (
-      !hasPackableDimensions(e) ||
-      e.count <= 0 ||
-      e.naturalWidth == null ||
-      e.naturalHeight == null ||
-      e.naturalWidth <= 0 ||
-      e.naturalHeight <= 0
-    ) {
-      return; // not packable yet
-    }
-    const tabHMm = resolveTabHeightMm(e);
-    const { front, back: rawBackFit } = fitMiniFaces(
-      { ...e, naturalWidth: e.naturalWidth, naturalHeight: e.naturalHeight },
-      opts,
-    );
-    const { imageWidthMm, imageHeightMm, limits } = front;
-    const backFit = rawBackFit && {
-      imageWidthMm: rawBackFit.imageWidthMm,
-      imageHeightMm: rawBackFit.imageHeightMm,
-    };
-    // A figure may overhang its base, so the reserved column is the widest of
-    // base and faces.
-    const contentWidthMm = Math.max(baseWidthMm, imageWidthMm, backFit?.imageWidthMm ?? 0);
-    const totalWidthMm = contentWidthMm + marginMm * 2;
-    const imageOffsetXMm = marginMm + (contentWidthMm - imageWidthMm) / 2;
-    const back = backFit && {
-      ...backFit,
-      imageOffsetXMm: marginMm + (contentWidthMm - backFit.imageWidthMm) / 2,
-    };
-    const faceHeightMm = Math.max(imageHeightMm, backFit?.imageHeightMm ?? 0);
-    // Derived here in millimetres rather than in the drawer, because the same
-    // arithmetic in points does not land on the same numbers. `drawMini` still
-    // derives the back badge's own offset, inside the rotated frame, from this
-    // rule — change it here and change it there.
-    const baseOffsetXMm = marginMm + (contentWidthMm - baseWidthMm) / 2;
-    // Face on face, a margin either side of the fold, a tab at each end and
-    // the floor strip, twice a tab, under the front one.
-    const totalHeightMm = faceHeightMm * 2 + marginMm * 2 + tabHMm * 4;
-    for (let i = 0; i < e.count; i++) {
-      minis.push({
-        entryIndex,
-        copyIndex: i,
-        heightSlot: e.heightSlot,
-        baseWidthMm,
-        totalWidthMm,
-        baseOffsetXMm,
-        tabHeightMm: tabHMm,
-        marginMm,
-        imageWidthMm,
-        imageHeightMm,
-        imageOffsetXMm,
-        faceHeightMm,
-        ...(back && { back }),
-        fitLimits: [...new Set([...limits, ...(rawBackFit?.limits ?? [])])],
-        totalHeightMm,
-        label: opts.numberDuplicates ? String(i + 1) : undefined,
-      });
-    }
-  });
+// Lays resolved minis out in rows and pages within the usable area. Upright
+// minis share rows; a mini that only fits turned gets a row of its own;
+// oversized minis are left out, as the resolve step already reported them.
+export function packRows(
+  minis: ResolvedMini[],
+  opts: Pick<PackOptions, 'pageSize'>,
+): { pages: RowPage[]; pageCount: number } {
+  const { widthMm: usableWmm, heightMm: usableHmm } = usableAreaMm(opts.pageSize);
 
   // Sort by reserved width descending so wide minis lead each row — reordering
   // rows in the UI has no effect on output, which is why drag-to-reorder is out
   // of scope. A narrow figure of a large category can reserve less than a wide
   // one of a small category, so this is not base-width order.
-  minis.sort((a, b) => b.totalWidthMm - a.totalWidthMm);
+  const copies = placeableCopies(minis).toSorted((a, b) => b.mini.totalWidthMm - a.mini.totalWidthMm);
 
   const pages: RowPage[] = [];
-  const skipped: SkippedMini[] = [];
-  const oversized = new Set<number>();
   const rescued: PackedMini[] = [];
-  let placed = 0;
 
   let page: RowPage = { rows: [], heightMm: 0 };
   let row: PackedRow = { items: [], widthMm: 0, heightMm: 0 };
@@ -411,21 +246,9 @@ export function packRows(
     row = { items: [], widthMm: 0, heightMm: 0 };
   };
 
-  for (const mini of minis) {
-    if (!fitsStanding(mini, usableWmm, usableHmm)) {
-      const turned = footprint(mini, true);
-      if (turned.widthMm <= usableWmm && turned.heightMm <= usableHmm) {
-        rescued.push(mini);
-        placed++;
-        continue;
-      }
-      skipped.push({
-        entryIndex: mini.entryIndex,
-        copyIndex: mini.copyIndex,
-        baseWidthMm: mini.baseWidthMm,
-        totalHeightMm: mini.totalHeightMm,
-      });
-      oversized.add(mini.entryIndex);
+  for (const { mini, rotated } of copies) {
+    if (rotated) {
+      rescued.push(mini);
       continue;
     }
     const isFirst = row.items.length === 0;
@@ -437,7 +260,6 @@ export function packRows(
     row.widthMm += mini.totalWidthMm + (firstNow ? 0 : GAP_MM);
     row.items.push(mini);
     if (mini.totalHeightMm > row.heightMm) row.heightMm = mini.totalHeightMm;
-    placed++;
   }
   flushRow();
   if (page.rows.length > 0) pages.push(page);
@@ -445,7 +267,7 @@ export function packRows(
   // Rescues own a full strip in the fallback too. Scan all sheets before
   // opening another; upright rows must never share a rescued mini's strip.
   for (const mini of rescued) {
-    const { widthMm, heightMm } = footprint(mini, true);
+    const { widthMm, heightMm } = footprintMm(mini, true);
     const rescueRow: PackedRow = { items: [mini], widthMm, heightMm, rotated: true };
     const target = pages.find((sheet) => sheet.heightMm + GAP_MM + heightMm <= usableHmm);
     if (target) {
@@ -456,24 +278,5 @@ export function packRows(
     }
   }
 
-  const placedLimits = new Map<number, FigureFitLimit[]>();
-  for (const sheet of pages) {
-    for (const { items } of sheet.rows) {
-      for (const mini of items) {
-        if (mini.fitLimits.length) placedLimits.set(mini.entryIndex, mini.fitLimits);
-      }
-    }
-  }
-
-  return {
-    pages,
-    pageCount: pages.length,
-    miniCount: placed,
-    skipped,
-    oversizedEntryIndices: [...oversized],
-    limitedEntryFitLimits: [...placedLimits].map(([entryIndex, limits]) => ({
-      entryIndex,
-      limits,
-    })),
-  };
+  return { pages, pageCount: pages.length };
 }

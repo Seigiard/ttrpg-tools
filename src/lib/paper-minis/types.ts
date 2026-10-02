@@ -24,6 +24,8 @@ export type Entry = {
   name?: string;
   image: File | null;
   artwork: PreparedArtwork | null;
+  // Set when `image` could not be prepared; cleared when a new image is chosen.
+  frontError?: string;
   // One pair of figure bounds shared by both faces.
   calibration?: HeightCalibration;
   normalizationWarning?: string;
