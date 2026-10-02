@@ -175,10 +175,10 @@ export function fitFigure(
   return { imageWidthMm, imageHeightMm, limits };
 }
 
-// Resolve both faces together for packing and the calibration preview. A shared
-// calibration gives both faces the same printed height. The wider face's cap
-// shrinks both by the same factor so neither artwork distorts.
-export function fitMiniFaces(
+// Resolve both faces together. A shared calibration gives both faces the same
+// printed height. The wider face's cap shrinks both by the same factor so
+// neither artwork distorts.
+function fitMiniFaces(
   e: PackingEntry & { naturalWidth: number; naturalHeight: number },
   opts: PackOptions,
 ): { front: FigureFitMm; back?: FigureFitMm } {

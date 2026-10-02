@@ -18,7 +18,7 @@ import {
 import {
   DEFAULT_FIGURE_MARGIN_MM,
   fitLimitWarning,
-  fitMiniFaces,
+  resolveMini,
   type PageSizeKey,
 } from '@/lib/paper-minis/geometry';
 import { generatePDF } from '@/lib/paper-minis/pdf';
@@ -138,31 +138,33 @@ export function createPaperMinisStore({
   let packed: PackResult | undefined;
   let initialCalibration: HeightCalibration | undefined;
 
-  function calibrationSession(row: MiniRow, lines: HeightCalibration): CalibrationSession {
+  function calibrationSession(
+    row: MiniRow,
+    lines: HeightCalibration,
+  ): CalibrationSession | undefined {
+    if (!row.artwork) return undefined;
     const calibration = calibrationChanged(lines, initialCalibration) ? lines : initialCalibration;
-    const packingEntry = { ...toPackingEntry(row), calibration };
-    const fits = fitMiniFaces(
-      {
-        ...packingEntry,
-        naturalWidth: row.artwork!.width,
-        naturalHeight: row.artwork!.height,
-      },
+    // Every copy shares one geometry, so a single copy is enough to preview it.
+    const mini = resolveMini(
+      { ...toPackingEntry(row), calibration, count: 1 },
+      0,
       $settings.get(),
     );
+    if (!mini) return undefined;
     return {
       rowId: row.id,
       rowLabel: row.name || 'Миниатюра',
-      artwork: row.artwork!,
+      artwork: row.artwork,
       backArtwork: row.backArtwork,
       lines,
-      artworkHeight: Math.max(row.artwork!.height, row.backArtwork?.height ?? 0),
+      artworkHeight: Math.max(row.artwork.height, row.backArtwork?.height ?? 0),
       ranges: {
         head: calibrationRange(lines, 'head'),
         feet: calibrationRange(lines, 'feet'),
       },
       slotHeightMm: resolveFigureHeightMm(row),
-      printedHeightMm: fits.front.imageHeightMm,
-      warning: fitLimitWarning([...new Set([...fits.front.limits, ...(fits.back?.limits ?? [])])]),
+      printedHeightMm: mini.copies[0].imageHeightMm,
+      warning: fitLimitWarning(mini.limits),
     };
   }
 
@@ -174,10 +176,14 @@ export function createPaperMinisStore({
   function openCalibration(id: number) {
     if ($busy.get()) return false;
     const row = $rows.get().find((candidate) => candidate.id === id);
-    if (!row?.artwork) return false;
+    if (!row) return false;
     initialCalibration = calibrationGap(row.calibration) === undefined ? undefined : row.calibration;
-    const lines = { ...(initialCalibration ?? DEFAULT_CALIBRATION) };
-    $calibration.set(calibrationSession(row, lines));
+    const session = calibrationSession(row, { ...(initialCalibration ?? DEFAULT_CALIBRATION) });
+    if (!session) {
+      initialCalibration = undefined;
+      return false;
+    }
+    $calibration.set(session);
     return true;
   }
 
@@ -190,7 +196,10 @@ export function createPaperMinisStore({
       return;
     }
     const lines = setLine(session.lines, line, fraction);
-    if (lines !== session.lines) $calibration.set(calibrationSession(row, lines));
+    if (lines === session.lines) return;
+    const next = calibrationSession(row, lines);
+    if (next) $calibration.set(next);
+    else cancelCalibration();
   }
 
   function applyCalibration() {

@@ -672,7 +672,7 @@ export default function PaperMinisGenerator() {
                         calibration={row.calibration}
                         label="Лицевая сторона"
                         hint="Выбрать лицевую сторону"
-                        loading={!!row.image && !row.artwork && !row.frontError}
+                        loading={status?.state === 'loading'}
                         onFile={(file) => void store.setImage(row.id, file)}
                       />
                       <div className="space-y-2">
@@ -686,7 +686,7 @@ export default function PaperMinisGenerator() {
                           }
                           displayLabel="Оборот"
                           hint="Добавить свой оборот или оставить отражение"
-                          loading={!!row.backImage && !row.backArtwork}
+                          loading={status?.state === 'loading' && !!row.backImage}
                           onFile={(file) => void store.setImage(row.id, file, true)}
                         />
                         {(row.backImage || row.backWarning) && (
@@ -814,7 +814,11 @@ export default function PaperMinisGenerator() {
                         {fitWarning}
                       </p>
                     )}
-                    {[row.frontError, row.normalizationWarning, row.backWarning]
+                    {[
+                      status?.state === 'failed' && row.frontError,
+                      row.normalizationWarning,
+                      row.backWarning,
+                    ]
                       .filter(Boolean)
                       .map((warning, i) => (
                         <p

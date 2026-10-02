@@ -12,7 +12,7 @@ Review base: 8e5ec819a0bcf0114971db20f46aa9f62d4d01bc
       Done: `packMinis` no longer gets geometry through `packRows`; all checks green.
 - [x] G3 · `PackResult.entries` (`empty | loading | failed | upright | rotated | oversized` + `limits`) replaces `skipped`, `oversizedEntryIndices`, `limitedEntryFitLimits`; `frontError` moves onto `Entry`; `pdf.ts` filters nothing itself.
       Done: grep finds none of the old fields; all checks green.
-- [ ] G4 · the component renders row status from `entries[i]`; the calibration preview uses the resolve step.
+- [x] G4 · the component renders row status from `entries[i]`; the calibration preview uses the resolve step.
       Done: the component computes no loading / error / oversized flags itself; all checks green.
 - [ ] G5 · geometry tests go through `packMinis` / `packEntries`; `packRows` tests keep only ADR-0001 layout comparisons.
       Done: `packRows` in tests appears only in layout comparisons; all checks green.
