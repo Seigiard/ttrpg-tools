@@ -82,6 +82,26 @@ export type CalibrationSession = {
 const storageKey = 'pmg-settings';
 const successMessage = 'PDF готов.';
 const failureMessage = 'Не удалось создать PDF. Попробуйте ещё раз или уменьшите изображения.';
+const marginDraftError = 'Поля должны быть числом от 0 мм.';
+const rowDraftError = 'Количество должно быть целым числом от 1, размеры — больше 0 мм.';
+
+function inputsForRow(row: Pick<Entry, 'count' | 'customWidthMm' | 'customHeightMm'>) {
+  return {
+    count: { text: String(row.count), valid: true },
+    customWidthMm: {
+      text: row.customWidthMm === undefined ? '' : String(row.customWidthMm),
+      valid: row.customWidthMm !== undefined,
+    },
+    customHeightMm: {
+      text: row.customHeightMm === undefined ? '' : String(row.customHeightMm),
+      valid: row.customHeightMm !== undefined,
+    },
+  };
+}
+
+function marginInput(settings: Readonly<PaperMinisSettings>) {
+  return { text: String(settings.marginMm), valid: true };
+}
 
 function parseNumericInput(text: string, accepts: (value: number) => boolean) {
   if (text.trim() === '') return { input: { text, valid: false } };
@@ -96,19 +116,20 @@ export function createPaperMinisStore({
   artwork = createCanvasArtwork(),
 }: PaperMinisStoreDependencies = {}) {
   const $rows = atom<MiniRow[]>([]);
-  const $settings = atom<PaperMinisSettings>({
+  const initialSettings: PaperMinisSettings = {
     pageSize: 'a4',
     marginMm: DEFAULT_FIGURE_MARGIN_MM,
     numberDuplicates: false,
     normalization: true,
-  });
+  };
+  const $settings = atom(initialSettings);
   const $inputs = atom<PaperMinisInputs>({
-    margin: { text: String(DEFAULT_FIGURE_MARGIN_MM), valid: true },
+    margin: marginInput(initialSettings),
     rows: {},
   });
-  const $inputsValid = computed([$inputs, $rows], (inputs, rows) => {
-    if (!inputs.margin.valid) return false;
-    return rows.every((row) => {
+  const $draftError = computed([$inputs, $rows], (inputs, rows) => {
+    if (!inputs.margin.valid) return marginDraftError;
+    const valid = rows.every((row) => {
       const rowInputs = inputs.rows[row.id];
       return (
         rowInputs?.count.valid === true &&
@@ -116,7 +137,9 @@ export function createPaperMinisStore({
           (rowInputs.customWidthMm.valid && rowInputs.customHeightMm.valid))
       );
     });
+    return valid ? '' : rowDraftError;
   });
+  const $inputsValid = computed($draftError, (error) => error === '');
   const $message = atom('');
   const $revision = atom(0);
   const $busy = atom(false);
@@ -271,11 +294,7 @@ export function createPaperMinisStore({
       ...$inputs.get(),
       rows: {
         ...$inputs.get().rows,
-        [row.id]: {
-          count: { text: '1', valid: true },
-          customWidthMm: { text: '', valid: false },
-          customHeightMm: { text: '', valid: false },
-        },
+        [row.id]: inputsForRow(row),
       },
     });
     changed();
@@ -291,23 +310,18 @@ export function createPaperMinisStore({
       size === 'custom'
         ? { heightSlot: size, customWidthMm, customHeightMm }
         : { heightSlot: size };
-    $rows.set(
-      $rows
-        .get()
-        .map((candidate) =>
-          candidate.id === id ? Object.assign({}, candidate, fields) : candidate,
-        ),
-    );
+    const nextRow = Object.assign({}, row, fields);
+    $rows.set($rows.get().map((candidate) => (candidate.id === id ? nextRow : candidate)));
     if (size === 'custom') {
       const inputs = $inputs.get();
+      const seeded = inputsForRow(nextRow);
       $inputs.set({
         ...inputs,
         rows: {
           ...inputs.rows,
           [id]: {
-            ...inputs.rows[id],
-            customWidthMm: { text: String(customWidthMm), valid: true },
-            customHeightMm: { text: String(customHeightMm), valid: true },
+            ...seeded,
+            count: inputs.rows[id]?.count ?? seeded.count,
           },
         },
       });
@@ -323,12 +337,17 @@ export function createPaperMinisStore({
         if (size !== 'custom') return Object.assign({}, row, { heightSlot: size });
         const customWidthMm = row.customWidthMm ?? DEFAULT_CUSTOM_WIDTH_MM;
         const customHeightMm = row.customHeightMm ?? DEFAULT_CUSTOM_HEIGHT_MM;
+        const nextRow = Object.assign({}, row, {
+          heightSlot: size,
+          customWidthMm,
+          customHeightMm,
+        });
+        const seeded = inputsForRow(nextRow);
         nextInputs[row.id] = {
-          ...nextInputs[row.id],
-          customWidthMm: { text: String(customWidthMm), valid: true },
-          customHeightMm: { text: String(customHeightMm), valid: true },
+          ...seeded,
+          count: nextInputs[row.id]?.count ?? seeded.count,
         };
-        return Object.assign({}, row, { heightSlot: size, customWidthMm, customHeightMm });
+        return nextRow;
       }),
     );
     if (size === 'custom') $inputs.set({ ...inputs, rows: nextInputs });
@@ -350,6 +369,13 @@ export function createPaperMinisStore({
       ),
     );
     changed();
+  }
+  function commitCount(id: number) {
+    if ($busy.get()) return;
+    const row = $rows.get().find((candidate) => candidate.id === id);
+    const input = $inputs.get().rows[id]?.count;
+    if (!row || input?.valid !== false) return;
+    setRowInput(id, { count: { text: String(row.count), valid: true } });
   }
   function setCustomDimensions(
     id: number,
@@ -376,6 +402,15 @@ export function createPaperMinisStore({
     if (next === row) return;
     $rows.set($rows.get().map((candidate) => (candidate.id === id ? next : candidate)));
     changed();
+  }
+  function commitCustomDimension(id: number, dimension: 'width' | 'height') {
+    if ($busy.get()) return;
+    const row = $rows.get().find((candidate) => candidate.id === id);
+    const inputKey = dimension === 'width' ? 'customWidthMm' : 'customHeightMm';
+    const value = row?.[inputKey];
+    const input = $inputs.get().rows[id]?.[inputKey];
+    if (value === undefined || input?.valid !== false) return;
+    setRowInput(id, { [inputKey]: { text: String(value), valid: true } });
   }
   async function setImage(id: number, file: File, back = false) {
     if (!$acceptsFiles.get()) return;
@@ -477,7 +512,7 @@ export function createPaperMinisStore({
     if (next.marginMm !== previous.marginMm)
       $inputs.set({
         ...$inputs.get(),
-        margin: { text: String(next.marginMm), valid: true },
+        margin: marginInput(next),
       });
     changed();
     try {
@@ -502,6 +537,13 @@ export function createPaperMinisStore({
     settings({ marginMm: value });
     $inputs.set({ ...$inputs.get(), margin: input });
   }
+  function commitMargin() {
+    if ($busy.get() || $inputs.get().margin.valid) return;
+    $inputs.set({
+      ...$inputs.get(),
+      margin: marginInput($settings.get()),
+    });
+  }
   function loadSettings() {
     if ($busy.get()) return;
     try {
@@ -510,7 +552,7 @@ export function createPaperMinisStore({
       $settings.set(next);
       $inputs.set({
         ...$inputs.get(),
-        margin: { text: String(next.marginMm), valid: true },
+        margin: marginInput(next),
       });
     } catch {
       /* Use defaults when storage is unavailable. */
@@ -540,6 +582,7 @@ export function createPaperMinisStore({
     $settings: readonlyType($settings),
     $inputs: readonlyType($inputs),
     $inputsValid,
+    $draftError,
     $message: readonlyType($message),
     $revision: readonlyType($revision),
     $busy: readonlyType($busy),
@@ -554,11 +597,14 @@ export function createPaperMinisStore({
     setSize,
     setAllSizes,
     setCount,
+    commitCount,
     setCustomDimensions,
+    commitCustomDimension,
     setImage,
     ingest,
     settings,
     setMargin,
+    commitMargin,
     loadSettings,
     openCalibration,
     setCalibrationLine: updateCalibration,
@@ -616,17 +662,7 @@ export function createPaperMinisStore({
         ...inputs,
         rows: {
           ...inputs.rows,
-          [copy.id]: {
-            count: { text: String(copy.count), valid: true },
-            customWidthMm: {
-              text: copy.customWidthMm === undefined ? '' : String(copy.customWidthMm),
-              valid: copy.customWidthMm !== undefined,
-            },
-            customHeightMm: {
-              text: copy.customHeightMm === undefined ? '' : String(copy.customHeightMm),
-              valid: copy.customHeightMm !== undefined,
-            },
-          },
+          [copy.id]: inputsForRow(copy),
         },
       });
       changed();

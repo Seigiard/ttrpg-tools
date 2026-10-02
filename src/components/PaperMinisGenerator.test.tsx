@@ -34,41 +34,22 @@ async function addBack(bytes = png) {
   });
 }
 
-test('both PDF actions follow generation availability', async () => {
+test('blur restores an invalid draft and both PDF actions become available again', async () => {
   // #given
   render(<PaperMinisGenerator />);
   await addFront();
-  const input = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Поля, мм' });
+  const margin = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Поля, мм' });
+  const count = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Количество копий' });
+  fireEvent.change(margin, { target: { value: '5' } });
+  fireEvent.change(count, { target: { value: '3' } });
   // #when
-  fireEvent.change(input, { target: { value: '' } });
+  fireEvent.change(count, { target: { value: '' } });
   const disabled = ['Скачать PDF', 'Предпросмотр PDF'].map(
     (name) => screen.getByRole<HTMLButtonElement>('button', { name }).disabled,
   );
-  fireEvent.change(input, { target: { value: '2' } });
-  // #then
-  expect({
-    disabled,
-    enabled: ['Скачать PDF', 'Предпросмотр PDF'].map(
-      (name) => !screen.getByRole<HTMLButtonElement>('button', { name }).disabled,
-    ),
-  }).toEqual({ disabled: [true, true], enabled: [true, true] });
-});
-
-test('blur restores every invalid numeric draft without changing another field', async () => {
-  // #given
-  render(<PaperMinisGenerator />);
-  await addFront();
-  const count = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Количество копий' });
-  const margin = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Поля, мм' });
-  fireEvent.change(count, { target: { value: '2' } });
-  fireEvent.change(margin, { target: { value: '5' } });
-  // #when
-  fireEvent.change(count, { target: { value: '' } });
   fireEvent.blur(count);
-  const restoredCount = { value: count.value, invalid: count.getAttribute('aria-invalid') };
   fireEvent.change(margin, { target: { value: '' } });
   fireEvent.blur(margin);
-  const restoredMargin = { value: margin.value, invalid: margin.getAttribute('aria-invalid') };
   fireEvent.change(screen.getByRole('combobox', { name: 'Высота существа' }), {
     target: { value: 'custom' },
   });
@@ -83,24 +64,26 @@ test('blur restores every invalid numeric draft without changing another field',
   fireEvent.blur(height);
   // #then
   expect({
-    count: restoredCount,
-    margin: restoredMargin,
+    disabled,
+    count: { value: count.value, invalid: count.getAttribute('aria-invalid') },
+    margin: { value: margin.value, invalid: margin.getAttribute('aria-invalid') },
     afterWidthBlur,
     afterHeightBlur: { width: width.value, height: height.value },
     dimensionsInvalid: [
       width.getAttribute('aria-invalid'),
       height.getAttribute('aria-invalid'),
     ],
-    actionsEnabled: ['Скачать PDF', 'Предпросмотр PDF'].map(
+    enabled: ['Скачать PDF', 'Предпросмотр PDF'].map(
       (name) => !screen.getByRole<HTMLButtonElement>('button', { name }).disabled,
     ),
   }).toEqual({
-    count: { value: '2', invalid: 'false' },
+    disabled: [true, true],
+    count: { value: '3', invalid: 'false' },
     margin: { value: '5', invalid: 'false' },
     afterWidthBlur: { width: '12.5', height: '40' },
     afterHeightBlur: { width: '12.5', height: '40' },
     dimensionsInvalid: ['false', 'false'],
-    actionsEnabled: [true, true],
+    enabled: [true, true],
   });
 });
 

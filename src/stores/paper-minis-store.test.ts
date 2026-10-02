@@ -109,11 +109,12 @@ test('setting every row size advances the revision once', () => {
 });
 
 test.each(['', '-', '2.7', '0'])(
-  'an invalid count draft %j leaves the model unchanged and can revert',
+  'committing an invalid count draft %j restores the committed count',
   (text) => {
     // #given
     const store = setup();
     const id = store.addBlank()!;
+    store.setCount(id, '3');
     // #when
     store.setCount(id, text);
     const invalid = {
@@ -121,14 +122,25 @@ test.each(['', '-', '2.7', '0'])(
       input: store.$inputs.get().rows[id].count,
       valid: store.$inputsValid.get(),
     };
-    store.setCount(id, String(store.$rows.get()[0].count));
+    store.commitCount(id);
     // #then
     expect({ invalid, reverted: store.$inputs.get().rows[id].count }).toEqual({
-      invalid: { count: 1, input: { text, valid: false }, valid: false },
-      reverted: { text: '1', valid: true },
+      invalid: { count: 3, input: { text, valid: false }, valid: false },
+      reverted: { text: '3', valid: true },
     });
   },
 );
+
+test('committing a valid count draft keeps its text unchanged', () => {
+  // #given
+  const store = setup();
+  const id = store.addBlank()!;
+  store.setCount(id, '01');
+  // #when
+  store.commitCount(id);
+  // #then
+  expect(store.$inputs.get().rows[id].count).toEqual({ text: '01', valid: true });
+});
 
 test('a finite scientific-notation count updates the model', () => {
   // #given
@@ -143,11 +155,12 @@ test('a finite scientific-notation count updates the model', () => {
   });
 });
 
-test('custom dimension drafts update valid fields without exposing invalid dimensions', () => {
+test('committing an invalid custom dimension restores its committed value', () => {
   // #given
   const store = setup();
   const id = store.addBlank()!;
   store.setSize(id, 'custom');
+  store.setCustomDimensions(id, { height: '40' });
   // #when
   store.setCustomDimensions(id, { width: '12.5', height: '-' });
   const invalid = {
@@ -155,7 +168,7 @@ test('custom dimension drafts update valid fields without exposing invalid dimen
     inputs: store.$inputs.get().rows[id],
     valid: store.$inputsValid.get(),
   };
-  store.setCustomDimensions(id, { height: String(store.$rows.get()[0].customHeightMm) });
+  store.commitCustomDimension(id, 'height');
   // #then
   expect({
     invalid: {
@@ -166,20 +179,33 @@ test('custom dimension drafts update valid fields without exposing invalid dimen
     reverted: store.$inputs.get().rows[id].customHeightMm,
   }).toEqual({
     invalid: {
-      dimensions: [12.5, DEFAULT_CUSTOM_HEIGHT_MM],
+      dimensions: [12.5, 40],
       inputs: [
         { text: '12.5', valid: true },
         { text: '-', valid: false },
       ],
       valid: false,
     },
-    reverted: { text: '30', valid: true },
+    reverted: { text: '40', valid: true },
   });
 });
 
-test('an invalid margin draft leaves settings unchanged until valid text arrives', () => {
+test('committing a valid custom dimension keeps its text unchanged', () => {
   // #given
   const store = setup();
+  const id = store.addBlank()!;
+  store.setSize(id, 'custom');
+  store.setCustomDimensions(id, { width: '030' });
+  // #when
+  store.commitCustomDimension(id, 'width');
+  // #then
+  expect(store.$inputs.get().rows[id].customWidthMm).toEqual({ text: '030', valid: true });
+});
+
+test('committing an invalid margin draft restores the committed margin', () => {
+  // #given
+  const store = setup();
+  store.setMargin('5');
   // #when
   store.setMargin('-');
   const invalid = {
@@ -187,17 +213,58 @@ test('an invalid margin draft leaves settings unchanged until valid text arrives
     input: store.$inputs.get().margin,
     valid: store.$inputsValid.get(),
   };
-  store.setMargin('1e1');
+  store.commitMargin();
   // #then
   expect({
     invalid,
-    margin: store.$settings.get().marginMm,
-    input: store.$inputs.get().margin,
+    reverted: store.$inputs.get().margin,
   }).toEqual({
-    invalid: { margin: 2, input: { text: '-', valid: false }, valid: false },
+    invalid: { margin: 5, input: { text: '-', valid: false }, valid: false },
+    reverted: { text: '5', valid: true },
+  });
+});
+
+test('committing a valid margin draft keeps its text unchanged', () => {
+  // #given
+  const store = setup();
+  store.setMargin('1e1');
+  // #when
+  store.commitMargin();
+  // #then
+  expect({ margin: store.$settings.get().marginMm, input: store.$inputs.get().margin }).toEqual({
     margin: 10,
     input: { text: '1e1', valid: true },
   });
+});
+
+test.each([
+  [
+    'copy count',
+    (store: ReturnType<typeof createPaperMinisStore>, id: number) => store.setCount(id, ''),
+    'Количество должно быть целым числом от 1, размеры — больше 0 мм.',
+  ],
+  [
+    'custom size',
+    (store: ReturnType<typeof createPaperMinisStore>, id: number) => {
+      store.setSize(id, 'custom');
+      store.setCustomDimensions(id, { width: '0' });
+    },
+    'Количество должно быть целым числом от 1, размеры — больше 0 мм.',
+  ],
+  [
+    'figure margin',
+    (store: ReturnType<typeof createPaperMinisStore>) => store.setMargin('-1'),
+    'Поля должны быть числом от 0 мм.',
+  ],
+] as const)('the draft error explains an invalid %s', (_, invalidate, expected) => {
+  // #given
+  const store = setup();
+  const id = store.addBlank()!;
+  const before = store.$draftError.get();
+  // #when
+  invalidate(store, id);
+  // #then
+  expect({ before, after: store.$draftError.get() }).toEqual({ before: '', after: expected });
 });
 
 test('direct and loaded settings reject the same invalid fields', () => {
@@ -747,6 +814,42 @@ test('generation keeps every row and setting mutation locked until rendering set
     busy: store.$busy.get(),
     count: store.$layout.get().miniCount,
   }).toEqual({ sameSnapshot: true, busy: false, count: 3 });
+});
+
+test('generation keeps every draft commit locked until rendering settles', async () => {
+  // #given
+  let release!: (bytes: Uint8Array) => void;
+  const rendering = new Promise<Uint8Array>((resolve) => {
+    release = resolve;
+  });
+  const store = setup(() => rendering);
+  const id = store.addBlank()!;
+  store.setSize(id, 'custom');
+  store.setSize(id, 'medium');
+  await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
+  const download = store.download();
+  const inputs = store.$inputs.get();
+  inputs.rows[id].count = { text: '', valid: false };
+  inputs.rows[id].customWidthMm = { text: '', valid: false };
+  inputs.margin = { text: '', valid: false };
+  // #when
+  store.commitCount(id);
+  store.commitCustomDimension(id, 'width');
+  store.commitMargin();
+  const during = structuredClone(store.$inputs.get());
+  release(Uint8Array.from([1]));
+  await download;
+  // #then
+  expect(during).toEqual({
+    rows: {
+      [id]: {
+        count: { text: '', valid: false },
+        customWidthMm: { text: '', valid: false },
+        customHeightMm: { text: '30', valid: true },
+      },
+    },
+    margin: { text: '', valid: false },
+  });
 });
 
 test('a removed row’s late load neither restores it nor invalidates the preview', async () => {

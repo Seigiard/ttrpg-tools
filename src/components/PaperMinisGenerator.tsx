@@ -362,7 +362,7 @@ export default function PaperMinisGenerator() {
   const rows = useStore(store.$rows);
   const settings = useStore(store.$settings);
   const inputs = useStore(store.$inputs);
-  const inputsValid = useStore(store.$inputsValid);
+  const draftError = useStore(store.$draftError);
   const packed = useStore(store.$layout);
   const canGenerate = useStore(store.$canGenerate);
   const message = useStore(store.$message);
@@ -501,10 +501,7 @@ export default function PaperMinisGenerator() {
                   value={inputs.margin.text}
                   aria-invalid={!inputs.margin.valid}
                   onChange={(event) => store.setMargin(event.target.value)}
-                  onBlur={() => {
-                    if (!store.$inputs.get().margin.valid)
-                      store.setMargin(String(store.$settings.get().marginMm));
-                  }}
+                  onBlur={store.commitMargin}
                 />
               </label>
               {rows.length > 0 && (
@@ -559,14 +556,9 @@ export default function PaperMinisGenerator() {
                       ? 'Обрабатываем изображения. PDF будет доступен после завершения.'
                       : ''}
                 </p>
-                {!inputs.margin.valid && (
+                {draftError && (
                   <p role="status" className="text-sm text-danger">
-                    Поля должны быть числом от 0 мм.
-                  </p>
-                )}
-                {!inputsValid && inputs.margin.valid && (
-                  <p role="status" className="text-sm text-danger">
-                    Количество должно быть целым числом от 1, размеры — больше 0 мм.
+                    {draftError}
                   </p>
                 )}
                 <div className="space-y-2">
@@ -623,17 +615,7 @@ export default function PaperMinisGenerator() {
               {rows.map((row, index) => {
                 const status = packed.entries[index];
                 const statusWarning = status && entryStatusWarning(status);
-                const rowInputs = inputs.rows[row.id] ?? {
-                  count: { text: String(row.count), valid: true },
-                  customWidthMm: {
-                    text: row.customWidthMm === undefined ? '' : String(row.customWidthMm),
-                    valid: row.customWidthMm !== undefined,
-                  },
-                  customHeightMm: {
-                    text: row.customHeightMm === undefined ? '' : String(row.customHeightMm),
-                    valid: row.customHeightMm !== undefined,
-                  },
-                };
+                const rowInputs = inputs.rows[row.id];
                 return (
                   <article
                     key={row.id}
@@ -749,10 +731,7 @@ export default function PaperMinisGenerator() {
                           value={rowInputs.count.text}
                           aria-invalid={!rowInputs.count.valid}
                           onChange={(event) => store.setCount(row.id, event.target.value)}
-                          onBlur={() => {
-                            if (!store.$inputs.get().rows[row.id]?.count.valid)
-                              store.setCount(row.id, String(row.count));
-                          }}
+                          onBlur={() => store.commitCount(row.id)}
                         />
                       </label>
                       {row.heightSlot === 'custom' && (
@@ -774,12 +753,7 @@ export default function PaperMinisGenerator() {
                                       [dimension]: event.target.value,
                                     })
                                   }
-                                  onBlur={() => {
-                                    if (!store.$inputs.get().rows[row.id]?.[key].valid)
-                                      store.setCustomDimensions(row.id, {
-                                        [dimension]: String(row[key]),
-                                      });
-                                  }}
+                                  onBlur={() => store.commitCustomDimension(row.id, dimension)}
                                 />
                               </label>
                             );
