@@ -1,4 +1,4 @@
-import { calibrationGap } from './calibration';
+import { calibrationGap } from './calibration-session';
 import { HEIGHT_SLOT_ORDER } from './sizes';
 import type { HeightCalibration, HeightSlot, MiniSize } from './types';
 

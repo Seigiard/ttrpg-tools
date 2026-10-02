@@ -7,15 +7,18 @@ import {
 } from '@/lib/paper-minis/artwork';
 import { artworkMimeType } from '@/lib/paper-minis/artwork-formats';
 import { planBatch } from '@/lib/paper-minis/batch-plan';
+import { calibrationAfterChange } from '@/lib/paper-minis/calibration-reset-policy';
 import {
-  calibrationChanged,
   calibrationGap,
   calibrationRange,
-  DEFAULT_CALIBRATION,
-  setCalibrationLine as setLine,
+  calibrationSessionResult,
+  moveCalibrationLine as moveSessionLine,
+  openCalibrationSession,
+  setCalibrationLine as setSessionLine,
   type CalibrationLine,
   type CalibrationRange,
-} from '@/lib/paper-minis/calibration';
+  type CalibrationSession as CalibrationDraft,
+} from '@/lib/paper-minis/calibration-session';
 import { canvasToPngBytes } from '@/lib/paper-minis/canvas';
 import {
   DEFAULT_FIGURE_MARGIN_MM,
@@ -67,13 +70,10 @@ export type PaperMinisStoreDependencies = {
 };
 export type { ArtworkPreparation, PaperMinisArtwork };
 type Preview = { bytes: Uint8Array; revision: number };
-export type CalibrationSession = {
-  rowId: number;
+export type CalibrationSession = CalibrationDraft & {
   rowLabel: string;
   artwork: PreparedArtwork;
   backArtwork?: PreparedArtwork | null;
-  lines: HeightCalibration;
-  artworkHeight: number;
   ranges: Record<CalibrationLine, CalibrationRange>;
   slotHeightMm: number;
   printedHeightMm: number;
@@ -233,14 +233,14 @@ export function createPaperMinisStore({
   let nextId = 0;
   let nextLoadId = 0;
   const loads = new Map<string, object>();
-  let initialCalibration: HeightCalibration | undefined;
 
   function calibrationSession(
     row: MiniRow,
-    lines: HeightCalibration,
+    draft: CalibrationDraft,
   ): CalibrationSession | undefined {
     if (!row.artwork) return undefined;
-    const calibration = calibrationChanged(lines, initialCalibration) ? lines : initialCalibration;
+    const result = calibrationSessionResult(draft);
+    const calibration = result.state === 'changed' ? result.calibration : row.calibration;
     // Every copy shares one geometry, so a single copy is enough to preview it.
     const resolved = resolveEntry(
       { ...row, calibration, count: 1 },
@@ -251,15 +251,13 @@ export function createPaperMinisStore({
     if (!mini) return undefined;
     const warning = entryStatusWarning(resolved.status);
     return {
-      rowId: row.id,
+      ...draft,
       rowLabel: row.name || 'Миниатюра',
       artwork: row.artwork,
       backArtwork: row.backArtwork,
-      lines,
-      artworkHeight: Math.max(row.artwork.height, row.backArtwork?.height ?? 0),
       ranges: {
-        head: calibrationRange(lines, 'head'),
-        feet: calibrationRange(lines, 'feet'),
+        head: calibrationRange(draft.lines, 'head'),
+        feet: calibrationRange(draft.lines, 'feet'),
       },
       slotHeightMm: resolveFigureHeightMm(row),
       printedHeightMm: mini.copies[0].imageHeightMm,
@@ -271,7 +269,6 @@ export function createPaperMinisStore({
   }
 
   function cancelCalibration() {
-    initialCalibration = undefined;
     $calibration.set(undefined);
   }
 
@@ -280,18 +277,20 @@ export function createPaperMinisStore({
     // the finished expansion drop them. A single image loading never touches a ready row.
     if ($busy.get() || [...loads.keys()].some((key) => key.startsWith('zip:'))) return false;
     const row = $rows.get().find((candidate) => candidate.id === id);
-    if (!row) return false;
-    initialCalibration = calibrationGap(row.calibration) === undefined ? undefined : row.calibration;
-    const session = calibrationSession(row, { ...(initialCalibration ?? DEFAULT_CALIBRATION) });
-    if (!session) {
-      initialCalibration = undefined;
-      return false;
-    }
+    if (!row?.artwork) return false;
+    const draft = openCalibrationSession(
+      row.id,
+      row.calibration,
+      row.artwork.height,
+      row.backArtwork?.height,
+    );
+    const session = calibrationSession(row, draft);
+    if (!session) return false;
     $calibration.set(session);
     return true;
   }
 
-  function updateCalibration(line: CalibrationLine, fraction: number) {
+  function editCalibration(edit: (session: CalibrationSession) => CalibrationDraft) {
     const session = $calibration.get();
     if (!session) return;
     const row = $rows.get().find((candidate) => candidate.id === session.rowId);
@@ -299,18 +298,23 @@ export function createPaperMinisStore({
       cancelCalibration();
       return;
     }
-    const lines = setLine(session.lines, line, fraction);
-    if (lines === session.lines) return;
-    const next = calibrationSession(row, lines);
+    const draft = edit(session);
+    if (draft === session) return;
+    const next = calibrationSession(row, draft);
     if (next) $calibration.set(next);
     else cancelCalibration();
   }
 
+  function updateCalibration(line: CalibrationLine, fraction: number) {
+    editCalibration((session) => setSessionLine(session, line, fraction));
+  }
+
   function applyCalibration() {
     const session = $calibration.get();
-    if (!session || calibrationGap(session.lines) === undefined) return false;
-    const changedByValue = calibrationChanged(session.lines, initialCalibration);
-    if (changedByValue) updateRow(session.rowId, { calibration: session.lines });
+    if (!session) return false;
+    const result = calibrationSessionResult(session);
+    if (result.state === 'invalid') return false;
+    if (result.state === 'changed') updateRow(session.rowId, { calibration: result.calibration });
     cancelCalibration();
     return true;
   }
@@ -318,7 +322,7 @@ export function createPaperMinisStore({
   function resetCalibration(id: number) {
     const row = $rows.get().find((candidate) => candidate.id === id);
     if (!row?.calibration) return;
-    updateRow(id, { calibration: undefined });
+    updateRow(id, { calibration: calibrationAfterChange(row, 'reset') });
   }
 
   function changed() {
@@ -506,20 +510,22 @@ export function createPaperMinisStore({
     $preparing.set(true);
     const normalization = $settings.get().normalization;
     const selectedRow = $rows.get().find((candidate) => candidate.id === id);
-    const replacing = back ? selectedRow?.backArtwork != null : selectedRow?.artwork != null;
+    const calibration = selectedRow
+      ? calibrationAfterChange(selectedRow, back ? 'select-back' : 'select-front')
+      : undefined;
     updateRow(
       id,
       back
         ? {
             backImage: file,
             backArtwork: null,
-            ...(replacing && { calibration: undefined }),
+            calibration,
             backWarning: undefined,
           }
         : {
             image: file,
             artwork: null,
-            ...(replacing && { calibration: undefined }),
+            calibration,
             normalizationWarning: undefined,
             frontError: undefined,
           },
@@ -640,6 +646,22 @@ export function createPaperMinisStore({
     if (typeof fields.normalization === 'boolean') next.normalization = fields.normalization;
     return next;
   }
+  function applyNormalizationChange() {
+    cancelCalibration();
+    $rows.set(
+      $rows
+        .get()
+        .map((row) =>
+          Object.assign({}, row, {
+            calibration: calibrationAfterChange(row, 'toggle-normalization'),
+          }),
+        ),
+    );
+    for (const row of $rows.get()) {
+      if (row.image) void setImage(row.id, row.image);
+      if (row.backImage) void setImage(row.id, row.backImage, true);
+    }
+  }
   function settings(fields: Partial<PaperMinisSettings>) {
     if ($busy.get()) return;
     const previous = $settings.get();
@@ -656,14 +678,7 @@ export function createPaperMinisStore({
     } catch {
       /* Storage is optional. */
     }
-    if (previous.normalization !== next.normalization) {
-      cancelCalibration();
-      $rows.set($rows.get().map((row) => Object.assign({}, row, { calibration: undefined })));
-      for (const row of $rows.get()) {
-        if (row.image) void setImage(row.id, row.image);
-        if (row.backImage) void setImage(row.id, row.backImage, true);
-      }
-    }
+    if (previous.normalization !== next.normalization) applyNormalizationChange();
   }
   function setMargin(text: string) {
     if ($busy.get()) return;
@@ -677,12 +692,14 @@ export function createPaperMinisStore({
     if ($busy.get()) return;
     try {
       const value = JSON.parse(localStorage.getItem(storageKey) ?? 'null');
-      const next = validatedSettings(value, $settings.get());
+      const previous = $settings.get();
+      const next = validatedSettings(value, previous);
       $settings.set(next);
       $inputs.set({
         ...$inputs.get(),
         margin: { text: String(next.marginMm), valid: true },
       });
+      if (previous.normalization !== next.normalization) applyNormalizationChange();
     } catch {
       /* Use defaults when storage is unavailable. */
     }
@@ -746,8 +763,7 @@ export function createPaperMinisStore({
     }
   }
   return {
-    // ADR-0002's all-images-removed test still needs direct row mutation until calibration is reworked.
-    $rows,
+    $rows: readonlyType($rows),
     $settings: readonlyType($settings),
     $inputs: readonlyType($inputs),
     $inputsValid,
@@ -774,9 +790,7 @@ export function createPaperMinisStore({
     openCalibration,
     setCalibrationLine: updateCalibration,
     moveCalibrationLine(line: CalibrationLine, pixels: number) {
-      const session = $calibration.get();
-      if (!session || session.artworkHeight <= 0) return;
-      updateCalibration(line, session.lines[line] + pixels / session.artworkHeight);
+      editCalibration((session) => moveSessionLine(session, line, pixels));
     },
     applyCalibration,
     cancelCalibration,
@@ -798,10 +812,11 @@ export function createPaperMinisStore({
     clearBack(id: number) {
       if ($busy.get()) return;
       loads.delete(`${id}:true`);
+      const row = $rows.get().find((candidate) => candidate.id === id);
       updateRow(id, {
         backImage: null,
         backArtwork: null,
-        ...(!$rows.get().find((row) => row.id === id)?.image && { calibration: undefined }),
+        calibration: row ? calibrationAfterChange(row, 'clear-back') : undefined,
         backWarning: undefined,
       });
       $preparing.set(loads.size > 0);

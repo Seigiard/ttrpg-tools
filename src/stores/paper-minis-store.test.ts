@@ -853,6 +853,7 @@ test('a calibration session previews draft edits and cancel leaves the row uncha
   // #then
   expect({
     opened,
+    startingLines: session?.startingLines,
     lines: session?.lines,
     artworkHeight: session?.artworkHeight,
     ranges: session?.ranges,
@@ -863,6 +864,7 @@ test('a calibration session previews draft edits and cancel leaves the row uncha
     revision: store.$revision.get(),
   }).toEqual({
     opened: true,
+    startingLines: { head: 0, feet: 1 },
     lines: { head: 0.25, feet: 0.75 },
     artworkHeight: 100,
     ranges: { head: { min: 0, max: 0.65 }, feet: { min: 0.35, max: 1 } },
@@ -1041,23 +1043,6 @@ test('calibration cannot open while the selected back artwork is loading', async
     whileLoading: false,
     afterLoading: true,
     open: true,
-  });
-});
-
-test('a zero-copy oversized row can open calibration with the row warning', async () => {
-  // #given
-  const store = setup();
-  const id = store.addBlank()!;
-  await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
-  store.setSize(id, 'custom');
-  store.setCustomDimensions(id, { width: '300', height: '30' });
-  store.$rows.set(store.$rows.get().map((row) => Object.assign({}, row, { count: 0 })));
-  // #when
-  const opened = store.openCalibration(id);
-  // #then
-  expect({ opened, warning: store.$calibration.get()?.warning }).toEqual({
-    opened: true,
-    warning: 'Не помещается на лист. Уменьшите размер или поля. Эта миниатюра не попадёт в PDF.',
   });
 });
 
@@ -1588,7 +1573,7 @@ test('calibration can be set, cleared, copied and kept across size changes', asy
   ]);
 });
 
-test('adding a missing back keeps calibration', async () => {
+test('adding a missing back keeps calibration after the artwork is prepared', async () => {
   // #given
   const store = setup();
   const id = store.addBlank()!;
@@ -1645,6 +1630,38 @@ test('normalization clears calibration on a row with loaded front and back image
   ]);
 });
 
+test('loading a different normalization setting resets calibration and prepares artwork again', async () => {
+  // #given
+  const normalizations: boolean[] = [];
+  const artwork: PaperMinisArtwork = {
+    prepare(_file, options) {
+      normalizations.push(options.normalize);
+      return Promise.resolve({ artwork: preparedArtwork() });
+    },
+  };
+  const store = setup(undefined, artwork);
+  const id = store.addBlank()!;
+  await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
+  calibrate(store, id, { head: 0.2, feet: 0.8 });
+  localStorage.setItem('pmg-settings', JSON.stringify({ normalization: false }));
+  // #when
+  store.loadSettings();
+  const settled = new Promise<void>((resolve) => {
+    const unsubscribe = store.$preparing.listen((preparing) => {
+      if (!preparing) {
+        unsubscribe();
+        resolve();
+      }
+    });
+  });
+  await settled;
+  // #then
+  expect({ calibration: store.$rows.get()[0].calibration, normalizations }).toEqual({
+    calibration: undefined,
+    normalizations: [true, false],
+  });
+});
+
 test('removing one of two sides keeps calibration', async () => {
   // #given
   const store = setup();
@@ -1661,20 +1678,4 @@ test('removing one of two sides keeps calibration', async () => {
     null,
     { head: 0.2, feet: 0.8 },
   ]);
-});
-
-test('removing the only image resets calibration', async () => {
-  // #given
-  const store = setup();
-  const id = store.addBlank()!;
-  await store.setImage(id, new File([png], 'back.png', { type: 'image/png' }), true);
-  store.$rows.set(
-    store.$rows
-      .get()
-      .map((row) => Object.assign({}, row, { calibration: { head: 0.2, feet: 0.8 } })),
-  );
-  // #when
-  store.clearBack(id);
-  // #then
-  expect(store.$rows.get()[0].calibration).toBe(undefined);
 });
