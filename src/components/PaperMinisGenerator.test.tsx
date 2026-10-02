@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, setSystemTime, spyOn, test } from 'bun:test';
 import { act, cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react';
+import * as pdf from '@/lib/paper-minis/pdf';
 import PaperMinisGenerator from './PaperMinisGenerator';
 
 const png = Buffer.from(
@@ -33,7 +34,7 @@ async function addBack(bytes = png) {
   });
 }
 
-test('clearing copies keeps the field empty until a new count is entered', async () => {
+test('clearing copies disables generation until blur restores the last valid count', async () => {
   // #given
   render(<PaperMinisGenerator />);
   await addFront();
@@ -42,13 +43,74 @@ test('clearing copies keeps the field empty until a new count is entered', async
   // #when
   fireEvent.change(input, { target: { value: '' } });
   const cleared = input.value;
-  fireEvent.change(input, { target: { value: `${input.value}3` } });
+  const disabled = screen.getByRole<HTMLButtonElement>('button', { name: 'Скачать PDF' }).disabled;
+  const reason = screen.getByText(
+    'Количество должно быть целым числом от 1, размеры — больше 0 мм.',
+  ).textContent;
+  fireEvent.blur(input);
   // #then
   expect({
     cleared,
     value: input.value,
+    invalid: input.getAttribute('aria-invalid'),
+    disabled,
+    reason,
+    reasonAfterBlur:
+      screen.queryByText('Количество должно быть целым числом от 1, размеры — больше 0 мм.')
+        ?.textContent ?? null,
     summary: document.querySelector('[aria-live="polite"]')?.textContent,
-  }).toEqual({ cleared: '', value: '3', summary: 'Миниатюр: 3 → листов: 1 (A4)' });
+  }).toEqual({
+    cleared: '',
+    value: '2',
+    invalid: 'false',
+    disabled: true,
+    reason: 'Количество должно быть целым числом от 1, размеры — больше 0 мм.',
+    reasonAfterBlur: null,
+    summary: 'Миниатюр: 2 → листов: 1 (A4)',
+  });
+});
+
+test('an invalid margin draft reverts on blur and restores PDF actions', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  const input = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Поля, мм' });
+  // #when
+  fireEvent.change(input, { target: { value: '' } });
+  const disabled = screen.getByRole<HTMLButtonElement>('button', { name: 'Скачать PDF' }).disabled;
+  fireEvent.blur(input);
+  // #then
+  expect({
+    disabled,
+    value: input.value,
+    invalid: input.getAttribute('aria-invalid'),
+    enabled: !screen.getByRole<HTMLButtonElement>('button', { name: 'Скачать PDF' }).disabled,
+  }).toEqual({ disabled: true, value: '2', invalid: 'false', enabled: true });
+});
+
+test('an invalid custom width reverts its own last valid value on blur', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  fireEvent.change(screen.getByRole('combobox', { name: 'Высота существа' }), {
+    target: { value: 'custom' },
+  });
+  const width = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Основание, мм' });
+  const height = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Фигурка, мм' });
+  fireEvent.change(width, { target: { value: '12.5' } });
+  fireEvent.change(height, { target: { value: '40' } });
+  // #when
+  fireEvent.change(width, { target: { value: '0' } });
+  const disabled = screen.getByRole<HTMLButtonElement>('button', { name: 'Скачать PDF' }).disabled;
+  fireEvent.blur(width);
+  // #then
+  expect({
+    disabled,
+    width: width.value,
+    height: height.value,
+    invalid: width.getAttribute('aria-invalid'),
+    enabled: !screen.getByRole<HTMLButtonElement>('button', { name: 'Скачать PDF' }).disabled,
+  }).toEqual({ disabled: true, width: '12.5', height: '40', invalid: 'false', enabled: true });
 });
 
 test('a thumbnail drop uses the first supported image even after an unsupported file', async () => {
