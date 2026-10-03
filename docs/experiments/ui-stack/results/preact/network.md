@@ -4,15 +4,15 @@ Transferred bytes use Chrome DevTools Protocol Network.loadingFinished encodedDa
 
 | Route | Mode | Transferred bytes | Requests | By resource type |
 | --- | --- | ---: | ---: | --- |
-| / | cold | 9854 | 2 | document: 1418 B / 1<br>stylesheet: 8436 B / 1 |
+| / | cold | 9850 | 2 | document: 1420 B / 1<br>stylesheet: 8430 B / 1 |
 | / | warm | 254 | 2 | document: 127 B / 1<br>stylesheet: 127 B / 1 |
-| /mausritter/weather/ | cold | 41515 | 12 | document: 5908 B / 1<br>stylesheet: 8436 B / 1<br>script: 27171 B / 10 |
+| /mausritter/weather/ | cold | 41241 | 12 | document: 5909 B / 1<br>stylesheet: 8430 B / 1<br>script: 26902 B / 10 |
 | /mausritter/weather/ | warm | 2044 | 12 | document: 127 B / 1<br>stylesheet: 127 B / 1<br>script: 1790 B / 10 |
-| /mausritter/locations/ | cold | 44314 | 11 | document: 8195 B / 1<br>stylesheet: 8436 B / 1<br>script: 27683 B / 9 |
+| /mausritter/locations/ | cold | 44033 | 11 | document: 8197 B / 1<br>stylesheet: 8430 B / 1<br>script: 27406 B / 9 |
 | /mausritter/locations/ | warm | 1865 | 11 | document: 127 B / 1<br>stylesheet: 127 B / 1<br>script: 1611 B / 9 |
-| /mausritter/encounters/ | cold | 39365 | 11 | document: 5702 B / 1<br>stylesheet: 8436 B / 1<br>script: 25227 B / 9 |
+| /mausritter/encounters/ | cold | 39104 | 11 | document: 5704 B / 1<br>stylesheet: 8430 B / 1<br>script: 24970 B / 9 |
 | /mausritter/encounters/ | warm | 1865 | 11 | document: 127 B / 1<br>stylesheet: 127 B / 1<br>script: 1611 B / 9 |
-| /the-black-hack/prices/ | cold | 42045 | 11 | document: 6446 B / 1<br>stylesheet: 8436 B / 1<br>script: 27163 B / 9 |
-| /the-black-hack/prices/ | warm | 1865 | 11 | document: 127 B / 1<br>stylesheet: 127 B / 1<br>script: 1611 B / 9 |
-| /paper-minis/ | cold | 229024 | 9 | document: 5584 B / 1<br>stylesheet: 8436 B / 1<br>script: 215004 B / 7 |
-| /paper-minis/ | warm | 1507 | 9 | document: 127 B / 1<br>stylesheet: 127 B / 1<br>script: 1253 B / 7 |
+| /the-black-hack/prices/ | cold | 41772 | 11 | document: 6447 B / 1<br>stylesheet: 8430 B / 1<br>script: 26895 B / 9 |
+| /the-black-hack/prices/ | warm | 1865 | 11 | stylesheet: 127 B / 1<br>document: 127 B / 1<br>script: 1611 B / 9 |
+| /paper-minis/ | cold | 229460 | 9 | document: 5763 B / 1<br>stylesheet: 8430 B / 1<br>script: 215267 B / 7 |
+| /paper-minis/ | warm | 1507 | 9 | stylesheet: 127 B / 1<br>document: 127 B / 1<br>script: 1253 B / 7 |
