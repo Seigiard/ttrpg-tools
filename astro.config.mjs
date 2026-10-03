@@ -1,13 +1,13 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 
-import react from '@astrojs/react';
+import preact from '@astrojs/preact';
 
 import tailwindcss from '@tailwindcss/vite';
 
 // https://astro.build/config
 export default defineConfig({
-  integrations: [react()],
+  integrations: [preact()],
 
   vite: {
     plugins: [tailwindcss()],
@@ -15,6 +15,6 @@ export default defineConfig({
     // fflate is only imported dynamically, on the first zip export or import.
     // Discovered that late, Vite re-optimizes deps mid-session and the pending
     // request fails with 504 "Outdated Optimize Dep".
-    optimizeDeps: { include: ['fflate'] }
+    optimizeDeps: { include: ['fflate'] },
   }
 });

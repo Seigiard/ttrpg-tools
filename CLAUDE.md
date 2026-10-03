@@ -40,15 +40,15 @@ Browser-тесты Paper minis живут в `tests/paper-minis/`. Меняеш�
 
 ## Архитектура: генераторы по таблицам
 
-Каждый инструмент — Astro-страница со statiс-контентом + React-остров (`client:load`). Генератор разложен на изолированные слои; добавление нового идёт по этой же цепочке:
+Каждый инструмент — Astro-страница со statiс-контентом + Preact-остров (`client:load`). Генератор разложен на изолированные слои; добавление нового идёт по этой же цепочке:
 
 1. **Данные** — `src/data/<system>/<tool>.ts`: чистые таблицы + формула `RollSpec` (`{count, sides}`). Перевод авторский, шероховатость оригинала (открытые вопросы в скобках) сохраняем.
 2. **Хелпер броска** — переиспользуй существующий, не пиши свой RNG:
    - равномерная `1d{length}` или произвольная `NdX` с одним индексом на сумму → `data/random-table.ts` (`pickFromTable`).
    - суммы сгруппированы в диапазоны (`2d6 → 3–5`, `d6 → 3–6`) → `data/range-table.ts` (`pickRange` / `validateRanges` / `findRangeIndex`). `weather-table.ts` — тонкая доменная обёртка над ним; новые range-генераторы строятся на `range-table`.
    - честный RNG (crypto + rejection sampling против modulo-bias) живёт в `src/lib/dice.ts` — единственный источник случайности.
-3. **Стор** — `src/stores/<tool>-store.ts`: фабрика `create…Store(table)` возвращает nanostores-атомы (`$…`) + операции. Без React — логика state-машины тестируется здесь напрямую.
-4. **Компонент** — `src/components/<Tool>Generator.tsx`: только presentation. Стор создаётся через `useMemo(() => create…Store(table), [table])`, подписка — `useStore` из `@nanostores/react`. Примитивы UI (`Button`, `Card`, `Tabs`) — в `src/components/ui/` (shadcn-стиль); переиспользуй их, не верстай сырыми элементами.
+3. **Стор** — `src/stores/<tool>-store.ts`: фабрика `create…Store(table)` возвращает nanostores-атомы (`$…`) + операции. Без Preact — логика state-машины тестируется здесь напрямую.
+4. **Компонент** — `src/components/<Tool>Generator.tsx`: только presentation. Стор создаётся через `useMemo(() => create…Store(table), [table])`, подписка — `useStore` из `@nanostores/preact`. Примитивы UI (`Button`, `Card`, `Tabs`) — в `src/components/ui/`; переиспользуй их, не верстай сырыми элементами.
 5. **Страница** — `src/pages/<system>/<tool>.astro` (`ToolLayout` + `AttributionFooter`) и карточка-ссылка в `src/pages/index.astro`.
 
 ### SSR-гоча

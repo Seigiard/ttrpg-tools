@@ -1,5 +1,5 @@
-import { useStore } from '@nanostores/react';
-import { useEffect, useMemo } from 'react';
+import { useStore } from '@/lib/use-store';
+import { useEffect, useMemo } from 'preact/hooks';
 import { referenceHitClass } from '@/components/ReferenceList';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -27,8 +27,7 @@ export function WeatherGenerator({ table }: Props) {
     }
   }, [store]);
 
-  const handleSeasonChange = (next: string | number | null) => {
-    if (next === null) return;
+  const handleSeasonChange = (next: string | number) => {
     store.setSeason(next as Season);
   };
 
@@ -135,11 +134,7 @@ function ReferenceTable({ table, season, roll }: ReferenceTableProps) {
               const rangeLabel = formatRangeLabel(row);
               const isHitRow = i === hitRow;
               return (
-                <tr
-                  key={rangeLabel}
-                  data-row-index={i}
-                  className="border-b border-border last:border-0"
-                >
+                <tr key={rangeLabel} data-row-index={i} className="border-b border-border last:border-0">
                   <td className="px-2 py-1.5 font-mono text-xs text-text-muted">{rangeLabel}</td>
                   {table.seasons.map((s) => {
                     const c = row.cells[s];

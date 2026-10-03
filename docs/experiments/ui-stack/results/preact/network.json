@@ -1,0 +1,258 @@
+[
+  {
+    "route": "/",
+    "mode": "cold",
+    "total": {
+      "requests": 2,
+      "transferredBytes": 9850
+    },
+    "byType": {
+      "document": {
+        "requests": 1,
+        "transferredBytes": 1420
+      },
+      "stylesheet": {
+        "requests": 1,
+        "transferredBytes": 8430
+      }
+    }
+  },
+  {
+    "route": "/",
+    "mode": "warm",
+    "total": {
+      "requests": 2,
+      "transferredBytes": 254
+    },
+    "byType": {
+      "document": {
+        "requests": 1,
+        "transferredBytes": 127
+      },
+      "stylesheet": {
+        "requests": 1,
+        "transferredBytes": 127
+      }
+    }
+  },
+  {
+    "route": "/mausritter/weather/",
+    "mode": "cold",
+    "total": {
+      "requests": 12,
+      "transferredBytes": 41241
+    },
+    "byType": {
+      "document": {
+        "requests": 1,
+        "transferredBytes": 5909
+      },
+      "stylesheet": {
+        "requests": 1,
+        "transferredBytes": 8430
+      },
+      "script": {
+        "requests": 10,
+        "transferredBytes": 26902
+      }
+    }
+  },
+  {
+    "route": "/mausritter/weather/",
+    "mode": "warm",
+    "total": {
+      "requests": 12,
+      "transferredBytes": 2044
+    },
+    "byType": {
+      "document": {
+        "requests": 1,
+        "transferredBytes": 127
+      },
+      "stylesheet": {
+        "requests": 1,
+        "transferredBytes": 127
+      },
+      "script": {
+        "requests": 10,
+        "transferredBytes": 1790
+      }
+    }
+  },
+  {
+    "route": "/mausritter/locations/",
+    "mode": "cold",
+    "total": {
+      "requests": 11,
+      "transferredBytes": 44033
+    },
+    "byType": {
+      "document": {
+        "requests": 1,
+        "transferredBytes": 8197
+      },
+      "stylesheet": {
+        "requests": 1,
+        "transferredBytes": 8430
+      },
+      "script": {
+        "requests": 9,
+        "transferredBytes": 27406
+      }
+    }
+  },
+  {
+    "route": "/mausritter/locations/",
+    "mode": "warm",
+    "total": {
+      "requests": 11,
+      "transferredBytes": 1865
+    },
+    "byType": {
+      "document": {
+        "requests": 1,
+        "transferredBytes": 127
+      },
+      "stylesheet": {
+        "requests": 1,
+        "transferredBytes": 127
+      },
+      "script": {
+        "requests": 9,
+        "transferredBytes": 1611
+      }
+    }
+  },
+  {
+    "route": "/mausritter/encounters/",
+    "mode": "cold",
+    "total": {
+      "requests": 11,
+      "transferredBytes": 39104
+    },
+    "byType": {
+      "document": {
+        "requests": 1,
+        "transferredBytes": 5704
+      },
+      "stylesheet": {
+        "requests": 1,
+        "transferredBytes": 8430
+      },
+      "script": {
+        "requests": 9,
+        "transferredBytes": 24970
+      }
+    }
+  },
+  {
+    "route": "/mausritter/encounters/",
+    "mode": "warm",
+    "total": {
+      "requests": 11,
+      "transferredBytes": 1865
+    },
+    "byType": {
+      "document": {
+        "requests": 1,
+        "transferredBytes": 127
+      },
+      "stylesheet": {
+        "requests": 1,
+        "transferredBytes": 127
+      },
+      "script": {
+        "requests": 9,
+        "transferredBytes": 1611
+      }
+    }
+  },
+  {
+    "route": "/the-black-hack/prices/",
+    "mode": "cold",
+    "total": {
+      "requests": 11,
+      "transferredBytes": 41772
+    },
+    "byType": {
+      "document": {
+        "requests": 1,
+        "transferredBytes": 6447
+      },
+      "stylesheet": {
+        "requests": 1,
+        "transferredBytes": 8430
+      },
+      "script": {
+        "requests": 9,
+        "transferredBytes": 26895
+      }
+    }
+  },
+  {
+    "route": "/the-black-hack/prices/",
+    "mode": "warm",
+    "total": {
+      "requests": 11,
+      "transferredBytes": 1865
+    },
+    "byType": {
+      "stylesheet": {
+        "requests": 1,
+        "transferredBytes": 127
+      },
+      "document": {
+        "requests": 1,
+        "transferredBytes": 127
+      },
+      "script": {
+        "requests": 9,
+        "transferredBytes": 1611
+      }
+    }
+  },
+  {
+    "route": "/paper-minis/",
+    "mode": "cold",
+    "total": {
+      "requests": 9,
+      "transferredBytes": 229460
+    },
+    "byType": {
+      "document": {
+        "requests": 1,
+        "transferredBytes": 5763
+      },
+      "stylesheet": {
+        "requests": 1,
+        "transferredBytes": 8430
+      },
+      "script": {
+        "requests": 7,
+        "transferredBytes": 215267
+      }
+    }
+  },
+  {
+    "route": "/paper-minis/",
+    "mode": "warm",
+    "total": {
+      "requests": 9,
+      "transferredBytes": 1507
+    },
+    "byType": {
+      "stylesheet": {
+        "requests": 1,
+        "transferredBytes": 127
+      },
+      "document": {
+        "requests": 1,
+        "transferredBytes": 127
+      },
+      "script": {
+        "requests": 7,
+        "transferredBytes": 1253
+      }
+    }
+  }
+]

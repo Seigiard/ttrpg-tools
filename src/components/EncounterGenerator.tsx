@@ -1,5 +1,5 @@
-import { useStore } from '@nanostores/react';
-import { useEffect, useMemo } from 'react';
+import { useStore } from '@/lib/use-store';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { ReferenceList } from '@/components/ReferenceList';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -49,6 +49,21 @@ function CheckSection({ table, roll, onRoll }: SectionProps) {
   const rows = table.check.rows;
   const row = roll ? rows[roll.rowIndex] : null;
   const loading = !row;
+  const [history, setHistory] = useState<Array<{ sum: number; label: string }>>([]);
+  const clearedRoll = useRef<RangePick | null>(null);
+
+  useEffect(() => {
+    if (!roll || !row) return;
+    if (clearedRoll.current === roll) return;
+
+    setHistory((items) => [{ sum: roll.sum, label: row.ru }, ...items].slice(0, 5));
+  }, [roll, row]);
+
+  const clearHistory = () => {
+    clearedRoll.current = roll;
+    setHistory([]);
+  };
+
   return (
     <section className="space-y-6">
       <h2 className="font-display text-2xl text-text">Проверка столкновения</h2>
@@ -59,9 +74,7 @@ function CheckSection({ table, roll, onRoll }: SectionProps) {
       <Card data-testid="check-result-card">
         <CardHeader>
           <div className="flex items-center justify-between">
-            <span className="font-mono text-xs uppercase tracking-wider text-text-muted">
-              Проверка
-            </span>
+            <span className="font-mono text-xs uppercase tracking-wider text-text-muted">Проверка</span>
             <span className="font-mono text-xs text-text-muted">
               d6 = <Skeleton loading={loading}>{roll ? roll.sum : 0}</Skeleton>
             </span>
@@ -69,27 +82,34 @@ function CheckSection({ table, roll, onRoll }: SectionProps) {
         </CardHeader>
         <CardContent>
           <div data-testid="check-result" data-outcome={row?.outcome}>
-            <p
-              className={`font-display text-3xl ${row ? outcomeTone[row.outcome] : 'text-text-muted'}`}
-            >
+            <p className={`font-display text-3xl ${row ? outcomeTone[row.outcome] : 'text-text-muted'}`}>
               <Skeleton loading={loading}>{row ? row.ru : 'Проверка'}</Skeleton>
             </p>
             <p className="mt-2 text-sm text-text-muted">
-              <Skeleton loading={loading}>
-                {row ? row.hint : 'Бросаем кубик столкновения этой зоны…'}
-              </Skeleton>
+              <Skeleton loading={loading}>{row ? row.hint : 'Бросаем кубик столкновения этой зоны…'}</Skeleton>
             </p>
           </div>
         </CardContent>
       </Card>
 
-      <ReferenceList
-        title="Исходы · d6"
-        testId="check-reference"
-        rows={rows}
-        hitIndex={roll ? roll.rowIndex : null}
-        label={formatRangeLabel}
-      >
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="font-display text-lg text-text">Последние проверки</h3>
+          <Button variant="outline" size="sm" onClick={clearHistory} data-testid="check-history-clear">
+            Очистить
+          </Button>
+        </div>
+        <ul className="space-y-2" data-testid="check-history">
+          {history.map((item, index) => (
+            <li key={`${item.sum}-${item.label}-${index}`} className="flex items-center justify-between rounded-lg border border-border bg-surface px-3 py-2 text-sm">
+              <span className="font-mono text-xs text-text-muted">d6 = {item.sum}</span>
+              <span className="font-semibold text-text">{item.label}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <ReferenceList title="Исходы · d6" testId="check-reference" rows={rows} hitIndex={roll ? roll.rowIndex : null} label={formatRangeLabel}>
         {(referenceRow) => (
           <>
             <span className="font-semibold text-text">{referenceRow.ru}.</span> {referenceRow.hint}
@@ -114,9 +134,7 @@ function ReactionSection({ table, roll, onRoll }: SectionProps) {
       <Card data-testid="reaction-result-card">
         <CardHeader>
           <div className="flex items-center justify-between">
-            <span className="font-mono text-xs uppercase tracking-wider text-text-muted">
-              Реакция
-            </span>
+            <span className="font-mono text-xs uppercase tracking-wider text-text-muted">Реакция</span>
             <span className="font-mono text-xs text-text-muted">
               2d6 = <Skeleton loading={loading}>{roll ? roll.sum : 0}</Skeleton>
             </span>
@@ -136,13 +154,7 @@ function ReactionSection({ table, roll, onRoll }: SectionProps) {
         </CardContent>
       </Card>
 
-      <ReferenceList
-        title="Отношение · 2d6"
-        testId="reaction-reference"
-        rows={rows}
-        hitIndex={roll ? roll.rowIndex : null}
-        label={formatRangeLabel}
-      >
+      <ReferenceList title="Отношение · 2d6" testId="reaction-reference" rows={rows} hitIndex={roll ? roll.rowIndex : null} label={formatRangeLabel}>
         {(referenceRow) => (
           <>
             <span className="font-semibold text-text">{referenceRow.ru}.</span>{' '}

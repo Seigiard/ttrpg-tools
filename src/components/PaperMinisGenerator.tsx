@@ -1,11 +1,9 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
-import { useStore } from '@nanostores/react';
+import { Fragment, type ComponentChildren, type JSX, type Ref } from 'preact';
+import { useStore } from '@/lib/use-store';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import {
-  createPaperMinisStore,
-  type CalibrationSession,
-} from '@/stores/paper-minis-store';
+import { createPaperMinisStore, type CalibrationSession } from '@/stores/paper-minis-store';
 import { ARTWORK_ACCEPT, artworkMimeType } from '@/lib/paper-minis/artwork-formats';
 import { isSupportedArtwork } from '@/lib/paper-minis/artwork';
 import type { CalibrationLine } from '@/lib/paper-minis/calibration-session';
@@ -34,11 +32,17 @@ function useArtworkUrl(artwork?: PreparedArtwork | null) {
       setUrl(undefined);
       return;
     }
-    const next = URL.createObjectURL(
-      new Blob([artwork.bytes as BlobPart], {
-        type: artworkMimeType(artwork.format),
-      }),
-    );
+    let next: string;
+    try {
+      next = URL.createObjectURL(
+        new Blob([artwork.bytes as BlobPart], {
+          type: artworkMimeType(artwork.format),
+        }),
+      );
+    } catch {
+      setUrl(undefined);
+      return;
+    }
     setUrl(next);
     return () => URL.revokeObjectURL(next);
   }, [artwork]);
@@ -60,7 +64,7 @@ function ArtworkFrame({
   artwork: PreparedArtwork;
   url: string;
   label: string;
-  children?: ReactNode;
+  children?: ComponentChildren;
 }) {
   return (
     <span className="relative block h-full w-full [container-type:size]">
@@ -133,6 +137,12 @@ function ArtworkSlot({
 }) {
   const url = useArtworkUrl(artwork);
   const input = useRef<HTMLInputElement>(null);
+  const handleFileInput = (event: JSX.TargetedEvent<HTMLInputElement, Event>) => {
+    const target = event.target as HTMLInputElement;
+    const file = target.files?.[0];
+    if (file) onFile(file);
+    target.value = '';
+  };
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-surface-elevated">
       <div className="border-b border-border px-3 py-2">
@@ -150,7 +160,7 @@ function ArtworkSlot({
         onDrop={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          const dropped = Array.from(event.dataTransfer.files);
+          const dropped = Array.from(event.dataTransfer?.files ?? []);
           const file = dropped.find(isSupportedArtwork) ?? dropped[0];
           if (file) onFile(file);
         }}
@@ -182,11 +192,8 @@ function ArtworkSlot({
         accept={ARTWORK_ACCEPT}
         className="hidden"
         aria-label={label}
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file) onFile(file);
-          event.target.value = '';
-        }}
+        onInput={handleFileInput}
+        onChange={handleFileInput}
       />
     </div>
   );
@@ -205,7 +212,7 @@ function CalibrationArtwork({
   frontUrl: string;
   backUrl?: string;
   artworkRef: Ref<HTMLSpanElement>;
-  children: ReactNode;
+  children: ComponentChildren;
 }) {
   const totalAspect =
     artwork.width / artwork.height +
@@ -244,11 +251,12 @@ function HeightCalibrationDialog({
   onMoveLine: (line: CalibrationLine, pixels: number) => void;
   onApply: () => void;
   onCancel: () => void;
-  returnFocus: React.RefObject<HTMLButtonElement | null>;
+  returnFocus: { current: HTMLButtonElement | null };
 }) {
   const { artwork, backArtwork, lines } = session;
   const frontUrl = useArtworkUrl(artwork);
   const backUrl = useArtworkUrl(backArtwork);
+  const areaRef = useRef<HTMLDivElement>(null);
   const artworkRef = useRef<HTMLSpanElement>(null);
   const dragging = useRef<'head' | 'feet' | null>(null);
 
@@ -289,6 +297,7 @@ function HeightCalibrationDialog({
           </p>
         )}
         <div
+          ref={areaRef}
           data-testid="height-calibration-artwork"
           className="relative mt-4 h-[min(65vh,640px)] touch-none rounded-lg border border-border bg-surface-elevated p-6"
           onPointerMove={(event) => {
@@ -338,9 +347,9 @@ function HeightCalibrationDialog({
                       onMoveLine(key, pixels);
                     }}
                     onPointerDown={(event) => {
-                      if (event.button !== 0 || event.ctrlKey) return;
+                      if ((event.button ?? 0) !== 0 || event.ctrlKey) return;
                       dragging.current = key;
-                      event.currentTarget.setPointerCapture?.(event.pointerId);
+                      areaRef.current?.setPointerCapture?.(event.pointerId);
                       setLineFromClientY(key, event.clientY);
                     }}
                   >
@@ -366,8 +375,11 @@ function HeightCalibrationDialog({
   );
 }
 
-export default function PaperMinisGenerator() {
-  const store = useMemo(() => createPaperMinisStore(), []);
+type PaperMinisGeneratorStore = ReturnType<typeof createPaperMinisStore>;
+
+export default function PaperMinisGenerator({ store: providedStore }: { store?: PaperMinisGeneratorStore }) {
+  const fallbackStore = useMemo(() => createPaperMinisStore(), []);
+  const store = providedStore ?? fallbackStore;
   const rows = useStore(store.$rows);
   const settings = useStore(store.$settings);
   const inputs = useStore(store.$inputs);
@@ -384,6 +396,23 @@ export default function PaperMinisGenerator() {
   const calibrationOpener = useRef<HTMLButtonElement>(null);
   const [dragging, setDragging] = useState(false);
   const files = useRef<HTMLInputElement>(null);
+  const handlePageSize = (event: JSX.TargetedEvent<HTMLSelectElement, Event>) =>
+    store.settings({ pageSize: (event.target as HTMLSelectElement).value as 'a4' | 'letter' });
+  const handleMargin = (event: JSX.TargetedEvent<HTMLInputElement, Event>) =>
+    store.setMargin((event.target as HTMLInputElement).value);
+  const handleSetAllSizes = (event: JSX.TargetedEvent<HTMLSelectElement, Event>) =>
+    store.setAllSizes((event.target as HTMLSelectElement).value as MiniSize);
+  const handleNumberDuplicates = (event: JSX.TargetedEvent<HTMLInputElement, Event>) =>
+    store.settings({ numberDuplicates: (event.target as HTMLInputElement).checked });
+  const handleNormalization = (event: JSX.TargetedEvent<HTMLInputElement, Event>) =>
+    store.settings({ normalization: (event.target as HTMLInputElement).checked });
+  const handleBatchInput = (event: JSX.TargetedEvent<HTMLInputElement, Event>) => {
+    const target = event.target as HTMLInputElement;
+    const selected = Array.from(target.files ?? []);
+    if (selected.length === 0) return;
+    store.ingest(selected);
+    target.value = '';
+  };
 
   useEffect(() => {
     store.loadSettings();
@@ -535,9 +564,8 @@ export default function PaperMinisGenerator() {
                 <select
                   className={field}
                   value={settings.pageSize}
-                  onChange={(event) =>
-                    store.settings({ pageSize: event.target.value as 'a4' | 'letter' })
-                  }
+                  onInput={handlePageSize}
+                  onChange={handlePageSize}
                 >
                   <option value="a4">A4 (210 × 297 мм)</option>
                   <option value="letter">Letter (216 × 279 мм)</option>
@@ -553,7 +581,8 @@ export default function PaperMinisGenerator() {
                   required
                   value={inputs.margin.text}
                   aria-invalid={!inputs.margin.valid}
-                  onChange={(event) => store.setMargin(event.target.value)}
+                  onInput={handleMargin}
+                  onChange={handleMargin}
                   onBlur={store.commitMargin}
                 />
               </label>
@@ -583,7 +612,12 @@ export default function PaperMinisGenerator() {
                     step="any"
                     value={inputs.printerMeasurement.text}
                     aria-invalid={!inputs.printerMeasurement.valid}
-                    onChange={(event) => store.setPrinterMeasurement(event.target.value)}
+                    onInput={(event) =>
+                      store.setPrinterMeasurement((event.target as HTMLInputElement).value)
+                    }
+                    onChange={(event) =>
+                      store.setPrinterMeasurement((event.target as HTMLInputElement).value)
+                    }
                     onBlur={store.commitPrinterMeasurement}
                   />
                 </label>
@@ -606,7 +640,8 @@ export default function PaperMinisGenerator() {
                   <select
                     className={field}
                     value=""
-                    onChange={(event) => store.setAllSizes(event.target.value as MiniSize)}
+                    onInput={handleSetAllSizes}
+                    onChange={handleSetAllSizes}
                   >
                     <option value="" disabled>
                       Выберите…
@@ -620,7 +655,8 @@ export default function PaperMinisGenerator() {
                   <input
                     type="checkbox"
                     checked={settings.numberDuplicates}
-                    onChange={(event) => store.settings({ numberDuplicates: event.target.checked })}
+                    onInput={handleNumberDuplicates}
+                    onChange={handleNumberDuplicates}
                   />
                   Нумеровать копии
                 </label>
@@ -628,7 +664,8 @@ export default function PaperMinisGenerator() {
                   <input
                     type="checkbox"
                     checked={settings.normalization}
-                    onChange={(event) => store.settings({ normalization: event.target.checked })}
+                    onInput={handleNormalization}
+                    onChange={handleNormalization}
                   />
                   Обрезать пустые поля
                 </label>
@@ -692,6 +729,15 @@ export default function PaperMinisGenerator() {
                 variant="outline"
                 className="h-auto min-h-28 w-full flex-col whitespace-normal border-dashed p-6"
                 onClick={() => files.current?.click()}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  store.ingest(Array.from(event.dataTransfer?.files ?? []));
+                }}
               >
                 <span className="text-base">Добавить изображения</span>
                 <span className="text-sm font-normal text-text-muted">
@@ -708,10 +754,8 @@ export default function PaperMinisGenerator() {
               accept={`${ARTWORK_ACCEPT},.zip,application/zip`}
               className="hidden"
               aria-label="Добавить изображения"
-              onChange={(event) => {
-                store.ingest(Array.from(event.target.files ?? []));
-                event.target.value = '';
-              }}
+              onInput={handleBatchInput}
+              onChange={handleBatchInput}
             />
 
             <section aria-label="Миниатюры" className="space-y-5">
@@ -791,7 +835,7 @@ export default function PaperMinisGenerator() {
                             className="min-h-11"
                             disabled={!row.artwork || status?.state === 'loading'}
                             onClick={(event) => {
-                              calibrationOpener.current = event.currentTarget;
+                              calibrationOpener.current = event.target as HTMLButtonElement;
                               store.openCalibration(row.id);
                             }}
                           >
@@ -817,8 +861,11 @@ export default function PaperMinisGenerator() {
                           className={field}
                           value={row.heightSlot}
                           title={slotGeometryLabel(row.heightSlot)}
+                          onInput={(event) =>
+                            store.setSize(row.id, (event.target as HTMLSelectElement).value as MiniSize)
+                          }
                           onChange={(event) =>
-                            store.setSize(row.id, event.target.value as MiniSize)
+                            store.setSize(row.id, (event.target as HTMLSelectElement).value as MiniSize)
                           }
                         >
                           <SizeOptions custom />
@@ -834,7 +881,8 @@ export default function PaperMinisGenerator() {
                           required
                           value={rowInputs.count.text}
                           aria-invalid={!rowInputs.count.valid}
-                          onChange={(event) => store.setCount(row.id, event.target.value)}
+                          onInput={(event) => store.setCount(row.id, (event.target as HTMLInputElement).value)}
+                          onChange={(event) => store.setCount(row.id, (event.target as HTMLInputElement).value)}
                           onBlur={() => store.commitCount(row.id)}
                         />
                       </label>
@@ -852,9 +900,14 @@ export default function PaperMinisGenerator() {
                                   required
                                   value={rowInputs[key].text}
                                   aria-invalid={!rowInputs[key].valid}
+                                  onInput={(event) =>
+                                    store.setCustomDimensions(row.id, {
+                                      [dimension]: (event.target as HTMLInputElement).value,
+                                    })
+                                  }
                                   onChange={(event) =>
                                     store.setCustomDimensions(row.id, {
-                                      [dimension]: event.target.value,
+                                      [dimension]: (event.target as HTMLInputElement).value,
                                     })
                                   }
                                   onBlur={() => store.commitCustomDimension(row.id, dimension)}
