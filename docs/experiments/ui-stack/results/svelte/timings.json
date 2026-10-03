@@ -1,0 +1,105 @@
+{
+  "machine": {
+    "cpu": "Apple M1 Pro",
+    "cpuCount": 10,
+    "os": "darwin 24.6.0",
+    "browserVersion": "153.0.8010.12"
+  },
+  "timings": [
+    {
+      "name": "weather click-to-result",
+      "repeats": 10,
+      "minMs": 36,
+      "medianMs": 39,
+      "maxMs": 64,
+      "samplesMs": [
+        64,
+        36,
+        40,
+        41,
+        40,
+        38,
+        38,
+        39,
+        39,
+        39
+      ]
+    },
+    {
+      "name": "prices tab switch",
+      "repeats": 10,
+      "minMs": 37,
+      "medianMs": 51,
+      "maxMs": 54,
+      "samplesMs": [
+        51,
+        52,
+        54,
+        50,
+        52,
+        51,
+        37,
+        38,
+        51,
+        51
+      ]
+    },
+    {
+      "name": "paper-minis upload-to-row",
+      "repeats": 10,
+      "minMs": 25,
+      "medianMs": 26,
+      "maxMs": 31,
+      "samplesMs": [
+        28,
+        26,
+        26,
+        28,
+        27,
+        31,
+        26,
+        26,
+        25,
+        26
+      ]
+    },
+    {
+      "name": "paper-minis preview ready",
+      "repeats": 10,
+      "minMs": 60,
+      "medianMs": 70,
+      "maxMs": 80,
+      "samplesMs": [
+        70,
+        71,
+        63,
+        60,
+        80,
+        64,
+        67,
+        63,
+        79,
+        75
+      ]
+    },
+    {
+      "name": "paper-minis PDF generation",
+      "repeats": 10,
+      "minMs": 59,
+      "medianMs": 66,
+      "maxMs": 78,
+      "samplesMs": [
+        73,
+        59,
+        63,
+        61,
+        67,
+        78,
+        78,
+        66,
+        64,
+        65
+      ]
+    }
+  ]
+}
