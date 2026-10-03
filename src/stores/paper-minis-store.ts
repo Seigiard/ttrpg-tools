@@ -27,7 +27,6 @@ import {
   type PackOptions,
   type PageSizeKey,
 } from '@/lib/paper-minis/geometry';
-import { generatePDF } from '@/lib/paper-minis/pdf';
 import { packEntries, resolveEntry, type PackResult } from '@/lib/paper-minis/packing';
 import {
   DEFAULT_CUSTOM_HEIGHT_MM,
@@ -226,8 +225,13 @@ async function artworkAsPng(artwork: PreparedArtwork): Promise<Uint8Array> {
   }
 }
 
+async function renderPDF(...args: Parameters<PaperMinisRenderer>) {
+  const { generatePDF } = await import('@/lib/paper-minis/pdf');
+  return generatePDF(...args);
+}
+
 export function createPaperMinisStore({
-  renderer = generatePDF,
+  renderer = renderPDF,
   artwork = createCanvasArtwork(),
 }: PaperMinisStoreDependencies = {}) {
   const $rows = atom<MiniRow[]>([]);
@@ -678,6 +682,11 @@ export function createPaperMinisStore({
     }
   }
   function ingestArtworkFiles(files: File[]) {
+    if (files.length > 0 && renderer === renderPDF) {
+      // Start loading on user intent, while artwork is being prepared.
+      // The actual render still reports any import failure through its normal error path.
+      void import('@/lib/paper-minis/pdf').catch(() => {});
+    }
     for (const planned of planBatch(files)) {
       const id = addBlank(planned);
       if (id === undefined) continue;

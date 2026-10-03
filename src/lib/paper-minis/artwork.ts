@@ -1,4 +1,3 @@
-import { PDFDocument } from 'pdf-lib';
 import { artworkFormatForMimeType, type PreparedArtworkFormat } from './artwork-formats';
 import { canvasToPngBytes } from './canvas';
 import { createArtworkNormalizer } from './normalization';
@@ -44,6 +43,7 @@ async function decodeArtwork(file: File): Promise<PreparedArtwork> {
   const { bytes, format } = await fileToImageBytes(file);
   if (format === 'png') return { bytes, format, ...pngDimensions(bytes) };
   // pdf-lib's JPEG embedder reads SOF markers without decoding pixels.
+  const { PDFDocument } = await import('pdf-lib');
   const pdf = await PDFDocument.create();
   const image = await pdf.embedJpg(bytes);
   return { bytes, format, width: image.width, height: image.height };

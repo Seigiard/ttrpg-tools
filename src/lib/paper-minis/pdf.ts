@@ -381,12 +381,4 @@ function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
 }
 
-export function buildFilename(): string {
-  const d = new Date();
-  const pad = (n: number) => n.toString().padStart(2, '0');
-  return `paper-minis-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.pdf`;
-}
-
-export function buildPrinterScaleTestSheetFilename(pageSize: PageSizeKey): string {
-  return `paper-minis-printer-scale-test-${pageSize}.pdf`;
-}
+export { buildFilename, buildPrinterScaleTestSheetFilename } from './pdf-filenames';
