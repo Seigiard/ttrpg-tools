@@ -392,6 +392,7 @@ export function createPaperMinisStore({
   function updateRow(id: number, fields: Partial<Entry>) {
     if ($busy.get()) return;
     const previous = $rows.get().find((row) => row.id === id);
+    // oxlint-disable-next-line no-map-spread -- Rows are immutable store values; a copy per changed row is intended.
     $rows.set($rows.get().map((row) => (row.id === id ? { ...row, ...fields } : row)));
     const next = $rows.get().find((row) => row.id === id);
     if (
@@ -855,8 +856,11 @@ export function createPaperMinisStore({
           names = sides.map((side) => `${base}-${suffix}-${size}-${side}${count}${calibration}.png`);
         }
         for (const name of collisionKeys) used.add(name.toLowerCase());
+        // oxlint-disable-next-line no-await-in-loop -- Exporting one image at a time avoids decoding every row into memory at once.
         entries[names[0]] = await artworkAsPng(row.artwork!);
-        if (row.backArtwork) entries[names[1]] = await artworkAsPng(row.backArtwork);
+        if (row.backArtwork)
+          // oxlint-disable-next-line no-await-in-loop -- Exporting one image at a time avoids decoding every row into memory at once.
+          entries[names[1]] = await artworkAsPng(row.backArtwork);
       }
       const bytes = zipSync(entries, { level: 0 });
       $message.set(exportSuccessMessage);

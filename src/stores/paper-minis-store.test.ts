@@ -635,6 +635,7 @@ test('export zip separates reserved filename characters and compares collisions 
   const store = setup();
   for (const name of ['Orc/Chief', 'orc chief', 'Mage:Boss*Elite?One"Two<Three>Four|Five\\Six']) {
     const id = store.addBlank({ name, heightSlot: 'small' })!;
+    // oxlint-disable-next-line no-await-in-loop -- Each image load updates the shared store; keep fixture setup deterministic.
     await store.setImage(id, artworkFile(10, 20, `${name}.png`));
   }
 

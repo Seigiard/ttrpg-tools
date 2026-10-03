@@ -227,7 +227,7 @@ function minis(shapes: Shape[]): Mini[] {
     const vertical = segments
       .filter(([a, b]) => a.x === b.x)
       .map(([a, b]) => ({ from: Math.min(a.y, b.y), to: Math.max(a.y, b.y) }));
-    const ys = [...new Set(horizontal.map((h) => h.y))].sort((a, b) => a - b);
+    const ys = [...new Set(horizontal.map((h) => h.y))].toSorted((a, b) => a - b);
     // A tick's vertical arm runs both ways from its level; a corner's only one.
     const levels = ys.map(
       (y): Level => ({
@@ -524,11 +524,11 @@ t('a sliver of Tiny artwork keeps its badge at the right of the base once folded
     },
   };
   // #when
-  const { minis } = await read(
+  const { minis: readMinis } = await read(
     await generatePDF([tall], { pageSize: 'a4', numberDuplicates: true }),
   );
   // #then  the sheet shows the back face from behind, so its right is our left
-  const [mini] = minis;
+  const [mini] = readMinis;
   const middle = (mini.extent.left + mini.extent.right) / 2;
   assert.equal(mini.back.badge!.right < middle && mini.back.badge!.left > mini.extent.left, true);
 });
@@ -607,7 +607,7 @@ t('a height slot prints one figure height for artworks of different proportions'
     },
   };
   // #when
-  const { minis } = await read(
+  const { minis: readMinis } = await read(
     await generatePDF([entry, sliver], {
       pageSize: 'a4',
       numberDuplicates: false,
@@ -616,7 +616,7 @@ t('a height slot prints one figure height for artworks of different proportions'
   );
   // #then  Tiny is 12 mm tall in printableminimaker ADR-0002's graded table, front and back, both entries
   assert.deepEqual(
-    minis
+    readMinis
       .flatMap((mini) => [mini.front.image, mini.back.image])
       .map((box) => asMm(box.top - box.bottom)),
     [12, 12, 12, 12],
@@ -705,16 +705,16 @@ t('marks stay on the piece and neighbours share a cut line', async () => {
   // #given  a row of copies, so neighbours meet edge to edge
   const copies: Entry = { ...entry, heightSlot: 'medium', count: 4 };
   // #when
-  const { minis } = await read(
+  const { minis: readMinis } = await read(
     await generatePDF([copies], { pageSize: 'a4', numberDuplicates: false }),
   );
   // #then
   assert.deepEqual(
     {
-      inward: minis.map((mini) => mini.inward),
-      shared: minis
+      inward: readMinis.map((mini) => mini.inward),
+      shared: readMinis
         .slice(1)
-        .map((mini, i) => asMm(mini.extent.left) === asMm(minis[i].extent.right)),
+        .map((mini, i) => asMm(mini.extent.left) === asMm(readMinis[i].extent.right)),
     },
     { inward: [true, true, true, true], shared: [true, true, true] },
   );
@@ -723,7 +723,7 @@ t('marks stay on the piece and neighbours share a cut line', async () => {
 t('the badge marks the base, a fixed step inside it', async () => {
   // #when  square art at Medium prints 35 mm wide, so the 25 mm base sits
   // 5 mm inside the figure and 7 mm inside the mini's own left edge
-  const { minis } = await read(
+  const { minis: readMinis } = await read(
     await generatePDF([{ ...entry, heightSlot: 'medium' }], {
       pageSize: 'a4',
       numberDuplicates: true,
@@ -731,7 +731,7 @@ t('the badge marks the base, a fixed step inside it', async () => {
     }),
   );
   // #then  rotated, the base's right corner lands at the sheet's left
-  const [mini] = minis;
+  const [mini] = readMinis;
   const badge = mini.back.badge!;
   assert.deepEqual(
     {
@@ -1149,7 +1149,7 @@ t('one sheet mixes reflected and rotated backs, and waits for a back still loadi
   // #given  a back still loading, then a plain entry, then one with its back
   const loading: Entry = { ...withBack, backArtwork: null };
   // #when
-  const { minis } = await read(
+  const { minis: readMinis } = await read(
     await generatePDF([loading, { ...entry, heightSlot: 'medium' }, withBack], {
       pageSize: 'a4',
       numberDuplicates: false,
@@ -1157,7 +1157,7 @@ t('one sheet mixes reflected and rotated backs, and waits for a back still loadi
   );
   // #then  packing puts the wider mini first
   assert.deepEqual(
-    minis.map((mini) => [mini.back.mirror, widthMm(mini.back.image)]),
+    readMinis.map((mini) => [mini.back.mirror, widthMm(mini.back.image)]),
     [
       [{ x: true, y: true }, 52.5],
       [{ x: false, y: true }, 35],
