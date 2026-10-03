@@ -856,6 +856,7 @@ test('Apply after returning lines to their starting values keeps the calibration
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Предпросмотр PDF' }));
     });
+    await waitFor(() => expect(screen.getByTitle('Предпросмотр PDF')).toBeDefined());
     fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
     const head = screen.getByRole('slider', { name: 'Голова' });
     // #when
