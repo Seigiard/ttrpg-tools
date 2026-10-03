@@ -88,7 +88,9 @@ export async function generatePDF(
     const entry = entries[entryIndex];
     if (!entry?.artwork) throw new Error('Layout refers to an entry without prepared artwork.');
     faces.set(entryIndex, {
+      // oxlint-disable-next-line no-await-in-loop -- Keep embedding sequential to cap image memory while writing one PDF document.
       front: await embed(entry.artwork),
+      // oxlint-disable-next-line no-await-in-loop -- Keep embedding sequential to cap image memory while writing one PDF document.
       back: entry.backArtwork ? await embed(entry.backArtwork) : undefined,
     });
   }
