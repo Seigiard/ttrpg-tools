@@ -39,7 +39,7 @@ Behaviour that had to be rebuilt by hand, because Base UI has no Preact or Svelt
 | Tabs | Base UI | own, roving focus, arrows/Home/End | own, roving focus, arrows |
 | Dialog | Base UI (portal, focus guards, inert, scroll lock) | native `<dialog>` + `showModal()` + scroll lock | native `<dialog>` + `showModal()` + scroll lock |
 | Icons | `lucide-react` | `lucide-preact` | `@lucide/svelte` |
-| Store binding | `@nanostores/react` | `@nanostores/preact` | Svelte store contract (`$store`), no adapter |
+| Store binding | `@nanostores/react` | local Preact hook for Nanostores | Svelte store contract (`$store`), no adapter |
 
 Both candidates get modality from the browser top layer, and both add the page scroll lock that Base UI provided. The first Preact dialog was a `div` with a keydown trap. Review showed that Shift+Tab from the dialog container reached the page, so it was replaced.
 
@@ -51,11 +51,11 @@ Initial-load JS:
 
 | Route | React | Preact | Svelte |
 | --- | ---: | ---: | ---: |
-| encounters | 87,400 | 21,714 | 34,312 |
-| weather | 95,222 | 23,289 | 35,301 |
-| locations | 96,440 | 24,440 | 36,878 |
-| prices | 95,813 | 23,923 | 35,891 |
-| paper-minis | 296,499 | 213,098 | 228,093 |
+| encounters | 87,400 | 21,459 | 34,312 |
+| weather | 95,222 | 23,023 | 35,301 |
+| locations | 96,440 | 24,172 | 36,878 |
+| prices | 95,813 | 23,661 | 35,891 |
+| paper-minis | 296,499 | 213,353 | 228,093 |
 
 Lazy JS, loaded only on demand: the zip export chunk on paper minis (6.1 KB in every build). Preact builds also emit a 3.0 KB `@preact/signals` chunk; `@astrojs/preact` imports it only for islands that receive signal props, and none here does, so pages never fetch it. The candidates' encounters page includes the follow-up change (about 300 B); React's does not.
 
@@ -63,11 +63,11 @@ Cold load, all bytes on the wire (HTML + CSS + JS as served gzip-encoded by `vit
 
 | Route | React | Preact | Svelte |
 | --- | ---: | ---: | ---: |
-| encounters | 104,332 | 39,365 | 52,295 |
-| weather | 113,287 | 41,515 | 53,098 |
-| paper-minis | 312,146 | 229,024 | 243,616 |
+| encounters | 104,332 | 39,104 | 52,295 |
+| weather | 113,287 | 41,241 | 53,098 |
+| paper-minis | 312,146 | 229,460 | 243,616 |
 
-Warm loads are 1.1–1.7 KB in all three (cache revalidation only).
+Warm loads are cache revalidation only. The remeasured Preact range is 0.3–2.0 KB.
 
 What accounts for the numbers:
 
@@ -84,15 +84,25 @@ Ten repeats per scenario in Playwright Chromium 153 on an Apple M1 Pro. Values a
 
 | Scenario | React | Preact | Svelte |
 | --- | --- | --- | --- |
-| weather click-to-result | 33 (28–63) | 76 (58–87) | 39 (36–64) |
-| prices tab switch | 53 (42–59) | 80 (68–82) | 51 (37–54) |
-| paper-minis upload-to-row | 26 (25–31) | 22 (22–25) | 26 (25–31) |
-| paper-minis preview ready | 77 (69–86) | 68 (57–83) | 70 (60–80) |
-| paper-minis PDF generation | 70 (62–80) | 62 (53–67) | 66 (59–78) |
+| weather click-to-result | 33 (28–63) | 38 (27–69) | 39 (36–64) |
+| prices tab switch | 53 (42–59) | 53 (40–54) | 51 (37–54) |
+| paper-minis upload-to-row | 26 (25–31) | 24 (23–29) | 26 (25–31) |
+| paper-minis preview ready | 77 (69–86) | 62 (61–67) | 70 (60–80) |
+| paper-minis PDF generation | 70 (62–80) | 57 (54–67) | 66 (59–78) |
 
 Every scenario waits until all islands have hydrated, then stops the clock only once its action is visible: a new result, a new URL, a new row, a ready preview, or a finished PDF. The timings include Playwright round trips.
 
-Paper minis timings are within noise of each other. The generators are not: Preact is about 30–40 ms slower than React and Svelte on both interaction scenarios, and the ranges barely overlap. This was not profiled. Two likely contributors: Preact runs `useEffect` after the next paint, and both the prices URL sync and the first-roll logic live in effects; also, `@nanostores/preact` subscribes through an effect. Nothing here is visible as lag to a person, but it is the one measured runtime cost of Preact in this experiment.
+Paper minis timings are within noise of each other. The generator gap is gone in this Preact rerun: weather now matches Svelte, and prices now matches React and Svelte. Preact was measured twice after the fix. The first medians were 40, 54, 25, 68 and 61 ms. The retained second run is the table above.
+
+### Preact interaction latency
+
+The lag came from scheduling, not expensive rendering. `@nanostores/preact` deferred each store notification through `setTimeout`. Chromium ran that timer after the next frame. A baseline weather trace installed the timer at +0.083 ms, ran it at +24.549 ms, and changed the DOM at +25.103 ms. The browser-side profile showed median native click-to-DOM at 26.7 ms, with only 0.569 ms of script time and 0.597 ms of layout time.
+
+Prices also waited for persisted URL state. The UI changed first, but the old `useEffect` persistence ran after paint. The timing harness stops on the URL, so it counted that wait.
+
+The fix is a local 18-line `useStore` hook plus `useLayoutEffect` for prices URL and storage sync. The hook replaces `@nanostores/preact` for the atom API used here and lets Preact batch updates in its microtask queue. The profile dropped native click-to-DOM to 0.5 ms. Prices DOM and URL timing landed together at 1.5 ms and 1.4 ms.
+
+The follow-up measurements in the Preact profile went from 68 to 41 ms for weather and from 79 to 53 ms for prices when pooling two runs. This report's direct rerun retained 38 ms and 53 ms for those two scenarios. Keeping the local hook has a maintenance cost, and the result is worth offering upstream.
 
 Earlier versions of this table had two harness defects. Some scenarios clicked before hydration, and the prices scenario clicked an already selected tab. Review caught both, and all three builds were remeasured.
 
@@ -153,7 +163,7 @@ To keep React: close both PRs. The harness commits are still useful on their own
 ## Findings outside the comparison
 
 - The attribution footer has two missing spaces on every tool page, in all three builds (`Mausritter` + `Айзека`, `условиях` + `Mausritter`). It predates the experiment.
-- Paper minis ships `pdf-lib` on first load; see Payload.
+- Paper minis ships `pdf-lib` on first load; see Payload. A shared lazy-loading fix was found separately for main, but it is applied to no candidate here.
 
 ## Review status
 
@@ -169,7 +179,7 @@ Each candidate went through four rounds of automated multi-agent review (codex r
 ## Limitations
 
 - One machine, one browser (Chromium 153), local `vite preview`. There is no CDN, HTTP/2 or real-network measurement, and no Lighthouse run.
-- Timings ran while other builds were running; treat them as a smoke check.
+- Preact was remeasured alone after the store binding fix. The React and Svelte timings keep the original limitation: other builds were running, so treat them as a smoke check.
 - Screenshots exist for every route at 1280 and 390 px (`results/*/screenshots/`). They were compared by eye, not pixel-diffed.
 - Coding agents wrote the candidates under review. A second pass by a framework expert could shrink either one, most likely Svelte's test setup and Preact's test waits.
 - The earlier loot-splitter prototype (in the issue) measured a smaller Svelte runtime than this app needs: 20.6 KB gzip there, about 34 KB here. A larger component set pulls in more of the Svelte runtime.
@@ -184,10 +194,10 @@ For Preact:
 - the same JSX and hooks model the code already uses.
 
 Against it, both measured on this branch:
-- generator interactions run 30–40 ms slower than React and Svelte;
+- the store binding fix is a local hook to maintain until it can move upstream;
 - Preact runs effects after paint, and this produced one real race in the follow-up change.
 
-Neither delay is visible to a person, but any effect that must happen before the next interaction needs care in Preact. Profiling that lag is the first follow-up worth doing.
+The measured generator delay is gone. Any effect that must happen before the next interaction still needs care in Preact.
 
 **Svelte is the close second.** It ships about 12 KB more JS per page than Preact and has the shortest templates. It binds stores with no adapter and matches React's interaction timings. Its cost is in tooling: `svelte-check`, a Bun compile plugin and serial unit tests, none of which React or Preact need.
 
