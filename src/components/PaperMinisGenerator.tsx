@@ -1,5 +1,5 @@
 import { Fragment, type ComponentChildren, type JSX, type Ref } from 'preact';
-import { useStore } from '@nanostores/preact';
+import { useStore } from '@/lib/use-store';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';

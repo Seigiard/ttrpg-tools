@@ -1,4 +1,4 @@
-import { useStore } from '@nanostores/preact';
+import { useStore } from '@/lib/use-store';
 import { useEffect, useMemo } from 'preact/hooks';
 import { referenceHitClass } from '@/components/ReferenceList';
 import { Button } from '@/components/ui/button';
