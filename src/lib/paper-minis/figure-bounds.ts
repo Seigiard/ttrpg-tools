@@ -50,7 +50,7 @@ function findOpaqueBounds(
   }
   const background: number[] = [];
   for (let channel = 0; channel < 3; channel++) {
-    const values = border.map((i) => pixels[i + channel]).sort((a, b) => a - b);
+    const values = border.map((i) => pixels[i + channel]).toSorted((a, b) => a - b);
     if (values[values.length - 1] - values[0] > tolerance) return null;
     const mid = Math.floor(values.length / 2);
     background.push((values[mid] + values[Math.floor((values.length - 1) / 2)]) / 2);

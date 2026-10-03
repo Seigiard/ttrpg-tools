@@ -184,12 +184,12 @@ for (const pageSize of ['a4', 'letter'] as const) {
       if (JSON.stringify(result) !== JSON.stringify(packMinis(entries, opts)))
         violations.push('nondeterministic');
       const placed = result.pages.flatMap((page) => page.placements);
-      const oversized = result.entries.flatMap(({ state }, i) =>
+      const oversized = new Set(result.entries.flatMap(({ state }, i) =>
         state === 'oversized' ? [i] : [],
-      );
+      ));
       const expected = entries
         .flatMap((e, i) =>
-          oversized.includes(i) ? [] : Array.from({ length: e.count }, (_, j) => `${i}:${j}`),
+          oversized.has(i) ? [] : Array.from({ length: e.count }, (_, j) => `${i}:${j}`),
         )
         .toSorted();
       const actual = placed

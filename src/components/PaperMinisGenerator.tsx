@@ -11,8 +11,7 @@ import { entryStatusWarning } from '@/lib/paper-minis/geometry';
 import {
   buildFilename,
   buildPrinterScaleTestSheetFilename,
-  generatePrinterScaleTestSheet,
-} from '@/lib/paper-minis/pdf';
+} from '@/lib/paper-minis/pdf-filenames';
 import { HEIGHT_SLOT_ORDER, slotLabel, slotGeometryLabel, slotName } from '@/lib/paper-minis/sizes';
 import type { HeightCalibration, MiniSize, PreparedArtwork } from '@/lib/paper-minis/types';
 
@@ -502,6 +501,7 @@ export default function PaperMinisGenerator({ store: providedStore }: { store?: 
   async function downloadPrinterScaleTestSheet() {
     let url: string | undefined;
     try {
+      const { generatePrinterScaleTestSheet } = await import('@/lib/paper-minis/pdf');
       const bytes = await generatePrinterScaleTestSheet(settings.pageSize);
       const nextUrl = URL.createObjectURL(
         new Blob([bytes as BlobPart], { type: 'application/pdf' }),

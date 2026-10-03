@@ -27,7 +27,6 @@ import {
   type PackOptions,
   type PageSizeKey,
 } from '@/lib/paper-minis/geometry';
-import { generatePDF } from '@/lib/paper-minis/pdf';
 import { packEntries, resolveEntry, type PackResult } from '@/lib/paper-minis/packing';
 import {
   DEFAULT_CUSTOM_HEIGHT_MM,
@@ -226,8 +225,13 @@ async function artworkAsPng(artwork: PreparedArtwork): Promise<Uint8Array> {
   }
 }
 
+async function renderPDF(...args: Parameters<PaperMinisRenderer>) {
+  const { generatePDF } = await import('@/lib/paper-minis/pdf');
+  return generatePDF(...args);
+}
+
 export function createPaperMinisStore({
-  renderer = generatePDF,
+  renderer = renderPDF,
   artwork = createCanvasArtwork(),
 }: PaperMinisStoreDependencies = {}) {
   const $rows = atom<MiniRow[]>([]);
@@ -392,6 +396,7 @@ export function createPaperMinisStore({
   function updateRow(id: number, fields: Partial<Entry>) {
     if ($busy.get()) return;
     const previous = $rows.get().find((row) => row.id === id);
+    // oxlint-disable-next-line no-map-spread -- Rows are immutable store values; a copy per changed row is intended.
     $rows.set($rows.get().map((row) => (row.id === id ? { ...row, ...fields } : row)));
     const next = $rows.get().find((row) => row.id === id);
     if (
@@ -678,6 +683,11 @@ export function createPaperMinisStore({
     }
   }
   function ingestArtworkFiles(files: File[]) {
+    if (files.length > 0 && renderer === renderPDF) {
+      // Start loading on user intent, while artwork is being prepared.
+      // The actual render still reports any import failure through its normal error path.
+      void import('@/lib/paper-minis/pdf').catch(() => {});
+    }
     for (const planned of planBatch(files)) {
       const id = addBlank(planned);
       if (id === undefined) continue;
@@ -855,8 +865,11 @@ export function createPaperMinisStore({
           names = sides.map((side) => `${base}-${suffix}-${size}-${side}${count}${calibration}.png`);
         }
         for (const name of collisionKeys) used.add(name.toLowerCase());
+        // oxlint-disable-next-line no-await-in-loop -- Exporting one image at a time avoids decoding every row into memory at once.
         entries[names[0]] = await artworkAsPng(row.artwork!);
-        if (row.backArtwork) entries[names[1]] = await artworkAsPng(row.backArtwork);
+        if (row.backArtwork)
+          // oxlint-disable-next-line no-await-in-loop -- Exporting one image at a time avoids decoding every row into memory at once.
+          entries[names[1]] = await artworkAsPng(row.backArtwork);
       }
       const bytes = zipSync(entries, { level: 0 });
       $message.set(exportSuccessMessage);
