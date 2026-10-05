@@ -9,6 +9,7 @@
   };
 
   let { children, ...rest }: Props = $props();
+
   const dialog = getContext<DialogContext>(dialogContextKey);
 </script>
 

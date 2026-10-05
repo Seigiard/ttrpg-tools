@@ -3,6 +3,7 @@ import { cleanup, render, screen } from '@testing-library/svelte';
 import ReferenceListTestBed from './ReferenceListTestBed.svelte';
 
 beforeEach(cleanup);
+
 afterEach(cleanup);
 
 test('each row shows its own label before its outcome', () => {
@@ -11,6 +12,7 @@ test('each row shows its own label before its outcome', () => {
     { code: 'A', outcome: 'Clear' },
     { code: 'B', outcome: 'Omen' },
   ];
+
   // #when the reference table renders both snippets
   render(ReferenceListTestBed, { rows, hitIndex: null });
   // #then each label stays paired with its outcome in display order
@@ -27,6 +29,7 @@ test.each([0, 1, 2, null])('marks only the rolled row for hitIndex %s', (hitInde
     { code: 'B', outcome: 'Omen' },
     { code: 'C', outcome: 'Encounter' },
   ];
+
   // #when the reference table is rendered
   const { container } = render(ReferenceListTestBed, { rows, hitIndex });
   // #then only that row is marked
@@ -44,6 +47,7 @@ test('the rolled row has a left border as a non-colour marker', () => {
     { code: 'A', outcome: 'Clear' },
     { code: 'B', outcome: 'Omen' },
   ];
+
   // #when the reference table is rendered
   render(ReferenceListTestBed, { rows, hitIndex: 1 });
   // #then the marker is present on the rolled row only
@@ -59,6 +63,7 @@ test('every reference row has its positional index', () => {
     { code: 'B', outcome: 'Omen' },
     { code: 'C', outcome: 'Encounter' },
   ];
+
   // #when the reference table is rendered
   render(ReferenceListTestBed, { rows, hitIndex: 1 });
   // #then every row exposes its index

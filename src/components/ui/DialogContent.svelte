@@ -11,7 +11,9 @@
   };
 
   let { class: className, children, finalFocus = null, ...rest }: Props = $props();
+
   const dialog = getContext<DialogContext>(dialogContextKey);
+
   let element = $state<HTMLDialogElement>();
 
   const focusableSelector = [
@@ -67,8 +69,10 @@
     if (event.key === 'Escape') {
       event.preventDefault();
       close();
+
       return;
     }
+
     if (event.key !== 'Tab') return;
 
     if (!element) return;
@@ -76,14 +80,17 @@
     const focusable = Array.from(element.querySelectorAll<HTMLElement>(focusableSelector)).filter(
       (node) => !node.hasAttribute('disabled'),
     );
+
     if (!focusable.length) {
       event.preventDefault();
       element.focus();
+
       return;
     }
 
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
+
     if (event.shiftKey && document.activeElement === first) {
       event.preventDefault();
       last?.focus();
@@ -95,6 +102,7 @@
 
   $effect(() => {
     if (!element) return;
+
     if (dialog.open && !element.open) {
       lockPageScroll();
       element.showModal();
@@ -103,6 +111,7 @@
         const target = current.querySelector<HTMLElement>(focusableSelector) ?? current;
         target.focus();
       });
+
       return () => {
         if (!current.open) return;
         current.close();

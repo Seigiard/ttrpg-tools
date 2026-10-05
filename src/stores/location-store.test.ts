@@ -104,6 +104,7 @@ describe('createLocationStore', () => {
     restoreCrypto = mockCrypto([0, 1, 2, 3]);
     const store = createLocationStore(mausritterLocations);
     const events: Array<number | null> = [];
+
     const unsubscribe = store.$roll.subscribe((roll) => {
       events.push(roll?.landmarkIndex ?? null);
     });

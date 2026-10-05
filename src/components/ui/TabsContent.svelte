@@ -11,7 +11,9 @@
   };
 
   let { class: className, value, children, ...rest }: Props = $props();
+
   const tabs = getContext<TabsContext>(tabsContextKey);
+
   let active = $derived(tabs.value === value);
 </script>
 

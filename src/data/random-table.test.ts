@@ -1,20 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import type { RandomTable } from './types';
 import { pickFromTable, rangeSize, resolveSpec, validateTable } from './random-table';
-
-function mockCrypto(sequence: number[]) {
-  const original = crypto.getRandomValues.bind(crypto);
-  let i = 0;
-  crypto.getRandomValues = ((buf: Uint32Array) => {
-    const value = sequence[i++];
-    if (value === undefined) throw new Error('тестовая последовательность исчерпана');
-    buf[0] = value;
-    return buf;
-  }) as typeof crypto.getRandomValues;
-  return () => {
-    crypto.getRandomValues = original;
-  };
-}
+import { mockCrypto } from '@/test-utils/mock-crypto';
 
 describe('resolveSpec', () => {
   test('без явного roll возвращает 1d{length}', () => {
@@ -27,6 +14,7 @@ describe('resolveSpec', () => {
       rows: Array.from({ length: 11 }, (_, i) => String(i)),
       roll: { count: 2, sides: 6 },
     };
+
     expect(resolveSpec(table)).toEqual({ count: 2, sides: 6 });
   });
 });
@@ -57,6 +45,7 @@ describe('validateTable', () => {
       rows: Array.from({ length: 11 }, (_, i) => i),
       roll: { count: 2, sides: 6 },
     };
+
     expect(() => validateTable(table)).not.toThrow();
   });
 
@@ -65,6 +54,7 @@ describe('validateTable', () => {
       rows: Array.from({ length: 12 }, (_, i) => i),
       roll: { count: 2, sides: 6 },
     };
+
     expect(() => validateTable(table)).toThrow(RangeError);
   });
 });
@@ -130,6 +120,7 @@ describe('pickFromTable', () => {
       rows: ['a', 'b', 'c'],
       roll: { count: 2, sides: 6 }, // ожидает 11 строк
     };
+
     expect(() => pickFromTable(table)).toThrow(RangeError);
   });
 

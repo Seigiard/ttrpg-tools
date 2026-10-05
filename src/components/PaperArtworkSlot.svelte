@@ -25,18 +25,22 @@
   } = $props();
 
   let input: HTMLInputElement | undefined = $state();
+
   let url = $state<string>();
 
   $effect(() => {
     if (!artwork) {
       url = undefined;
+
       return;
     }
 
     const next = URL.createObjectURL(
-      new Blob([artwork.bytes as BlobPart], { type: artworkMimeType(artwork.format) }),
+      new Blob([artwork.bytes.slice()], { type: artworkMimeType(artwork.format) }),
     );
+
     url = next;
+
     return () => URL.revokeObjectURL(next);
   });
 </script>
@@ -59,6 +63,7 @@
       event.stopPropagation();
       const dropped = Array.from(event.dataTransfer?.files ?? []);
       const file = dropped.find(isSupportedArtwork) ?? dropped[0];
+
       if (file) onFile(file);
     }}
   >
@@ -71,7 +76,7 @@
           <img src={url} alt={label} class="block h-full w-full" />
           {#if calibration}
             <span class="pointer-events-none absolute inset-0">
-              {#each lines as key}
+              {#each lines as key (key)}
                 <span
                   data-testid={`calibration-${key}`}
                   class="absolute left-0 right-0 border-t-2 border-primary bg-surface/70 text-[10px] font-bold text-primary shadow-sm"
@@ -96,6 +101,7 @@
     aria-label={label}
     onchange={(event) => {
       const file = event.currentTarget.files?.[0];
+
       if (file) onFile(file);
       event.currentTarget.value = '';
     }}

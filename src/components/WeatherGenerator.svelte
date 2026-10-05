@@ -14,9 +14,12 @@
   import { referenceHitClass } from './reference-list';
 
   const { table }: { table: WeatherTable } = $props();
-  // svelte-ignore state_referenced_locally -- Astro passes static table data; live table swaps should remount with a key.
+
+  // svelte-ignore state_referenced_locally (Astro passes static table data; live table swaps should remount with a key.)
   const store = createWeatherStore(table);
+
   const seasonStore = store.$season;
+
   const rollStore = store.$roll;
 
   onMount(() => {
@@ -24,17 +27,27 @@
   });
 
   let season = $derived($seasonStore);
+
   let roll = $derived($rollStore);
+
   let cell = $derived(roll ? table.rows[roll.rowIndex]?.cells[season] : null);
+
   let loading = $derived(!cell);
 </script>
 
 <div class="space-y-8">
   <div class="space-y-3">
     <span class="font-mono text-xs uppercase tracking-wider text-text-muted">Сезон</span>
-    <Tabs value={season} onValueChange={(next) => store.setSeason(next as Season)}>
+    <Tabs
+      value={season}
+      onValueChange={(next) => {
+        const selected = table.seasons.find((candidate) => candidate === next);
+
+        if (selected !== undefined) store.setSeason(selected);
+      }}
+    >
       <TabsList>
-        {#each table.seasons as s}
+        {#each table.seasons as s (s)}
           <TabsTrigger value={s}>{table.seasonLabels[s]}</TabsTrigger>
         {/each}
       </TabsList>
@@ -80,7 +93,7 @@
             >
               2d6
             </th>
-            {#each table.seasons as s}
+            {#each table.seasons as s (s)}
               <th
                 data-season={s}
                 class={`px-2 py-2 text-left font-mono text-xs font-medium uppercase tracking-wider ${s === season ? 'text-primary' : 'text-text-muted'}`}
@@ -91,12 +104,12 @@
           </tr>
         </thead>
         <tbody>
-          {#each table.rows as row, i}
+          {#each table.rows as row, i (i)}
             {@const rangeLabel = formatRangeLabel(row)}
             {@const isHitRow = i === roll?.rowIndex}
             <tr data-row-index={i} class="border-b border-border last:border-0">
               <td class="px-2 py-1.5 font-mono text-xs text-text-muted">{rangeLabel}</td>
-              {#each table.seasons as s}
+              {#each table.seasons as s (s)}
                 {@const c = row.cells[s]}
                 {@const isHit = isHitRow && s === season}
                 {@const tone = !isHit && s === season ? 'text-text' : referenceHitClass(isHit)}

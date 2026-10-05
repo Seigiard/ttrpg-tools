@@ -33,16 +33,22 @@ export function parse(query: string, table: PriceTable): PricesState | null {
   const params = new URLSearchParams(query);
   const s = params.get('s');
   const r = params.get('r');
+
   if (s === null || r === null) return null;
 
-  if (!table.settlements.includes(s as SettlementType)) return null;
+  const settlement = table.settlements.find((candidate) => candidate === s);
+
+  if (settlement === undefined) return null;
 
   const [seedPart, versionPart, ...rest] = r.split('.');
+
   if (rest.length > 0 || versionPart !== table.version) return null;
+
   if (seedPart === undefined || !/^[0-9a-z]{1,7}$/.test(seedPart)) return null;
 
   const seed = parseInt(seedPart, 36);
+
   if (!Number.isInteger(seed) || seed >= UINT32_RANGE) return null;
 
-  return { settlement: s as SettlementType, seed };
+  return { settlement, seed };
 }

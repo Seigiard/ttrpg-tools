@@ -10,6 +10,7 @@ async function fixture(name: string): Promise<ArrayBuffer> {
 
 async function prepare(name: string, type: string) {
   const bytes = await fixture(name);
+
   return createCanvasArtwork().prepare(new File([bytes], name, { type }), options);
 }
 
@@ -30,6 +31,7 @@ for (const { name, alter, message } of [
     name: 'a bad signature',
     alter(bytes: Uint8Array) {
       bytes[0] = 0;
+
       return bytes;
     },
     message: 'Invalid PNG header.',
@@ -45,6 +47,7 @@ for (const { name, alter, message } of [
     name: 'zero width',
     alter(bytes: Uint8Array) {
       new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).setUint32(16, 0);
+
       return bytes;
     },
     message: 'Invalid PNG dimensions.',
@@ -53,6 +56,7 @@ for (const { name, alter, message } of [
     name: 'zero height',
     alter(bytes: Uint8Array) {
       new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).setUint32(20, 0);
+
       return bytes;
     },
     message: 'Invalid PNG dimensions.',
@@ -61,7 +65,7 @@ for (const { name, alter, message } of [
   test(`PNG rejects ${name}`, async () => {
     // #given
     const bytes = alter(new Uint8Array(await fixture('artwork-3x2.png')));
-    const file = new File([bytes as BlobPart], 'broken.png', { type: 'image/png' });
+    const file = new File([bytes.slice()], 'broken.png', { type: 'image/png' });
     // #when
     const result = createCanvasArtwork().prepare(file, options);
     // #then
@@ -104,11 +108,13 @@ test('a failed decode can retry the same File', async () => {
   const artwork = createCanvasArtwork();
   // #when
   let firstError: unknown;
+
   try {
     await artwork.prepare(file, options);
   } catch (error) {
     firstError = error;
   }
+
   const retry = await artwork.prepare(file, options);
   // #then
   assert.deepEqual(

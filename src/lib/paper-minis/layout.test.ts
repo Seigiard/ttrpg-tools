@@ -21,6 +21,7 @@ for (const pageSize of ['a4', 'letter'] as const) {
       rescue,
       { heightSlot: 'tiny', naturalWidth: 1, naturalHeight: 1, count: 1 },
     ];
+
     const opts = { pageSize, numberDuplicates: false };
     // #when
     const result = packMinis(entries, opts);
@@ -44,6 +45,7 @@ test('a rescue cannot join an upright strip even when its turned footprint fits 
     },
     rescue,
   ];
+
   // #when
   const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false });
   // #then
@@ -59,6 +61,7 @@ test('a rescue fits turned exactly at the usable height boundary', () => {
     { ...rescue, customHeightMm: 160 },
     { ...rescue, customHeightMm: 160.01 },
   ];
+
   // #when
   const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false, marginMm: 3.5 });
   // #then
@@ -67,7 +70,13 @@ test('a rescue fits turned exactly at the usable height boundary', () => {
       page.placements.map((p) => [p.mini.entryIndex, p.rotated]),
     ),
     states: result.entries.map(({ state }) => state),
-  }).toEqual({ placed: [[1, true], [0, true]], states: ['rotated', 'rotated'] });
+  }).toEqual({
+    placed: [
+      [1, true],
+      [0, true],
+    ],
+    states: ['rotated', 'rotated'],
+  });
 });
 
 test('short minis stack beside a tall mini instead of opening a second sheet', () => {
@@ -92,6 +101,7 @@ test('short minis stack beside a tall mini instead of opening a second sheet', (
       naturalHeight: 1,
     },
   ];
+
   // #when
   const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false });
   // #then
@@ -119,6 +129,7 @@ test('a full-height layout puts more minis on the second sheet than the scale-ba
       naturalHeight: 1,
     },
   ];
+
   // #when
   const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false });
   // #then
@@ -128,17 +139,21 @@ test('a full-height layout puts more minis on the second sheet than the scale-ba
 // Find bands by projecting rectangles onto an axis. This checks whether cuts
 // exist in the result, without consulting the packer's strips or columns.
 const placedWidth = (p: Placement) => (p.rotated ? p.mini.totalHeightMm : p.mini.totalWidthMm);
+
 const placedHeight = (p: Placement) => (p.rotated ? p.mini.totalWidthMm : p.mini.totalHeightMm);
+
 function bands(items: Placement[], axis: 'x' | 'y'): Placement[][] {
   const start = (p: Placement) => (axis === 'x' ? p.xMm : p.yMm);
   const end = (p: Placement) => start(p) + (axis === 'x' ? placedWidth(p) : placedHeight(p));
   const groups: Placement[][] = [];
   let edge = -Infinity;
+
   for (const item of items.toSorted((a, b) => start(a) - start(b))) {
     if (start(item) >= edge) groups.push([]);
     groups.at(-1)!.push(item);
     edge = Math.max(edge, end(item));
   }
+
   return groups;
 }
 
@@ -174,33 +189,41 @@ for (const pageSize of ['a4', 'letter'] as const) {
       },
       { ...rescue, customWidthMm: 5 + n, count: 1 + (n % 2) },
     ]);
+
     // #when
     const violations: string[] = [];
+
     for (const [n, entries] of batches.entries()) {
       const opts = { pageSize, numberDuplicates: true, marginMm: n % 6 };
       const result = packMinis(entries, opts);
       const { widthMm: width, heightMm: firstHeight } = usableAreaMm(opts);
       const { heightMm: laterHeight } = fullPageAreaMm(opts);
+
       if (JSON.stringify(result) !== JSON.stringify(packMinis(entries, opts)))
         violations.push('nondeterministic');
       const placed = result.pages.flatMap((page) => page.placements);
-      const oversized = result.entries.flatMap(({ state }, i) =>
-        state === 'oversized' ? [i] : [],
+
+      const oversized = new Set(
+        result.entries.flatMap(({ state }, i) => (state === 'oversized' ? [i] : [])),
       );
+
       const expected = entries
         .flatMap((e, i) =>
-          oversized.includes(i) ? [] : Array.from({ length: e.count }, (_, j) => `${i}:${j}`),
+          oversized.has(i) ? [] : Array.from({ length: e.count }, (_, j) => `${i}:${j}`),
         )
         .toSorted();
-      const actual = placed
-        .map(({ mini }) => `${mini.entryIndex}:${mini.copyIndex}`)
-        .toSorted();
+
+      const actual = placed.map(({ mini }) => `${mini.entryIndex}:${mini.copyIndex}`).toSorted();
+
       if (JSON.stringify(actual) !== JSON.stringify(expected))
         violations.push('lost or repeated copy');
+
       if (placed.length !== result.miniCount || result.pages.length !== result.pageCount)
         violations.push('count');
+
       for (const [pageIndex, page] of result.pages.entries()) {
         const height = pageIndex === 0 ? firstHeight : laterHeight;
+
         for (const [i, a] of page.placements.entries()) {
           if (
             a.xMm < 0 ||
@@ -209,21 +232,27 @@ for (const pageSize of ['a4', 'letter'] as const) {
             a.yMm + placedHeight(a) > height + 1e-9
           )
             violations.push('bounds');
+
           if (a.rotated && a.mini.totalWidthMm <= width && a.mini.totalHeightMm <= laterHeight)
             violations.push('unneeded rotation');
+
           if (a.mini.label !== String(a.mini.copyIndex + 1)) violations.push('label');
+
           for (const b of page.placements.slice(i + 1)) {
             const separated =
               a.xMm + placedWidth(a) <= b.xMm + 1e-9 ||
               b.xMm + placedWidth(b) <= a.xMm + 1e-9 ||
               a.yMm + placedHeight(a) <= b.yMm + 1e-9 ||
               b.yMm + placedHeight(b) <= a.yMm + 1e-9;
+
             if (!separated) violations.push('overlap');
           }
         }
+
         for (const strip of bands(page.placements, 'y')) {
           if (strip.some((p) => p.rotated) && strip.length !== 1)
             violations.push('shared rescue strip');
+
           for (const column of bands(strip, 'x')) {
             if (bands(column, 'y').some((stackItem) => stackItem.length !== 1))
               violations.push('not guillotine');
@@ -231,6 +260,7 @@ for (const pageSize of ['a4', 'letter'] as const) {
         }
       }
     }
+
     // #then
     expect(violations).toEqual([]);
   });
@@ -239,10 +269,12 @@ for (const pageSize of ['a4', 'letter'] as const) {
 test('empty and unprepared inputs have no placements, and unprepared rows report empty', () => {
   // #given
   const inputs: PackingEntry[][] = [[], [{ heightSlot: 'medium', count: 1 }]];
+
   // #when
   const results = inputs.map((entries) =>
     packMinis(entries, { pageSize: 'a4', numberDuplicates: false }),
   );
+
   // #then
   expect(results).toEqual([
     { pages: [], pageCount: 0, miniCount: 0, entries: [] },
@@ -266,6 +298,7 @@ test('an uncalibrated wide mini keeps its dimensions through rotation and strip 
     },
     { heightSlot: 'tiny', count: 1, naturalWidth: 1, naturalHeight: 1 },
   ];
+
   // #when
   const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false });
   // #then
@@ -327,6 +360,7 @@ test('later small minis backfill the first sheet', () => {
     },
     { heightSlot: 'tiny', count: 1, naturalWidth: 1, naturalHeight: 1 },
   ];
+
   // #when
   const result = packMinis(entries, { pageSize: 'a4', numberDuplicates: false });
   // #then

@@ -14,6 +14,7 @@ describe('EncounterGenerator (presentation)', () => {
       restoreCrypto();
       restoreCrypto = null;
     }
+
     cleanup();
   });
 
@@ -121,6 +122,7 @@ describe('EncounterGenerator (presentation)', () => {
     // #given a mounted generator
     restoreCrypto = mockCrypto([0, 0, 0]);
     render(EncounterGenerator, { table: mausritterEncounters });
+
     // #then skeleton wrappers remain but are not loading after the first roll
     for (const testId of ['check-result-card', 'reaction-result-card']) {
       const card = screen.getByTestId(testId);

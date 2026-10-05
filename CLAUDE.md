@@ -23,16 +23,18 @@ Single-context: one `GLOSSARY.md` at the repo root and ADRs in `docs/adr/`. See 
 ```sh
 bun run dev          # дев-сервер, http://localhost:4321
 bun run build        # сборка в dist/
+bun run size         # production build + bundle size check
+bun run size:check   # check an existing dist/ build
 bun run test         # unit-тесты (`bun test --parallel=1`)
 bun run test:browser # Playwright/Chromium: browser-тесты Paper minis
 bun test src/data/range-table.test.ts   # один файл
 bun test -t "pickRange"                  # по паттерну имени describe/test
-bun run lint         # oxlint (TS/TSX)
-bun run typecheck    # astro check
+bun run lint         # Oxlint + Svelte-aware ESLint (scripts and templates)
+bun run typecheck    # astro check + svelte-check
 bun run format       # oxfmt (TS/TSX/CSS); .astro — bun run format:astro (prettier)
 ```
 
-CI (`.github/workflows/ci.yml`) на каждый PR гоняет **lint + format:check + typecheck + test + test:browser + build** — всё должно проходить. Перед завершением работы прогоняй эти же шаги. Деплой (Cloudflare Workers + Static Assets) идёт сам из `main`; см. README.
+CI (`.github/workflows/ci.yml`) на каждый PR гоняет **lint + format:check + typecheck + test + test:browser + build + size:check** — всё должно проходить. Перед завершением работы прогоняй эти же шаги. Деплой (Cloudflare Workers + Static Assets) идёт сам из `main`; см. README.
 
 Тесты используют happy-dom через `preload` в `bunfig.toml` (`test-setup.ts`) — DOM доступен без ручной настройки. Алиас `@/` → `src/`.
 

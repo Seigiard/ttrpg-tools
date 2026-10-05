@@ -8,65 +8,97 @@
   import {
     buildFilename,
     buildPrinterScaleTestSheetFilename,
-    generatePrinterScaleTestSheet,
-  } from '@/lib/paper-minis/pdf';
+  } from '@/lib/paper-minis/pdf-filenames';
   import {
     HEIGHT_SLOT_ORDER,
     slotGeometryLabel,
     slotLabel,
     slotName,
   } from '@/lib/paper-minis/sizes';
-  import type { MiniSize } from '@/lib/paper-minis/types';
   import { createPaperMinisStore } from '@/stores/paper-minis-store';
 
   const field =
     'min-h-11 w-full rounded-lg border border-border bg-surface-elevated px-3 text-text focus-visible:outline-2 focus-visible:outline-primary';
+
   const customDimensionKeys = ['customWidthMm', 'customHeightMm'] as const;
 
   function buildZipFilename(date = new Date()) {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
+
     return `paper-minis-${year}-${month}-${day}.zip`;
   }
 
   const store = createPaperMinisStore();
+
   const rowsStore = store.$rows;
+
   const settingsStore = store.$settings;
+
   const inputsStore = store.$inputs;
+
   const draftErrorStore = store.$draftError;
+
   const packedStore = store.$layout;
+
   const canGenerateStore = store.$canGenerate;
+
   const messageStore = store.$message;
+
   const busyStore = store.$busy;
+
   const preparingStore = store.$preparing;
+
   const previewStore = store.$preview;
+
   const previewStaleStore = store.$previewStale;
+
   const calibrationStore = store.$calibration;
 
   let previewUrl = $state<string>();
+
   let dragging = $state(false);
+
   let files = $state<HTMLInputElement>();
+
   let calibrationOpener = $state<HTMLButtonElement | null>(null);
 
   let rows = $derived($rowsStore);
+
   let settings = $derived($settingsStore);
+
   let inputs = $derived($inputsStore);
+
   let draftError = $derived($draftErrorStore);
+
   let packed = $derived($packedStore);
+
   let canGenerate = $derived($canGenerateStore);
+
   let message = $derived($messageStore);
+
   let busy = $derived($busyStore);
+
   let preparing = $derived($preparingStore);
+
   let preview = $derived($previewStore);
+
   let previewStale = $derived($previewStaleStore);
+
   let calibration = $derived($calibrationStore);
+
+  const hasFiles = (event: DragEvent) =>
+    Array.from(event.dataTransfer?.types ?? []).includes('Files');
+
+  const over = (event: DragEvent) => {
+    if (hasFiles(event)) event.preventDefault();
+  };
 
   onMount(() => {
     store.loadSettings();
     let depth = 0;
-    const hasFiles = (event: DragEvent) =>
-      Array.from(event.dataTransfer?.types ?? []).includes('Files');
+
     const enter = (event: DragEvent) => {
       if (hasFiles(event) && store.$acceptsFiles.get()) {
         event.preventDefault();
@@ -74,28 +106,31 @@
         dragging = true;
       }
     };
-    const over = (event: DragEvent) => {
-      if (hasFiles(event)) event.preventDefault();
-    };
+
     const leave = () => {
       depth = Math.max(0, depth - 1);
+
       if (!depth) dragging = false;
     };
+
     const clear = () => {
       depth = 0;
       dragging = false;
     };
+
     const drop = (event: DragEvent) => {
       if (hasFiles(event)) {
         event.preventDefault();
         store.ingest(Array.from(event.dataTransfer?.files ?? []));
       }
     };
+
     window.addEventListener('dragenter', enter);
     window.addEventListener('dragover', over);
     window.addEventListener('dragleave', leave);
     window.addEventListener('drop', clear, true);
     window.addEventListener('drop', drop);
+
     return () => {
       window.removeEventListener('dragenter', enter);
       window.removeEventListener('dragover', over);
@@ -108,13 +143,17 @@
   $effect(() => {
     if (!preview) {
       previewUrl = undefined;
+
       return;
     }
+
     try {
       const url = URL.createObjectURL(
-        new Blob([preview.bytes as BlobPart], { type: 'application/pdf' }),
+        new Blob([preview.bytes.slice()], { type: 'application/pdf' }),
       );
+
       previewUrl = url;
+
       return () => URL.revokeObjectURL(url);
     } catch {
       previewUrl = undefined;
@@ -128,12 +167,13 @@
 
   async function download() {
     const bytes = await store.download();
+
     if (!bytes) return;
     let url: string | undefined;
+
     try {
-      const nextUrl = URL.createObjectURL(
-        new Blob([bytes as BlobPart], { type: 'application/pdf' }),
-      );
+      const nextUrl = URL.createObjectURL(new Blob([bytes.slice()], { type: 'application/pdf' }));
+
       url = nextUrl;
       const anchor = document.createElement('a');
       anchor.href = nextUrl;
@@ -150,11 +190,13 @@
 
   async function downloadPrinterScaleTestSheet() {
     let url: string | undefined;
+
     try {
+      const { generatePrinterScaleTestSheet } = await import('@/lib/paper-minis/pdf');
       const bytes = await generatePrinterScaleTestSheet(settings.pageSize);
-      const nextUrl = URL.createObjectURL(
-        new Blob([bytes as BlobPart], { type: 'application/pdf' }),
-      );
+
+      const nextUrl = URL.createObjectURL(new Blob([bytes.slice()], { type: 'application/pdf' }));
+
       url = nextUrl;
       const anchor = document.createElement('a');
       anchor.href = nextUrl;
@@ -171,12 +213,13 @@
 
   async function exportZip() {
     const bytes = await store.exportZip();
+
     if (!bytes) return;
     let url: string | undefined;
+
     try {
-      const nextUrl = URL.createObjectURL(
-        new Blob([bytes as BlobPart], { type: 'application/zip' }),
-      );
+      const nextUrl = URL.createObjectURL(new Blob([bytes.slice()], { type: 'application/zip' }));
+
       url = nextUrl;
       const anchor = document.createElement('a');
       anchor.href = nextUrl;
@@ -192,10 +235,20 @@
   }
 
   function setBulkSize(event: Event) {
-    const select = event.currentTarget as HTMLSelectElement;
+    const select = event.currentTarget;
+
+    if (!(select instanceof HTMLSelectElement)) return;
     const value = select.value;
-    if (value) store.setAllSizes(value as MiniSize);
+    const size = HEIGHT_SLOT_ORDER.find((slot) => slot === value);
+
+    if (size !== undefined) store.setAllSizes(size);
     select.value = '';
+  }
+
+  function setRowSize(id: number, value: string) {
+    const size = value === 'custom' ? value : HEIGHT_SLOT_ORDER.find((slot) => slot === value);
+
+    if (size !== undefined) store.setSize(id, size);
   }
 </script>
 
@@ -220,8 +273,11 @@
             <select
               class={field}
               value={settings.pageSize}
-              onchange={(event) =>
-                store.settings({ pageSize: event.currentTarget.value as 'a4' | 'letter' })}
+              onchange={(event) => {
+                const pageSize = event.currentTarget.value;
+
+                if (pageSize === 'a4' || pageSize === 'letter') store.settings({ pageSize });
+              }}
             >
               <option value="a4">A4 (210 × 297 мм)</option>
               <option value="letter">Letter (216 × 279 мм)</option>
@@ -289,7 +345,7 @@
               Высота всех фигурок
               <select class={field} value="" onchange={setBulkSize}>
                 <option value="" disabled>Выберите…</option>
-                {#each HEIGHT_SLOT_ORDER as slot}<option
+                {#each HEIGHT_SLOT_ORDER as slot (slot)}<option
                     value={slot}
                     title={slotGeometryLabel(slot)}>{slotLabel(slot)}</option
                   >{/each}
@@ -378,7 +434,7 @@
                 >Размеры в имени файла</summary
               >
               <ul class="mt-2 space-y-1">
-                {#each HEIGHT_SLOT_ORDER as slot}<li>
+                {#each HEIGHT_SLOT_ORDER as slot (slot)}<li>
                     <code class="font-mono text-text">{slot}</code> — {slotName(slot)}
                   </li>{/each}
               </ul>
@@ -468,11 +524,9 @@
                     class={field}
                     value={row.heightSlot}
                     title={slotGeometryLabel(row.heightSlot)}
-                    oninput={(event) =>
-                      store.setSize(row.id, event.currentTarget.value as MiniSize)}
-                    onchange={(event) =>
-                      store.setSize(row.id, event.currentTarget.value as MiniSize)}
-                    >{#each HEIGHT_SLOT_ORDER as slot}<option
+                    oninput={(event) => setRowSize(row.id, event.currentTarget.value)}
+                    onchange={(event) => setRowSize(row.id, event.currentTarget.value)}
+                    >{#each HEIGHT_SLOT_ORDER as slot (slot)}<option
                         value={slot}
                         title={slotGeometryLabel(slot)}>{slotLabel(slot)}</option
                       >{/each}<option value="custom">{slotLabel('custom')}</option></select
@@ -493,7 +547,7 @@
                   /></label
                 >
                 {#if row.heightSlot === 'custom'}<div class="grid grid-cols-2 gap-2 sm:col-span-2">
-                    {#each customDimensionKeys as key, i}{@const dimension =
+                    {#each customDimensionKeys as key, i (key)}{@const dimension =
                         i === 0 ? 'width' : 'height'}<label class="text-sm"
                         >{i === 0 ? 'Основание, мм' : 'Фигурка, мм'}<input
                           class={field}
@@ -526,7 +580,7 @@
                 >
                   {statusWarning}
                 </p>{/if}
-              {#each [status?.state === 'failed' && row.frontError, row.normalizationWarning, row.backWarning].filter(Boolean) as warning}<p
+              {#each [status?.state === 'failed' && row.frontError, row.normalizationWarning, row.backWarning].filter(Boolean) as warning, warningIndex (warningIndex)}<p
                   role="status"
                   class="mt-3 border-l-2 border-warning pl-3 text-sm text-warning"
                 >

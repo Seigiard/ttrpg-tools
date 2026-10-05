@@ -37,13 +37,14 @@ export interface LocationStore<Biome extends string> {
 export function createLocationStore<Biome extends string>(
   table: LocationTable<Biome>,
 ): LocationStore<Biome> {
-  const firstBiome = table.biomes[0] as Biome;
+  const firstBiome = table.biomes[0];
   const $biome = atom<Biome>(firstBiome);
   const $roll = atom<Roll<Biome> | null>(null);
 
   const freshRoll = (biome: Biome): Roll<Biome> => {
     const landmarkPick = pickFromTable(table.landmarks[biome]);
     const detailPick = pickFromTable(table.details);
+
     return { biome, landmarkIndex: landmarkPick.index, detailIndex: detailPick.index };
   };
 
@@ -53,6 +54,7 @@ export function createLocationStore<Biome extends string>(
 
   const rerollLandmark = () => {
     const current = $roll.get();
+
     if (!current) return;
     const landmarkPick = pickFromTable(table.landmarks[current.biome]);
     $roll.set({ ...current, landmarkIndex: landmarkPick.index });
@@ -60,6 +62,7 @@ export function createLocationStore<Biome extends string>(
 
   const rerollDetail = () => {
     const current = $roll.get();
+
     if (!current) return;
     const detailPick = pickFromTable(table.details);
     $roll.set({ ...current, detailIndex: detailPick.index });

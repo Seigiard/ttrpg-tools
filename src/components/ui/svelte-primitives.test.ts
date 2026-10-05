@@ -2,18 +2,23 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import PrimitiveTestBed from './PrimitiveTestBed.svelte';
 
+function showModal(this: HTMLDialogElement) {
+  this.open = true;
+  this.setAttribute('open', '');
+}
+
+function close(this: HTMLDialogElement) {
+  this.open = false;
+  this.removeAttribute('open');
+}
+
 beforeEach(() => {
   cleanup();
   document.body.removeAttribute('style');
-  HTMLDialogElement.prototype.showModal = function showModal() {
-    this.open = true;
-    this.setAttribute('open', '');
-  };
-  HTMLDialogElement.prototype.close = function close() {
-    this.open = false;
-    this.removeAttribute('open');
-  };
+  HTMLDialogElement.prototype.showModal = showModal;
+  HTMLDialogElement.prototype.close = close;
 });
+
 afterEach(cleanup);
 
 describe('Svelte Skeleton', () => {
@@ -82,7 +87,10 @@ describe('Svelte Skeleton', () => {
     render(PrimitiveTestBed, { mode: 'skeleton', loading: true, class: 'block' });
     const node = screen.getByText('x');
     // #then both caller and base classes are present
-    expect({ block: node.className.includes('block'), pulse: node.className.includes('animate-pulse') }).toEqual({
+    expect({
+      block: node.className.includes('block'),
+      pulse: node.className.includes('animate-pulse'),
+    }).toEqual({
       block: true,
       pulse: true,
     });
@@ -95,7 +103,10 @@ test('Svelte Button keeps the button slot and caller classes', () => {
   render(PrimitiveTestBed, { mode: 'button' });
   const button = screen.getByRole('button', { name: 'Roll' });
   // #then it exposes the same slot contract and merged classes
-  expect({ slot: button.getAttribute('data-slot'), callerClass: button.className.includes('min-h-11') }).toEqual({
+  expect({
+    slot: button.getAttribute('data-slot'),
+    callerClass: button.className.includes('min-h-11'),
+  }).toEqual({
     slot: 'button',
     callerClass: true,
   });
@@ -164,9 +175,10 @@ test('Svelte Dialog locks page scroll while open and restores it after close', a
   const scrollYDescriptor = Object.getOwnPropertyDescriptor(window, 'scrollY');
   const originalScrollTo = window.scrollTo;
   Object.defineProperty(window, 'scrollY', { configurable: true, get: () => scrollY });
-  window.scrollTo = ((xOrOptions?: number | ScrollToOptions, y?: number) => {
-    scrollY = typeof xOrOptions === 'object' ? (xOrOptions.top ?? scrollY) : (y ?? scrollY);
-  }) as typeof window.scrollTo;
+  window.scrollTo = (xOrOptions?: number | ScrollToOptions, y?: number) => {
+    scrollY = xOrOptions instanceof Object ? (xOrOptions.top ?? scrollY) : (y ?? scrollY);
+  };
+
   document.body.style.position = 'relative';
   document.body.style.width = 'auto';
 
@@ -175,12 +187,14 @@ test('Svelte Dialog locks page scroll while open and restores it after close', a
     // #when the dialog opens and then closes
     await fireEvent.click(screen.getByTestId('dialog-opener'));
     await screen.findByTestId('first-action');
+
     const locked = {
       overflow: document.body.style.overflow,
       position: document.body.style.position,
       top: document.body.style.top,
       width: document.body.style.width,
     };
+
     await fireEvent.keyDown(document.querySelector('dialog')!, { key: 'Escape' });
     // #then page scroll is locked only during the modal lifetime
     await waitFor(() =>
@@ -201,6 +215,7 @@ test('Svelte Dialog locks page scroll while open and restores it after close', a
     );
   } finally {
     window.scrollTo = originalScrollTo;
+
     if (scrollYDescriptor) {
       Object.defineProperty(window, 'scrollY', scrollYDescriptor);
     }

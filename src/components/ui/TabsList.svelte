@@ -25,26 +25,40 @@
     VariantProps<typeof tabsListVariants>;
 
   let { class: className, variant = 'default', children, ...rest }: Props = $props();
+
   const tabs = getContext<TabsContext>(tabsContextKey);
 
   function moveFocus(event: KeyboardEvent) {
     const keys =
       tabs.orientation === 'vertical' ? ['ArrowUp', 'ArrowDown'] : ['ArrowLeft', 'ArrowRight'];
+
     if (![...keys, 'Home', 'End'].includes(event.key)) return;
 
+    const list = event.currentTarget;
+
+    if (!(list instanceof HTMLElement)) return;
+
     const triggers = Array.from(
-      (event.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>(
-        '[role="tab"]:not(:disabled)',
-      ),
+      list.querySelectorAll<HTMLButtonElement>('[role="tab"]:not(:disabled)'),
     );
+
     if (!triggers.length) return;
 
     event.preventDefault();
-    const current = Math.max(0, triggers.indexOf(document.activeElement as HTMLButtonElement));
+
+    const current = Math.max(
+      0,
+      triggers.findIndex((trigger) => trigger === document.activeElement),
+    );
+
     let next = current;
+
     if (event.key === 'Home') next = 0;
+
     if (event.key === 'End') next = triggers.length - 1;
+
     if (event.key === keys[0]) next = (current - 1 + triggers.length) % triggers.length;
+
     if (event.key === keys[1]) next = (current + 1) % triggers.length;
 
     triggers[next]?.focus();

@@ -14,6 +14,7 @@ describe('WeatherGenerator (presentation)', () => {
       restoreCrypto();
       restoreCrypto = null;
     }
+
     cleanup();
   });
 

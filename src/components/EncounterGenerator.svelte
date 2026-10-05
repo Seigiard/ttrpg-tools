@@ -16,10 +16,14 @@
   import { createEncounterStore } from '@/stores/encounter-store';
 
   const { table }: { table: EncounterTable } = $props();
-  // svelte-ignore state_referenced_locally -- Astro passes static table data; live table swaps should remount with a key.
+
+  // svelte-ignore state_referenced_locally (Astro passes static table data; live table swaps should remount with a key.)
   const store = createEncounterStore(table);
+
   const checkStore = store.$check;
+
   const reactionStore = store.$reaction;
+
   let checkHistory = $state<Array<{ sum: number; label: string }>>([]);
 
   const outcomeTone: Record<EncounterCheckOutcome, string> = {
@@ -31,6 +35,7 @@
   function rollCheck() {
     store.rollCheck();
     const nextCheck = store.$check.get();
+
     if (!nextCheck) return;
 
     checkHistory = [
@@ -41,12 +46,16 @@
 
   onMount(() => {
     if (store.$check.get() === null) rollCheck();
+
     if (store.$reaction.get() === null) store.rollReaction();
   });
 
   let check = $derived($checkStore);
+
   let reaction = $derived($reactionStore);
+
   let checkRow = $derived(check ? table.check.rows[check.rowIndex] : null);
+
   let reactionRow = $derived(reaction ? table.reactions.rows[reaction.rowIndex] : null);
 </script>
 

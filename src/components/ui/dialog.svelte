@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { setContext } from 'svelte';
+  import { setContext, untrack } from 'svelte';
   import type { HTMLAttributes } from 'svelte/elements';
   import { dialogContextKey, type DialogChildrenProps, type DialogContext } from './dialog-context';
 
@@ -12,13 +12,15 @@
   let { open = false, onOpenChange, children }: Props = $props();
 
   const dialog: DialogContext = $state({
-    open,
+    open: untrack(() => open),
     titleId: `dialog-title-${Math.random().toString(36).slice(2)}`,
     previouslyFocused: null,
     setOpen(next) {
       if (next && !dialog.open) {
-        dialog.previouslyFocused = document.activeElement as HTMLElement | null;
+        dialog.previouslyFocused =
+          document.activeElement instanceof HTMLElement ? document.activeElement : null;
       }
+
       dialog.open = next;
       onOpenChange?.(next);
     },
@@ -28,8 +30,10 @@
 
   $effect(() => {
     if (open && !dialog.open) {
-      dialog.previouslyFocused = document.activeElement as HTMLElement | null;
+      dialog.previouslyFocused =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
     }
+
     dialog.open = open;
   });
 </script>

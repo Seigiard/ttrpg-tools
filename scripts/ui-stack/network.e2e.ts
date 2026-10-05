@@ -37,16 +37,19 @@ async function capture(page: Page, url: string, mode: NetworkRun['mode']): Promi
     total: { requests: 0, transferredBytes: 0 },
     byType: {},
   };
+
   for (const item of finished) {
     addBucket(run.total, item.bytes);
     run.byType[item.type] ??= { requests: 0, transferredBytes: 0 };
     addBucket(run.byType[item.type], item.bytes);
   }
+
   return run;
 }
 
 export async function measureNetwork(browser: Browser, baseUrl: string, routes: readonly string[]) {
   const runs: NetworkRun[] = [];
+
   for (const route of routes) {
     const coldContext = await browser.newContext();
     const coldPage = await coldContext.newPage();
@@ -59,6 +62,7 @@ export async function measureNetwork(browser: Browser, baseUrl: string, routes: 
     runs.push(await capture(warmPage, new URL(route, baseUrl).toString(), 'warm'));
     await warmContext.close();
   }
+
   return runs;
 }
 
@@ -71,5 +75,6 @@ export function networkMarkdown(runs: NetworkRun[]) {
         .map(([type, bucket]) => `${type}: ${bucket.transferredBytes} B / ${bucket.requests}`)
         .join('<br>')} |`,
   );
+
   return `# Network\n\nTransferred bytes use Chrome DevTools Protocol Network.loadingFinished encodedDataLength.\n\n| Route | Mode | Transferred bytes | Requests | By resource type |\n| --- | --- | ---: | ---: | --- |\n${rows.join('\n')}\n`;
 }

@@ -14,6 +14,7 @@ describe('LocationGenerator (presentation)', () => {
       restoreCrypto();
       restoreCrypto = null;
     }
+
     cleanup();
   });
 

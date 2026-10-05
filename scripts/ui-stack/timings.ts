@@ -18,6 +18,7 @@ async function measure(
   setup: (page: Page) => Promise<void>,
 ) {
   const samples: number[] = [];
+
   for (let i = 0; i < repeats; i++) {
     const page = await context.newPage();
     await setup(page);
@@ -26,7 +27,9 @@ async function measure(
     samples.push(Math.round(performance.now() - start));
     await page.close();
   }
-  const sorted = [...samples].sort((a, b) => a - b);
+
+  const sorted = samples.toSorted((a, b) => a - b);
+
   return {
     name,
     repeats,
@@ -39,6 +42,7 @@ async function measure(
 
 export async function measureTimings(browser: Browser, baseUrl: string) {
   const context = await browser.newContext();
+
   try {
     const results: TimingSummary[] = [];
     results.push(
@@ -51,6 +55,7 @@ export async function measureTimings(browser: Browser, baseUrl: string) {
           await page.getByRole('button', { name: /Бросить погоду/ }).click();
           await page.waitForFunction((before) => {
             const result = document.querySelector('[data-testid="result-weather"]');
+
             return (
               result?.textContent?.trim() &&
               result.textContent !== before &&
@@ -137,6 +142,7 @@ export async function measureTimings(browser: Browser, baseUrl: string) {
         setupPaperMinis(baseUrl),
       ),
     );
+
     return results;
   } finally {
     await context.close();
@@ -175,6 +181,7 @@ async function waitForWeatherRoll(page: Page) {
   await page.getByTestId('result-weather').waitFor({ state: 'visible' });
   await page.waitForFunction(() => {
     const result = document.querySelector('[data-testid="result-weather"]');
+
     return (
       result?.textContent?.trim() &&
       result.textContent.trim() !== 'Погода' &&
@@ -195,8 +202,10 @@ async function installDeterministicWeatherRolls(page: Page) {
           for (let i = 0; i < array.length; i++) {
             array[i] = values[index++] ?? 0;
           }
+
           return array;
         }
+
         return original(array);
       },
     });
@@ -208,5 +217,6 @@ export function timingsMarkdown(timings: TimingSummary[]) {
     (timing) =>
       `| ${timing.name} | ${timing.medianMs} | ${timing.minMs} | ${timing.maxMs} | ${timing.samplesMs.join(', ')} |`,
   );
+
   return `# Timings\n\nEach scenario runs 10 repeats in Playwright Chromium. Values are milliseconds.\n\n| Scenario | Median | Min | Max | Samples |\n| --- | ---: | ---: | ---: | --- |\n${rows.join('\n')}\n`;
 }

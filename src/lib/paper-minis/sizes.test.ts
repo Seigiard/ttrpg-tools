@@ -11,24 +11,25 @@ import type { HeightSlot, SizeCategory } from './types.ts';
 
 import { test as t } from 'bun:test';
 
-const sizeCategories = [
-  ...new Set(HEIGHT_SLOT_ORDER.map((slot) => HEIGHT_SLOTS[slot].category)),
-];
+const sizeCategories = [...new Set(HEIGHT_SLOT_ORDER.map((slot) => HEIGHT_SLOTS[slot].category))];
+
 const slotsOfCategory = (category: SizeCategory): HeightSlot[] =>
   HEIGHT_SLOT_ORDER.filter((slot) => HEIGHT_SLOTS[slot].category === category);
-const resolveBaseWidthMm = (
-  entry: Parameters<typeof resolveSizeDimensionsMm>[0],
-): number => resolveSizeDimensionsMm(entry).baseWidthMm;
+
+const resolveBaseWidthMm = (entry: Parameters<typeof resolveSizeDimensionsMm>[0]): number =>
+  resolveSizeDimensionsMm(entry).baseWidthMm;
 
 t('nine slots grade height across the range, each on its category’s base', () => {
   // #given
   const slots = HEIGHT_SLOT_ORDER;
+
   // #when
   const table = slots.map((slot) => [
     slot,
     resolveBaseWidthMm({ heightSlot: slot }),
     resolveFigureHeightMm({ heightSlot: slot }),
   ]);
+
   // #then
   assert.deepEqual(table, [
     ['tiny', 20, 12],
@@ -46,12 +47,17 @@ t('nine slots grade height across the range, each on its category’s base', () 
 t('a slot’s base width comes from its category, so slots sharing one cannot disagree', () => {
   // #given
   const categories = sizeCategories.map(slotsOfCategory);
+
   // #when
   const bases = categories.map((slots) =>
     slots.map((slot) => resolveBaseWidthMm({ heightSlot: slot })),
   );
+
   // #then
-  assert.equal(bases.every((widths) => new Set(widths).size === 1), true);
+  assert.equal(
+    bases.every((widths) => new Set(widths).size === 1),
+    true,
+  );
 });
 
 // Printable Heroes sells the paper minis this tool is most often fed, and their
@@ -103,6 +109,7 @@ t('a slot’s name is its category, told apart from its siblings', () => {
   const categories = sizeCategories.map((category) =>
     slotsOfCategory(category).map((slot) => slotName(slot)),
   );
+
   // #then  every name opens with its category; siblings differ; a lone slot is
   //        named the category and nothing more
   assert.deepEqual(

@@ -30,6 +30,7 @@ export function mockLocalStorage(options: MockLocalStorageOptions = {}): MockLoc
       if (options.failSetItem) {
         throw new Error('mockLocalStorage: setItem запрещён (эмуляция quota/приватного режима)');
       }
+
       store.set(key, String(value));
     },
     removeItem: (key) => {
@@ -53,6 +54,7 @@ export function mockLocalStorage(options: MockLocalStorageOptions = {}): MockLoc
     target,
     descriptor: Object.getOwnPropertyDescriptor(target, 'localStorage'),
   }));
+
   for (const target of targets) {
     Object.defineProperty(target, 'localStorage', { value: fake, configurable: true });
   }
@@ -64,7 +66,7 @@ export function mockLocalStorage(options: MockLocalStorageOptions = {}): MockLoc
         if (descriptor) {
           Object.defineProperty(target, 'localStorage', descriptor);
         } else {
-          delete (target as { localStorage?: Storage }).localStorage;
+          Reflect.deleteProperty(target, 'localStorage');
         }
       }
     },

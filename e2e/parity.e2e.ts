@@ -37,17 +37,21 @@ async function openHydrated(page: Page, url: string) {
 
 async function text(locator: ReturnType<Page['getByTestId']>) {
   await expect(locator).toBeVisible();
+
   return (await locator.innerText()).replace(/\s+/g, ' ').trim();
 }
 
 async function expectRollChanges(page: Page, buttonName: RegExp, resultTestId: string) {
   const result = page.getByTestId(resultTestId);
   const before = await text(result);
+
   for (let i = 0; i < 20; i++) {
     await page.getByRole('button', { name: buttonName }).click();
     const after = await text(result);
+
     if (after !== before) return;
   }
+
   throw new Error(`${resultTestId} did not change after repeated rolls`);
 }
 
@@ -56,12 +60,15 @@ test('every route renders static content and attribution without JavaScript', as
 }) => {
   const context = await browser.newContext({ javaScriptEnabled: false });
   const page = await context.newPage();
+
   for (const route of routes) {
     await page.goto(route);
     await expect(page.locator('main')).toBeVisible();
+
     if (route !== '/') await expect(page.locator('footer')).toBeVisible();
     await expect(page.getByRole('heading').first()).toBeVisible();
   }
+
   await context.close();
 });
 
@@ -122,6 +129,7 @@ test('prices sync URL state, restore reloads, and prefer URL over localStorage',
   const firstParams = firstUrl.searchParams;
   const firstSettlement = firstParams.get('s');
   const firstVersion = firstParams.get('r')?.split('.')[1];
+
   if (!firstSettlement || !firstVersion) throw new Error('Prices URL state is missing');
   const storedSettlement = firstSettlement === 'city' ? 'rural' : 'city';
   const storedState = `s=${storedSettlement}&r=2.${firstVersion}`;
@@ -168,6 +176,7 @@ test('paper minis upload, edit, calibrate by keyboard, preview, and download PDF
   await page.getByRole('button', { name: 'Скачать PDF' }).click();
   const download = await downloadPromise;
   const path = await download.path();
+
   if (!path) throw new Error('Download path is missing');
   const bytes = await readFile(path);
   expect(new TextDecoder().decode(bytes.subarray(0, 5))).toBe('%PDF-');
@@ -198,6 +207,7 @@ test('the calibration dialog keeps keyboard focus inside while open', async ({ p
   // dialog before moving it back, so the check waits for focus to settle.
   const focusInsideDialog = () =>
     page.evaluate(() => !!document.activeElement?.closest('[role="dialog"], dialog'));
+
   for (const key of ['Shift+Tab', 'Tab']) {
     for (let i = 0; i < 12; i++) {
       await page.keyboard.press(key);

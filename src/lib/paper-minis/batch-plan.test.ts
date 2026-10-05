@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import { planBatch } from './batch-plan';
 
 const file = (name: string) => new File([], name);
+
 const names = (...fileNames: string[]) => planBatch(fileNames.map(file)).map((row) => row.name);
 
 test.each([
@@ -113,6 +114,7 @@ test('every dropped file lands in the plan, as a front or as a back', () => {
     'knight-back.png',
     'back.png',
   ].map(file);
+
   // #when
   const plan = planBatch(files);
   // #then
@@ -429,25 +431,29 @@ test('a back of another size does not pair and becomes its own row at its size',
 
 test('a back is never attached to a front of another size', () => {
   // #given
-  const sizeByFile: Record<string, string | undefined> = {
-    'goblin-small.png': 'small',
-    'goblin-large.png': 'large',
-    'goblin-small-back.png': 'small',
-    'ogre-huge.png': 'huge',
-    'ogre-tiny-back.png': 'tiny',
-    'troll.png': undefined,
-    'troll-large-back.png': 'large',
-  };
-  const files = Object.keys(sizeByFile).map(file);
+  const sizeByFile = new Map([
+    ['goblin-small.png', 'small'],
+    ['goblin-large.png', 'large'],
+    ['goblin-small-back.png', 'small'],
+    ['ogre-huge.png', 'huge'],
+    ['ogre-tiny-back.png', 'tiny'],
+    ['troll.png', undefined],
+    ['troll-large-back.png', 'large'],
+  ]);
+
+  const files = Array.from(sizeByFile.keys(), file);
   // #when
   const plan = planBatch(files);
+
   // #then
   const clashes = plan.filter((row) => {
     if (!row.back) return false;
-    const frontSize = sizeByFile[row.front.name];
-    const backSize = sizeByFile[row.back.name];
+    const frontSize = sizeByFile.get(row.front.name);
+    const backSize = sizeByFile.get(row.back.name);
+
     return frontSize !== undefined && backSize !== undefined && frontSize !== backSize;
   });
+
   expect(clashes).toEqual([]);
 });
 
@@ -473,7 +479,10 @@ test('front calibration wins over back calibration', () => {
 });
 
 test('back-only calibration is used when the front has none', () => {
-  const [row] = planBatch([file('goblin-medium-front.png'), file('goblin-medium-back-h300-f900.png')]);
+  const [row] = planBatch([
+    file('goblin-medium-front.png'),
+    file('goblin-medium-back-h300-f900.png'),
+  ]);
 
   expect(row.calibration).toEqual({ head: 0.3, feet: 0.9 });
 });

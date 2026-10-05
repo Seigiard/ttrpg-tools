@@ -14,7 +14,10 @@ export function calibrationAfterChange(
   change: CalibrationChange,
 ): HeightCalibration | undefined {
   if (change === 'select-front') return mini.artwork ? undefined : mini.calibration;
+
   if (change === 'select-back') return mini.backArtwork ? undefined : mini.calibration;
+
   if (change === 'clear-back') return mini.artwork ? mini.calibration : undefined;
+
   return undefined;
 }

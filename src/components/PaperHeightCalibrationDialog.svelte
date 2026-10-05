@@ -27,16 +27,22 @@
   } = $props();
 
   let artworkElement: HTMLSpanElement | undefined = $state();
+
   let dragging: CalibrationLine | null = $state(null);
+
   let frontUrl = $state<string>();
+
   let backUrl = $state<string>();
+
   let artwork = $derived(session.artwork);
+
   let backArtwork = $derived(session.backArtwork);
 
   function makeUrl(preparedArtwork?: PreparedArtwork | null) {
     if (!preparedArtwork) return undefined;
+
     return URL.createObjectURL(
-      new Blob([preparedArtwork.bytes as BlobPart], {
+      new Blob([preparedArtwork.bytes.slice()], {
         type: artworkMimeType(preparedArtwork.format),
       }),
     );
@@ -44,6 +50,7 @@
 
   function setLineFromClientY(which: CalibrationLine, clientY: number) {
     const box = artworkElement?.getBoundingClientRect();
+
     if (!box || box.height <= 0) return;
     onSetLine(which, (clientY - box.top) / box.height);
   }
@@ -51,6 +58,7 @@
   $effect(() => {
     const next = makeUrl(artwork);
     frontUrl = next;
+
     return () => {
       if (next) URL.revokeObjectURL(next);
     };
@@ -59,6 +67,7 @@
   $effect(() => {
     const next = makeUrl(backArtwork);
     backUrl = next;
+
     return () => {
       if (next) URL.revokeObjectURL(next);
     };
@@ -125,7 +134,7 @@
             {#if session.backArtwork && backUrl}
               <img src={backUrl} alt="Оборот" class="block h-full w-auto" />
             {/if}
-            {#each lines as line}
+            {#each lines as line (line)}
               <span
                 aria-hidden="true"
                 class="pointer-events-none absolute inset-x-0 border-t-2 border-primary"

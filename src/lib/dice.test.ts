@@ -15,11 +15,13 @@ describe('roll(sides)', () => {
     const counts: number[] = Array.from({ length: 20 }, () => 0);
     const N = 10_000;
     let sum = 0;
+
     for (let i = 0; i < N; i++) {
       const v = roll(20);
       counts[v - 1] = (counts[v - 1] ?? 0) + 1;
       sum += v;
     }
+
     // Каждое значение должно появиться хотя бы раз.
     expect(counts.every((c) => c > 0)).toBe(true);
     // Среднее в широком CI: ожидаемое 10.5, допуск ±0.5 на 10k бросков.
@@ -31,16 +33,20 @@ describe('roll(sides)', () => {
   test('распределение d20 проходит χ²-тест на 100к бросков', () => {
     const counts: number[] = Array.from({ length: 20 }, () => 0);
     const N = 100_000;
+
     for (let i = 0; i < N; i++) {
       const v = roll(20);
       counts[v - 1] = (counts[v - 1] ?? 0) + 1;
     }
+
     const expectedPerBin = N / 20;
     let chi = 0;
+
     for (const c of counts) {
-      const diff = (c as number) - expectedPerBin;
+      const diff = c - expectedPerBin;
       chi += (diff * diff) / expectedPerBin;
     }
+
     // 19 степеней свободы, α=0.001 → критическое значение 43.82.
     // Под честным RNG p > 0.001 практически всегда, тест не флэйковый.
     expect(chi).toBeLessThan(43.82);
@@ -54,9 +60,11 @@ describe('roll(sides)', () => {
 
   test('sides=256 (степень двойки) даёт все значения', () => {
     const seen = new Set<number>();
+
     for (let i = 0; i < 50_000 && seen.size < 256; i++) {
       seen.add(roll(256));
     }
+
     expect(seen.size).toBe(256);
   });
 
@@ -72,6 +80,7 @@ describe('roll(sides)', () => {
 describe('pick(table)', () => {
   test('возвращает { index, value } где table[index] === value', () => {
     const table = ['a', 'b', 'c'] as const;
+
     for (let i = 0; i < 200; i++) {
       const { index, value } = pick(table);
       expect(index).toBeGreaterThanOrEqual(0);
@@ -87,9 +96,11 @@ describe('pick(table)', () => {
   test('покрывает все элементы за достаточное число попыток', () => {
     const table = ['a', 'b', 'c'] as const;
     const seen = new Set<string>();
+
     for (let i = 0; i < 500 && seen.size < 3; i++) {
       seen.add(pick(table).value);
     }
+
     expect(seen.size).toBe(3);
   });
 });
@@ -115,11 +126,13 @@ describe('rollDice({ count, sides })', () => {
     const N = 10_000;
     let sum = 0;
     const counts: number[] = Array.from({ length: 13 }, () => 0);
+
     for (let i = 0; i < N; i++) {
       const v = rollDice({ count: 2, sides: 6 });
       sum += v;
       counts[v] = (counts[v] ?? 0) + 1;
     }
+
     const mean = sum / N;
     expect(mean).toBeGreaterThan(6.7);
     expect(mean).toBeLessThan(7.3);
@@ -130,12 +143,14 @@ describe('rollDice({ count, sides })', () => {
 
   test('3d4 даёт значения в [3, 12]', () => {
     const seen = new Set<number>();
+
     for (let i = 0; i < 5_000; i++) {
       const v = rollDice({ count: 3, sides: 4 });
       expect(v).toBeGreaterThanOrEqual(3);
       expect(v).toBeLessThanOrEqual(12);
       seen.add(v);
     }
+
     // За 5к бросков должны увидеть все 10 возможных сумм
     expect(seen.size).toBe(10);
   });
@@ -163,6 +178,7 @@ describe('rejection sampling корректность', () => {
     // Для d20: limit = floor(2^32 / 20) * 20 = 214748364 * 20 = 4294967280.
     // Значения >= 4294967280 должны отбрасываться.
     const limit = Math.floor(0x1_0000_0000 / 20) * 20;
+
     // ВНИМАНИЕ: Uint32Array truncate'ит значения >= 2^32, поэтому используем
     // только значения, влезающие в Uint32: [limit, 2^32 - 1] — для «отбрасываемых».
     const sequence = [
@@ -170,13 +186,17 @@ describe('rejection sampling корректность', () => {
       limit + 15, // отбрасывается (Uint32_MAX = 4294967295)
       42, // принимается → 42 % 20 + 1 == 3
     ];
+
     let i = 0;
-    crypto.getRandomValues = ((buf: Uint32Array) => {
+    crypto.getRandomValues = <T extends ArrayBufferView | null>(buf: T): T => {
+      if (!(buf instanceof Uint32Array)) throw new Error('Expected a Uint32Array');
       const value = sequence[i++];
+
       if (value === undefined) throw new Error('тестовая последовательность исчерпана');
       buf[0] = value;
+
       return buf;
-    }) as typeof crypto.getRandomValues;
+    };
 
     expect(roll(20)).toBe(3);
     expect(i).toBe(3); // все три значения были потреблены

@@ -73,6 +73,7 @@ t('a custom threshold excludes pixels at that threshold', () => {
 t('opaque artwork on a coloured background trims to its figure', () => {
   // #given
   const pixels = new Uint8ClampedArray(5 * 4 * 4);
+
   for (let i = 0; i < pixels.length; i += 4) pixels.set([40, 90, 150, 255], i);
   pixels.set([200, 30, 60, 255], (1 * 5 + 2) * 4);
   pixels.set([200, 30, 60, 255], (2 * 5 + 3) * 4);
@@ -85,6 +86,7 @@ t('opaque artwork on a coloured background trims to its figure', () => {
 t('a single border outlier beyond tolerance rejects a scenic background', () => {
   // #given
   const pixels = new Uint8ClampedArray(3 * 3 * 4);
+
   for (let i = 0; i < pixels.length; i += 4) pixels.set([100, 100, 100, 255], i);
   pixels.set([100, 100, 113, 255], 0);
   pixels.set([200, 0, 0, 255], 4 * 4);
@@ -97,6 +99,7 @@ t('a single border outlier beyond tolerance rejects a scenic background', () => 
 t('a custom colour tolerance keeps a smaller contrast as figure', () => {
   // #given
   const pixels = new Uint8ClampedArray(3 * 3 * 4);
+
   for (let i = 0; i < pixels.length; i += 4) pixels.set([100, 100, 100, 255], i);
   pixels.set([106, 100, 100, 255], 4 * 4);
   // #when
@@ -108,6 +111,7 @@ t('a custom colour tolerance keeps a smaller contrast as figure', () => {
 t('the border median tolerates a corner offset of 12 and detects a difference of 13', () => {
   // #given
   const pixels = new Uint8ClampedArray(5 * 5 * 4);
+
   for (let i = 0; i < pixels.length; i += 4) pixels.set([100, 80, 60, 255], i);
   pixels.set([112, 92, 72, 255], 0);
   pixels.set([112, 92, 72, 255], (1 * 5 + 1) * 4);
@@ -121,6 +125,7 @@ t('the border median tolerates a corner offset of 12 and detects a difference of
 t('similar-coloured pixels do not erase a row containing a contrasting figure pixel', () => {
   // #given
   const pixels = new Uint8ClampedArray(5 * 5 * 4);
+
   for (let i = 0; i < pixels.length; i += 4) pixels.set([100, 100, 100, 255], i);
   pixels.set([101, 100, 100, 255], (1 * 5 + 1) * 4);
   pixels.set([200, 100, 100, 255], (1 * 5 + 3) * 4);
@@ -134,6 +139,7 @@ t('similar-coloured pixels do not erase a row containing a contrasting figure pi
 t('any transparency keeps the alpha path even on a flat colour background', () => {
   // #given
   const pixels = new Uint8ClampedArray(3 * 3 * 4);
+
   for (let i = 0; i < pixels.length; i += 4) pixels.set([100, 100, 100, 255], i);
   pixels.set([100, 100, 100, 254], 0);
   pixels.set([200, 0, 0, 255], 4 * 4);
@@ -162,6 +168,7 @@ for (const [width, height] of [
 t('border colours more than 12 apart are not flat even when each is near the median', () => {
   // #given
   const pixels = new Uint8ClampedArray(3 * 3 * 4);
+
   for (let i = 0; i < pixels.length; i += 4) pixels.set([100, 100, 100, 255], i);
   pixels.set([88, 100, 100, 255], 0);
   pixels.set([112, 100, 100, 255], 8 * 4);

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createConnection } from 'node:net';
 import { chromium } from '@playwright/test';
+import * as z from 'zod/mini';
 import { buildPayloadReport, payloadMarkdown } from './payload';
 import { measureNetwork, networkMarkdown } from './network.e2e';
 import { measureTimings, timingsMarkdown } from './timings';
@@ -19,12 +20,14 @@ const routes = [
 
 function arg(name: string, fallback?: string) {
   const index = Bun.argv.indexOf(name);
+
   return index >= 0 ? Bun.argv[index + 1] : fallback;
 }
 
 async function run(command: string, args: string[]) {
   const proc = spawn(command, args, { stdio: 'inherit', env: process.env });
   const code = await new Promise<number | null>((resolve) => proc.on('exit', resolve));
+
   if (code !== 0) throw new Error(`${command} ${args.join(' ')} failed with ${code}`);
 }
 
@@ -38,6 +41,7 @@ async function assertPortFree(port: number) {
     });
     socket.once('error', (error: NodeJS.ErrnoException) => {
       socket.destroy();
+
       if (error.code === 'ECONNREFUSED') resolve();
       else reject(error);
     });
@@ -56,16 +60,21 @@ async function waitForPreview(baseUrl: string, proc: ChildProcess, ready: Promis
       throw new Error('vite preview did not report its local URL within 60s');
     }),
   ]);
+
   while (Date.now() - started < 60_000) {
     if (proc.exitCode !== null) throw new Error(`vite preview exited with ${proc.exitCode}`);
+
     try {
       const response = await fetch(baseUrl);
+
       if (response.ok) return;
     } catch {
       // Retry until preview binds the port.
     }
+
     await Bun.sleep(500);
   }
+
   throw new Error('vite preview did not start within 60s');
 }
 
@@ -91,30 +100,38 @@ export async function withPreview<T>(
   // shared by every checkout; parallel worktrees would stop each other's servers.
   const baseUrl = `http://127.0.0.1:${port}`;
   let markReady!: () => void;
+
   const ready = new Promise<void>((resolve) => {
     markReady = resolve;
   });
+
   const proc = deps.spawn(
     'bunx',
     ['vite', 'preview', '--host', '127.0.0.1', '--port', String(port), '--strictPort'],
     { stdio: ['ignore', 'pipe', 'pipe'] },
   );
+
   let stopping = false;
+
   const exit = new Promise<never>((_, reject) => {
     proc.once('exit', (code, signal) => {
       if (stopping) return;
       reject(new Error(`vite preview exited during measurement with ${code ?? signal}`));
     });
   });
+
   for (const stream of [proc.stdout, proc.stderr]) {
     stream.on('data', (chunk: Buffer) => {
       const text = chunk.toString();
       process.stdout.write(text);
+
       if (text.includes(baseUrl)) markReady();
     });
   }
+
   try {
     await deps.waitForPreview(baseUrl, proc, Promise.race([ready, exit]));
+
     return await Promise.race([work(baseUrl), exit]);
   } finally {
     stopping = true;
@@ -124,10 +141,12 @@ export async function withPreview<T>(
 
 async function screenshots(baseUrl: string, out: string) {
   const browser = await chromium.launch();
+
   try {
     for (const width of [1280, 390]) {
       const context = await browser.newContext({ viewport: { width, height: 900 } });
       const page = await context.newPage();
+
       for (const route of routes) {
         await page.goto(new URL(route, baseUrl).toString(), { waitUntil: 'networkidle' });
         const name = route === '/' ? 'index' : route.slice(1).replaceAll('/', '-');
@@ -136,6 +155,7 @@ async function screenshots(baseUrl: string, out: string) {
           fullPage: true,
         });
       }
+
       await context.close();
     }
   } finally {
@@ -144,11 +164,15 @@ async function screenshots(baseUrl: string, out: string) {
 }
 
 async function versions() {
-  const packageJson = JSON.parse(await readFile('package.json', 'utf8')) as {
-    dependencies?: Record<string, string>;
-    devDependencies?: Record<string, string>;
-  };
+  const packageJson = z
+    .object({
+      dependencies: z.optional(z.record(z.string(), z.string())),
+      devDependencies: z.optional(z.record(z.string(), z.string())),
+    })
+    .parse(JSON.parse(await readFile('package.json', 'utf8')));
+
   const lock = await readFile('bun.lock', 'utf8');
+
   const wanted = [
     'astro',
     '@astrojs/svelte',
@@ -158,6 +182,7 @@ async function versions() {
     '@playwright/test',
     'pdf-lib',
   ];
+
   return {
     packageJson: {
       dependencies: packageJson.dependencies,
@@ -177,6 +202,7 @@ async function versions() {
 
 async function main() {
   const out = arg('--out');
+
   if (!out) throw new Error('Usage: bun run measure -- --out <directory>');
   const port = Number(process.env.PORT ?? 4400);
   await mkdir(out, { recursive: true });
@@ -189,17 +215,20 @@ async function main() {
 
   await withPreview(port, async (baseUrl) => {
     const browser = await chromium.launch();
+
     try {
       const network = await measureNetwork(browser, baseUrl, routes);
       await writeFile(join(out, 'network.json'), `${JSON.stringify(network, null, 2)}\n`);
       await writeFile(join(out, 'network.md'), networkMarkdown(network));
       const timingData = await measureTimings(browser, baseUrl);
+
       const machine = {
         cpu: cpus()[0]?.model ?? 'unknown',
         cpuCount: cpus().length,
         os: `${platform()} ${release()}`,
         browserVersion: browser.version(),
       };
+
       await writeFile(
         join(out, 'timings.json'),
         `${JSON.stringify({ machine, timings: timingData }, null, 2)}\n`,
@@ -211,6 +240,7 @@ async function main() {
     } finally {
       await browser.close();
     }
+
     await screenshots(baseUrl, out);
   });
 

@@ -17,7 +17,7 @@
 <section data-testid={testId}>
   <h3 class="font-mono text-xs uppercase tracking-wider text-text-muted">{title}</h3>
   <ul class="mt-3 grid grid-cols-[max-content_1fr] divide-y divide-border">
-    {#each rows as row, i}
+    {#each rows as row, i (i)}
       <li
         data-row-index={i}
         data-hit={i === hitIndex ? 'true' : undefined}

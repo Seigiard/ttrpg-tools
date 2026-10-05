@@ -1,48 +1,48 @@
 import { afterEach, expect, test } from 'bun:test';
 import { unzipSync, zipSync } from 'fflate';
-import {
-  DEFAULT_CUSTOM_HEIGHT_MM,
-  DEFAULT_CUSTOM_WIDTH_MM,
-} from '@/lib/paper-minis/sizes';
+import { DEFAULT_CUSTOM_HEIGHT_MM, DEFAULT_CUSTOM_WIDTH_MM } from '@/lib/paper-minis/sizes';
 import type { HeightCalibration, PreparedArtwork } from '@/lib/paper-minis/types';
 import {
   createPaperMinisStore,
   type ArtworkPreparation,
   type PaperMinisArtwork,
   type PaperMinisRenderer,
-  type PaperMinisSettings,
 } from './paper-minis-store';
 
 const png = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==',
   'base64',
 );
-const preparation = Symbol('preparation');
-type ControlledFile = File & {
-  [preparation]?: Promise<ArtworkPreparation>;
-};
+
+const preparations = new WeakMap<File, Promise<ArtworkPreparation>>();
 
 function preparedArtwork(width = 1, height = 1): PreparedArtwork {
   return { bytes: Uint8Array.from([1]), format: 'png', width, height };
 }
+
 function artworkFile(width: number, height: number, name = 'front.png') {
-  const file = new File([png], name, { type: 'image/png' }) as ControlledFile;
-  file[preparation] = Promise.resolve({ artwork: preparedArtwork(width, height) });
+  const file = new File([png], name, { type: 'image/png' });
+  preparations.set(file, Promise.resolve({ artwork: preparedArtwork(width, height) }));
+
   return file;
 }
+
 function zipFile(entries: Record<string, Uint8Array>, name = 'paper-minis.zip') {
   return new File([zipSync(entries)], name, { type: 'application/zip' });
 }
+
 function fakeArtwork(): PaperMinisArtwork {
   return {
     prepare(file) {
-      return (file as ControlledFile)[preparation] ?? Promise.resolve({ artwork: preparedArtwork() });
+      return preparations.get(file) ?? Promise.resolve({ artwork: preparedArtwork() });
     },
   };
 }
+
 function setup(renderer?: PaperMinisRenderer, artwork = fakeArtwork()) {
   return createPaperMinisStore({ renderer, artwork });
 }
+
 function calibrate(
   store: ReturnType<typeof createPaperMinisStore>,
   id: number,
@@ -51,42 +51,57 @@ function calibrate(
   if (!store.openCalibration(id)) throw new Error('Expected calibration to open');
   store.setCalibrationLine('head', calibration.head);
   store.setCalibrationLine('feet', calibration.feet);
+
   if (!store.applyCalibration()) throw new Error('Expected calibration to apply');
 }
+
 function deferredFile() {
   let release!: (result: ArtworkPreparation) => void;
+
   const pending = new Promise<ArtworkPreparation>((resolve) => {
     release = resolve;
   });
-  const file = new File(['slow'], 'slow.png', { type: 'image/png' }) as ControlledFile;
-  file[preparation] = pending;
+
+  const file = new File(['slow'], 'slow.png', { type: 'image/png' });
+  preparations.set(file, pending);
+
   return { file, release: () => release({ artwork: preparedArtwork(1, 100) }) };
 }
+
 function deferredZipFile(entries: Record<string, Uint8Array>) {
   let release!: () => void;
+
   const pending = new Promise<void>((resolve) => {
     release = resolve;
   });
+
   let arrayBufferStarted!: () => void;
+
   const arrayBufferCalled = new Promise<void>((resolve) => {
     arrayBufferStarted = resolve;
   });
+
   const bytes = zipSync(entries);
   const file = new File([], 'paper-minis.zip', { type: 'application/zip' });
   Object.defineProperty(file, 'arrayBuffer', {
     value: async () => {
       arrayBufferStarted();
       await pending;
+
       return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
     },
   });
+
   return { file, arrayBufferCalled, release };
 }
+
 function failedFile(name: string) {
-  const file = new File(['broken'], name, { type: 'image/png' }) as ControlledFile;
-  file[preparation] = Promise.reject(new Error('Artwork preparation failed'));
+  const file = new File(['broken'], name, { type: 'image/png' });
+  preparations.set(file, Promise.reject(new Error('Artwork preparation failed')));
+
   return file;
 }
+
 afterEach(() => localStorage.removeItem('pmg-settings'));
 
 test('switching a row to custom size seeds valid default dimensions', () => {
@@ -141,11 +156,13 @@ test.each(['', '-', '2.7', '0'])(
     store.setCount(id, '3');
     // #when
     store.setCount(id, text);
+
     const invalid = {
       count: store.$rows.get()[0].count,
       input: store.$inputs.get().rows[id].count,
       valid: store.$inputsValid.get(),
     };
+
     store.commitCount(id);
     // #then
     expect({ invalid, reverted: store.$inputs.get().rows[id].count }).toEqual({
@@ -187,11 +204,13 @@ test('committing an invalid custom dimension restores its committed value', () =
   store.setCustomDimensions(id, { height: '40' });
   // #when
   store.setCustomDimensions(id, { width: '12.5', height: '-' });
+
   const invalid = {
     row: store.$rows.get()[0],
     inputs: store.$inputs.get().rows[id],
     valid: store.$inputsValid.get(),
   };
+
   store.commitCustomDimension(id, 'height');
   // #then
   expect({
@@ -232,11 +251,13 @@ test('committing an invalid margin draft restores the committed margin', () => {
   store.setMargin('5');
   // #when
   store.setMargin('-');
+
   const invalid = {
     margin: store.$settings.get().marginMm,
     input: store.$inputs.get().margin,
     valid: store.$inputsValid.get(),
   };
+
   store.commitMargin();
   // #then
   expect({
@@ -299,12 +320,14 @@ test('direct and loaded settings reject the same invalid fields', () => {
     numberDuplicates: 'yes',
     normalization: false,
   };
+
   const direct = createPaperMinisStore();
   const loaded = createPaperMinisStore();
   localStorage.setItem('pmg-settings', JSON.stringify(input));
   // #when
   loaded.loadSettings();
-  direct.settings(input as unknown as Partial<PaperMinisSettings>);
+  // @ts-expect-error Invalid fields deliberately exercise runtime validation.
+  direct.settings(input);
   // #then
   expect({ direct: direct.$settings.get(), loaded: loaded.$settings.get() }).toEqual({
     direct: {
@@ -325,10 +348,13 @@ test('direct and loaded settings reject the same invalid fields', () => {
 test('a printer measurement resolves to the scale used for layout and PDF generation', async () => {
   // #given
   let rendered: Parameters<PaperMinisRenderer> | undefined;
+
   const store = setup(async (...input) => {
     rendered = input;
+
     return Uint8Array.from([1]);
   });
+
   const id = store.addBlank()!;
   await store.setImage(id, artworkFile(10, 20));
   // #when
@@ -393,10 +419,13 @@ test.each(['79.9', '100.1', 'not a number'])(
 test('clearing a printer measurement restores the default scale', async () => {
   // #given
   let rendered: Parameters<PaperMinisRenderer> | undefined;
+
   const store = setup(async (...input) => {
     rendered = input;
+
     return Uint8Array.from([1]);
   });
+
   const id = store.addBlank()!;
   await store.setImage(id, artworkFile(10, 20));
   store.setPrinterMeasurement('95');
@@ -443,6 +472,7 @@ test('a printer measurement remains available when persistent storage is unavail
   localStorage.setItem = () => {
     throw new Error('Storage unavailable');
   };
+
   const store = setup();
 
   try {
@@ -460,10 +490,13 @@ test('download renders the layout shown by the counter and returns the renderer 
   // #given
   const bytes = Uint8Array.from([11, 22, 33]);
   let rendered: Parameters<PaperMinisRenderer> | undefined;
+
   const store = setup(async (...input) => {
     rendered = input;
+
     return bytes;
   });
+
   const id = store.addBlank()!;
   const file = new File([png], 'front.png', { type: 'image/png' });
   await store.setImage(id, file);
@@ -517,9 +550,11 @@ test('export zip restores names, sizes, counts, calibration and sides through ba
   // #when
   const bytes = await store.exportZip();
   const entries = bytes ? unzipSync(bytes) : {};
+
   const extracted = Object.entries(entries).map(
     ([name, fileBytes]) => new File([fileBytes], name, { type: 'image/png' }),
   );
+
   const restored = setup();
   restored.ingest(extracted);
   await Promise.resolve();
@@ -633,8 +668,10 @@ test('export zip restores names, sizes, counts, calibration and sides through ba
 test('export zip separates reserved filename characters and compares collisions case-insensitively', async () => {
   // #given
   const store = setup();
+
   for (const name of ['Orc/Chief', 'orc chief', 'Mage:Boss*Elite?One"Two<Three>Four|Five\\Six']) {
     const id = store.addBlank({ name, heightSlot: 'small' })!;
+    // oxlint-disable-next-line no-await-in-loop -- Each image load updates the shared store; keep fixture setup deterministic.
     await store.setImage(id, artworkFile(10, 20, `${name}.png`));
   }
 
@@ -710,6 +747,7 @@ test('a zip and loose images are flattened into one batch plan', async () => {
 test('a zip with a non-image entry reports skipped files', async () => {
   // #given
   const store = setup();
+
   const zip = zipFile({
     'goblin.png': Uint8Array.from(png),
     'notes.txt': Uint8Array.from([110, 111, 116, 101, 115]),
@@ -738,8 +776,12 @@ test('a broken zip reports an archive failure and still imports loose images', a
   await store.ingest([zip, front]);
 
   // #then
-  expect({ message: store.$message.get(), rows: store.$rows.get().map((row) => row.image?.name) }).toEqual({
-    message: 'Не удалось распаковать архив. Добавьте изображения вручную или попробуйте другой файл.',
+  expect({
+    message: store.$message.get(),
+    rows: store.$rows.get().map((row) => row.image?.name),
+  }).toEqual({
+    message:
+      'Не удалось распаковать архив. Добавьте изображения вручную или попробуйте другой файл.',
     rows: ['goblin.png'],
   });
 });
@@ -754,6 +796,7 @@ test('zip expansion is preparing work that blocks generation and calibration', a
   // #when
   const ingest = store.ingest([slow.file]);
   await slow.arrayBufferCalled;
+
   const during = {
     preparing: store.$preparing.get(),
     download: await store.download(),
@@ -761,6 +804,7 @@ test('zip expansion is preparing work that blocks generation and calibration', a
     calibrationOpened: store.openCalibration(existing),
     rows: store.$rows.get().map((row) => row.image?.name),
   };
+
   slow.release();
   await ingest;
 
@@ -786,12 +830,24 @@ test('zip expansion is preparing work that blocks generation and calibration', a
 test('export zip decodes JPEG artwork without EXIF orientation and releases the canvas', async () => {
   // #given
   const previousCreateImageBitmap = globalThis.createImageBitmap;
-  const calls: unknown[] = [];
+  const calls: (ImageBitmapOptions | undefined)[] = [];
   let closed = false;
-  globalThis.createImageBitmap = ((...args: unknown[]) => {
-    calls.push(args[1]);
-    return Promise.resolve({ width: 2, height: 3, close: () => (closed = true) } as ImageBitmap);
-  }) as typeof createImageBitmap;
+  globalThis.createImageBitmap = (
+    ...args:
+      | [image: ImageBitmapSource, options?: ImageBitmapOptions]
+      | Parameters<typeof createImageBitmap>
+  ) => {
+    calls.push(args.length === 1 || args.length === 2 ? args[1] : args[5]);
+
+    return Promise.resolve({
+      width: 2,
+      height: 3,
+      close: () => {
+        closed = true;
+      },
+    });
+  };
+
   const canvas = document.createElement('canvas');
   const originalCreateElement = document.createElement.bind(document);
   const released: number[] = [];
@@ -809,16 +865,32 @@ test('export zip decodes JPEG artwork without EXIF orientation and releases the 
     value: () => ({ drawImage() {} }),
   });
   Object.defineProperty(canvas, 'toBlob', {
-    value: (callback: (blob: Blob | null) => void) => callback(new Blob([png], { type: 'image/png' })),
+    value: (callback: (blob: Blob | null) => void) =>
+      callback(new Blob([png], { type: 'image/png' })),
   });
+  // SAFETY: Only the canvas overload is replaced; every other tag uses the original factory.
   document.createElement = ((tagName: string, options?: ElementCreationOptions) =>
-    tagName === 'canvas' ? canvas : originalCreateElement(tagName, options)) as typeof document.createElement;
+    tagName === 'canvas'
+      ? canvas
+      : originalCreateElement(tagName, options)) as typeof document.createElement;
+
   const artwork: PaperMinisArtwork = {
     prepare: () =>
-      Promise.resolve({ artwork: { bytes: Uint8Array.from([255, 216, 255, 217]), format: 'jpg', width: 2, height: 3 } }),
+      Promise.resolve({
+        artwork: {
+          bytes: Uint8Array.from([255, 216, 255, 217]),
+          format: 'jpg',
+          width: 2,
+          height: 3,
+        },
+      }),
   };
+
   const store = setup(undefined, artwork);
-  await store.setImage(store.addBlank({ name: 'Photo' })!, new File(['jpg'], 'photo.jpg', { type: 'image/jpeg' }));
+  await store.setImage(
+    store.addBlank({ name: 'Photo' })!,
+    new File(['jpg'], 'photo.jpg', { type: 'image/jpeg' }),
+  );
 
   try {
     // #when
@@ -838,14 +910,18 @@ test('export zip decodes JPEG artwork without EXIF orientation and releases the 
   } finally {
     globalThis.createImageBitmap = previousCreateImageBitmap;
     document.createElement = originalCreateElement;
+
     if (originalWidth) Object.defineProperty(HTMLCanvasElement.prototype, 'width', originalWidth);
-    if (originalHeight) Object.defineProperty(HTMLCanvasElement.prototype, 'height', originalHeight);
+
+    if (originalHeight)
+      Object.defineProperty(HTMLCanvasElement.prototype, 'height', originalHeight);
   }
 });
 
 test('zip folders and macOS metadata entries are ignored silently', async () => {
   // #given
   const store = setup();
+
   const zip = zipFile({
     'folder/': Uint8Array.from([]),
     '__MACOSX/._goblin-small-front.png': Uint8Array.from([1, 2, 3]),
@@ -907,9 +983,11 @@ test('a ready mini opens calibration while another mini is still preparing', asy
 test('export zip does nothing while locked, preparing, or without a ready mini', async () => {
   // #given
   let finish!: (bytes: Uint8Array) => void;
+
   const rendering = new Promise<Uint8Array>((resolve) => {
     finish = resolve;
   });
+
   const busy = setup(() => rendering);
   await busy.setImage(busy.addBlank()!, artworkFile(1, 1));
   const download = busy.download();
@@ -930,6 +1008,7 @@ test('export zip does nothing while locked, preparing, or without a ready mini',
     empty.exportZip(),
     failed.exportZip(),
   ]);
+
   finish(Uint8Array.from([1]));
   slow.release();
   await Promise.all([download, pendingImage]);
@@ -973,10 +1052,13 @@ test.each([
     // #given
     let renders = 0;
     const bytes = Uint8Array.from([7]);
+
     const store = setup(async () => {
       renders++;
+
       return bytes;
     });
+
     const id = store.addBlank()!;
     await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
     invalidate(store, id);
@@ -1010,9 +1092,11 @@ test.each([
 test('generation availability follows layout, drafts, preparation and rendering', async () => {
   // #given
   let finishRender!: (bytes: Uint8Array) => void;
+
   const rendering = new Promise<Uint8Array>((resolve) => {
     finishRender = resolve;
   });
+
   const store = setup(() => rendering);
   const availability = [store.$canGenerate.get()];
   const id = store.addBlank()!;
@@ -1198,9 +1282,11 @@ test('an open calibration session blocks batch and single-slot file intake', asy
 test('calibration cannot open without prepared front artwork or during PDF generation', async () => {
   // #given
   let finish!: (bytes: Uint8Array) => void;
+
   const rendering = new Promise<Uint8Array>((resolve) => {
     finish = resolve;
   });
+
   const store = setup(() => rendering);
   const id = store.addBlank()!;
   const withoutArtwork = store.openCalibration(id);
@@ -1271,10 +1357,8 @@ test('a render failure releases the generation lock and reports the failure', as
   const store = setup(async () => {
     throw new Error('renderer failed');
   });
-  await store.setImage(
-    store.addBlank()!,
-    new File([png], 'front.png', { type: 'image/png' }),
-  );
+
+  await store.setImage(store.addBlank()!, new File([png], 'front.png', { type: 'image/png' }));
   // #when
   const result = await store.download();
   // #then
@@ -1294,10 +1378,12 @@ test('a preview records its revision and becomes stale after an edit', async () 
   const revision = store.$revision.get();
   // #when
   await store.refreshPreview();
+
   const current = {
     preview: store.$preview.get(),
     stale: store.$previewStale.get(),
   };
+
   store.setCount(id, '2');
   // #then
   expect({
@@ -1318,18 +1404,20 @@ test('a preview records its revision and becomes stale after an edit', async () 
 test('a second generation call does nothing while the renderer is pending', async () => {
   // #given
   let release!: (bytes: Uint8Array) => void;
+
   const pending = new Promise<Uint8Array>((resolve) => {
     release = resolve;
   });
+
   let calls = 0;
+
   const store = setup(() => {
     calls++;
+
     return pending;
   });
-  await store.setImage(
-    store.addBlank()!,
-    new File([png], 'front.png', { type: 'image/png' }),
-  );
+
+  await store.setImage(store.addBlank()!, new File([png], 'front.png', { type: 'image/png' }));
   // #when
   const download = store.download();
   const preview = await store.refreshPreview();
@@ -1354,20 +1442,24 @@ test('a second generation call does nothing while the renderer is pending', asyn
 test('generation keeps every row and setting mutation locked until rendering settles', async () => {
   // #given
   let release!: (bytes: Uint8Array) => void;
+
   const rendering = new Promise<Uint8Array>((resolve) => {
     release = resolve;
   });
+
   const store = setup(() => rendering);
   const id = store.addBlank()!;
   const file = new File([png], 'front.png', { type: 'image/png' });
   await store.setImage(id, file);
   await store.setImage(id, file, true);
+
   const before = {
     rows: store.$rows.get(),
     settings: store.$settings.get(),
     inputs: store.$inputs.get(),
     revision: store.$revision.get(),
   };
+
   // #when
   const download = store.download();
   store.setCount(id, '7');
@@ -1383,12 +1475,14 @@ test('generation keeps every row and setting mutation locked until rendering set
   store.remove(id);
   await store.setImage(id, file);
   await store.setImage(id, file, true);
+
   const during = {
     rows: store.$rows.get(),
     settings: store.$settings.get(),
     inputs: store.$inputs.get(),
     revision: store.$revision.get(),
   };
+
   release(Uint8Array.from([1]));
   await download;
   store.setCount(id, '3');
@@ -1407,9 +1501,11 @@ test('generation keeps every row and setting mutation locked until rendering set
 test('generation keeps every draft commit locked until rendering settles', async () => {
   // #given
   let release!: (bytes: Uint8Array) => void;
+
   const rendering = new Promise<Uint8Array>((resolve) => {
     release = resolve;
   });
+
   const store = setup(() => rendering);
   const id = store.addBlank()!;
   store.setSize(id, 'custom');
@@ -1462,26 +1558,33 @@ test('a removed row’s late load neither restores it nor invalidates the previe
 test('generation waits for artwork preparation even when another row is printable', async () => {
   // #given
   let renders = 0;
+
   const store = setup(async () => {
     renders++;
+
     return Uint8Array.from([1]);
   });
+
   await store.setImage(store.addBlank()!, new File([png], 'front.png', { type: 'image/png' }));
   const slow = deferredFile();
   const pending = store.setImage(store.addBlank()!, slow.file);
+
   // #when
   const during = {
     preparing: store.$preparing.get(),
     result: await store.download(),
     count: store.$layout.get().miniCount,
   };
+
   slow.release();
   await pending;
+
   const after = {
     preparing: store.$preparing.get(),
     result: Array.from((await store.download()) ?? []),
     count: store.$layout.get().miniCount,
   };
+
   // #then
   expect({ during, after, renders }).toEqual({
     during: { preparing: true, result: undefined, count: 1 },
@@ -1495,23 +1598,27 @@ test('a pending normalized result keeps generation unavailable until its warning
   let renders = 0;
   let release!: (result: ArtworkPreparation) => void;
   let normalize: boolean | undefined;
+
   const pending = new Promise<ArtworkPreparation>((resolve) => {
     release = resolve;
   });
+
   const slow = new File(['slow'], 'slow.png', { type: 'image/png' });
+
   const artwork: PaperMinisArtwork = {
     prepare(file, options) {
       normalize = options.normalize;
+
       return file === slow ? pending : Promise.resolve({ artwork: preparedArtwork() });
     },
   };
-  const store = setup(
-    async () => {
-      renders++;
-      return Uint8Array.from([1]);
-    },
-    artwork,
-  );
+
+  const store = setup(async () => {
+    renders++;
+
+    return Uint8Array.from([1]);
+  }, artwork);
+
   await store.setImage(store.addBlank()!, new File([png], 'front.png', { type: 'image/png' }));
   const pendingImage = store.setImage(store.addBlank()!, slow);
   // #when
@@ -1551,6 +1658,7 @@ test.each(['remove', 'clearBack', 'replace'])(
     const slow = deferredFile();
     const target = action === 'remove' ? store.addBlank()! : id;
     const pending = store.setImage(target, slow.file, action === 'clearBack');
+
     // #when
     if (action === 'remove') store.remove(target);
     else if (action === 'clearBack') store.clearBack(target);
@@ -1584,9 +1692,11 @@ test.each([false, true])(
   async (back) => {
     // #given
     let finish!: (bytes: Uint8Array) => void;
+
     const rendering = new Promise<Uint8Array>((resolve) => {
       finish = resolve;
     });
+
     const store = setup(() => rendering);
     const id = store.addBlank()!;
     const original = new File([png], 'original.png', { type: 'image/png' });
@@ -1612,18 +1722,24 @@ test.each([false, true])(
 test('a late image cannot replace the newer selection', async () => {
   // #given
   let release!: () => void;
+
   const decoding = new Promise<void>((resolve) => {
     release = resolve;
   });
+
   const slow = new File(['slow'], 'slow.png', { type: 'image/png' });
   const normalized: string[] = [];
+
   const artwork: PaperMinisArtwork = {
     async prepare(file, options) {
       if (file === slow) await decoding;
+
       if (options.normalize && options.isCurrent?.() !== false) normalized.push(file.name);
+
       return { artwork: preparedArtwork() };
     },
   };
+
   const store = setup(undefined, artwork);
   const id = store.addBlank()!;
   const pending = store.setImage(id, slow);
@@ -1634,7 +1750,9 @@ test('a late image cannot replace the newer selection', async () => {
   await pending;
   // #then
   expect({
-    rows: store.$rows.get().map((row) => [row.image?.name, row.artwork?.width, row.artwork?.height]),
+    rows: store.$rows
+      .get()
+      .map((row) => [row.image?.name, row.artwork?.width, row.artwork?.height]),
     normalized,
   }).toEqual({ rows: [['new.png', 1, 1]], normalized: ['new.png'] });
 });
@@ -1656,9 +1774,7 @@ test('clearing a loading back keeps the reflection and restores print readiness'
     during,
     after: store.$layout.get().miniCount,
     back: store.$rows.get()[0].backArtwork,
-  }).toEqual(
-    { during: 0, after: 1, back: null },
-  );
+  }).toEqual({ during: 0, after: 1, back: null });
 });
 
 test('a broken back falls back to the front with a warning', async () => {
@@ -1685,10 +1801,12 @@ test('a failed front stays out of the print estimate and can be replaced', async
   const store = setup();
   const id = store.addBlank()!;
   await store.setImage(id, failedFile('bad.png'));
+
   const failed = {
     count: store.$layout.get().miniCount,
     error: store.$rows.get()[0].frontError,
   };
+
   // #when
   await store.setImage(id, new File([png], 'good.png', { type: 'image/png' }));
   // #then
@@ -1696,13 +1814,11 @@ test('a failed front stays out of the print estimate and can be replaced', async
     failed,
     count: store.$layout.get().miniCount,
     error: store.$rows.get()[0].frontError,
-  }).toEqual(
-    {
-      failed: { count: 0, error: 'Не удалось загрузить изображение. Попробуйте другой файл.' },
-      count: 1,
-      error: undefined,
-    },
-  );
+  }).toEqual({
+    failed: { count: 0, error: 'Не удалось загрузить изображение. Попробуйте другой файл.' },
+    count: 1,
+    error: undefined,
+  });
 });
 
 test('a dropped front and back pair loads into one row with both sides', async () => {
@@ -1710,6 +1826,7 @@ test('a dropped front and back pair loads into one row with both sides', async (
   const store = setup();
   const front = new File([png], 'goblin.png', { type: 'image/png' });
   const back = new File([png], 'goblin-back.png', { type: 'image/png' });
+
   const settled = new Promise<void>((resolve) => {
     const unsubscribe = store.$preparing.listen((preparing) => {
       if (!preparing) {
@@ -1718,6 +1835,7 @@ test('a dropped front and back pair loads into one row with both sides', async (
       }
     });
   });
+
   // #when
   store.ingest([front, back]);
   await settled;
@@ -1753,6 +1871,7 @@ test('duplicating while a missing back loads keeps calibration on the copy', asy
   calibrate(store, id, { head: 0.2, feet: 0.8 });
   const slow = deferredFile();
   const pending = store.setImage(id, slow.file, true);
+
   const settled = new Promise<void>((resolve) => {
     const unsubscribe = store.$preparing.listen((preparing) => {
       if (!preparing) {
@@ -1761,6 +1880,7 @@ test('duplicating while a missing back loads keeps calibration on the copy', asy
       }
     });
   });
+
   // #when
   store.duplicate(id);
   const calibrations = store.$rows.get().map((row) => row.calibration);
@@ -1830,6 +1950,7 @@ test.each([false, true])(
     const store = setup();
     const id = store.addBlank()!;
     await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
+
     if (back) await store.setImage(id, new File([png], 'back.png', { type: 'image/png' }), true);
     calibrate(store, id, { head: 0.2, feet: 0.8 });
     // #when
@@ -1846,6 +1967,7 @@ test('normalization clears calibration on a row with loaded front and back image
   await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
   await store.setImage(id, new File([png], 'back.png', { type: 'image/png' }), true);
   calibrate(store, id, { head: 0.2, feet: 0.8 });
+
   const settled = new Promise<void>((resolve) => {
     const unsubscribe = store.$preparing.listen((preparing) => {
       if (!preparing) {
@@ -1854,6 +1976,7 @@ test('normalization clears calibration on a row with loaded front and back image
       }
     });
   });
+
   // #when
   store.settings({ normalization: false });
   const during = store.$rows.get()[0];
@@ -1871,12 +1994,15 @@ test('normalization clears calibration on a row with loaded front and back image
 test('loading a different normalization setting resets calibration and prepares artwork again', async () => {
   // #given
   const normalizations: boolean[] = [];
+
   const artwork: PaperMinisArtwork = {
     prepare(_file, options) {
       normalizations.push(options.normalize);
+
       return Promise.resolve({ artwork: preparedArtwork() });
     },
   };
+
   const store = setup(undefined, artwork);
   const id = store.addBlank()!;
   await store.setImage(id, new File([png], 'front.png', { type: 'image/png' }));
@@ -1884,6 +2010,7 @@ test('loading a different normalization setting resets calibration and prepares 
   localStorage.setItem('pmg-settings', JSON.stringify({ normalization: false }));
   // #when
   store.loadSettings();
+
   const settled = new Promise<void>((resolve) => {
     const unsubscribe = store.$preparing.listen((preparing) => {
       if (!preparing) {
@@ -1892,6 +2019,7 @@ test('loading a different normalization setting resets calibration and prepares 
       }
     });
   });
+
   await settled;
   // #then
   expect({ calibration: store.$rows.get()[0].calibration, normalizations }).toEqual({

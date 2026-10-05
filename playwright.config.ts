@@ -4,8 +4,11 @@ import { defineConfig, devices } from '@playwright/test';
 
 // A per-checkout port lets parallel worktrees run the suite at once; PORT overrides it.
 const portOffset = createHash('sha1').update(process.cwd()).digest().readUInt16BE(0) % 18_000;
+
 const port = Number(process.env.PORT ?? 10_000 + portOffset);
+
 const baseURL = `http://127.0.0.1:${port}`;
+
 const previewCommand = `${process.env.CI ? '' : 'bun run build && '}bunx vite preview --host 127.0.0.1 --port ${port} --strictPort`;
 
 export default defineConfig({

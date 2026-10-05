@@ -14,9 +14,12 @@
   import { createLocationStore } from '@/stores/location-store';
 
   const { table }: { table: LocationTable<Biome> } = $props();
-  // svelte-ignore state_referenced_locally -- Astro passes static table data; live table swaps should remount with a key.
+
+  // svelte-ignore state_referenced_locally (Astro passes static table data; live table swaps should remount with a key.)
   const store = createLocationStore(table);
+
   const biomeStore = store.$biome;
+
   const rollStore = store.$roll;
 
   onMount(() => {
@@ -24,19 +27,31 @@
   });
 
   let biome = $derived($biomeStore);
+
   let roll = $derived($rollStore);
+
   let landmark = $derived(roll ? table.landmarks[biome].rows[roll.landmarkIndex] : null);
+
   let detail = $derived(roll ? table.details.rows[roll.detailIndex] : null);
+
   let highlightLandmark = $derived(roll && roll.biome === biome ? roll.landmarkIndex : null);
+
   let highlightDetail = $derived(roll ? roll.detailIndex : null);
 </script>
 
 <div class="space-y-8">
   <div class="space-y-3">
     <span class="font-mono text-xs uppercase tracking-wider text-text-muted">Биом</span>
-    <Tabs value={biome} onValueChange={(next) => store.setBiome(next as Biome)}>
+    <Tabs
+      value={biome}
+      onValueChange={(next) => {
+        const selected = table.biomes.find((candidate) => candidate === next);
+
+        if (selected !== undefined) store.setBiome(selected);
+      }}
+    >
       <TabsList>
-        {#each table.biomes as b}
+        {#each table.biomes as b (b)}
           <TabsTrigger value={b}>{table.biomeLabels[b]}</TabsTrigger>
         {/each}
       </TabsList>

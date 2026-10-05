@@ -117,10 +117,12 @@ export function computePricesVersion(cats: readonly PriceCategory[]): string {
   ].join('\n');
 
   let hash = 0x811c9dc5;
+
   for (let i = 0; i < fingerprint.length; i++) {
     hash ^= fingerprint.charCodeAt(i);
     hash = Math.imul(hash, 0x01000193);
   }
+
   return (hash >>> 0).toString(36);
 }
 
@@ -139,6 +141,7 @@ export type PricesRolls = readonly (readonly (readonly number[])[])[];
  */
 export function expandRolls(seed: number, table: PriceTable): PricesRolls {
   const rng = createSeededRng(seed);
+
   return table.categories.map((c) =>
     c.items.map(() => Array.from({ length: c.roll.count }, () => nextFace(rng, c.roll.sides))),
   );
