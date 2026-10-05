@@ -23,6 +23,8 @@
 bun install
 bun run dev        # http://localhost:4321
 bun run build      # сборка в dist/
+bun run size       # production build + bundle size check
+bun run size:check # check an existing dist/ build
 bun run preview    # просмотр сборки
 bun test           # быстрые unit-тесты
 bun run test:browser # browser-тесты Paper minis
@@ -35,6 +37,20 @@ bun run typecheck  # astro check
 ```
 
 Перед первым локальным запуском browser-тестов установите Chromium: `bunx playwright install chromium`.
+
+### Bundle size budgets
+
+[Size Limit](https://github.com/ai/size-limit) checks production assets in
+`dist/_astro/` with Brotli compression. `.size-limit.json` sets aggregate budgets
+of **360 kB for JavaScript** and **10 kB for CSS**. JavaScript includes all chunks,
+including lazy PDF and ZIP exports. These totals measure the whole site's assets,
+not the initial download of a single page.
+
+The initial baseline is 287.23 kB of JavaScript and 7.57 kB of CSS. Budgets leave
+about 25% headroom, rounded up. CI runs `bun run size:check` after its build and
+fails if a budget is exceeded or a configured asset glob has no matches. Run
+`bun run size` locally for a fresh build. Investigate unexpected growth before
+changing a budget; explain intentional increases in the PR.
 
 ## Деплой
 
@@ -66,7 +82,7 @@ bun run deploy   # build + wrangler deploy
 
 **Если что-то отвалится:** проверь в Cloudflare → Project → Build logs. Чаще всего — несовместимость версий Node/Bun или забытый `BUN_VERSION`.
 
-CI на GitHub Actions проверяет lint + format + unit + browser + typecheck + build на PR (`.github/workflows/ci.yml`) — Cloudflare сам деплоит, GA только страхует от слома `main`.
+CI на GitHub Actions проверяет lint + format + unit + browser + typecheck + build + bundle size на PR (`.github/workflows/ci.yml`) — Cloudflare сам деплоит, GA только страхует от слома `main`.
 
 ## Документация
 

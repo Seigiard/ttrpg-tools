@@ -1,0 +1,12 @@
+[
+  {
+    "name": "Client JavaScript (all chunks, including lazy exports)",
+    "path": "dist/_astro/*.js",
+    "limit": "360 kB"
+  },
+  {
+    "name": "Client CSS",
+    "path": "dist/_astro/*.css",
+    "limit": "10 kB"
+  }
+]
