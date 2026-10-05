@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { parse, serialize, type PricesState } from '@/data/the-black-hack/prices-codec';
-import type { PriceCategory, PriceItem, PriceTable, SettlementType } from '@/data/types';
+import type { PriceCategory, PriceItem, PriceTable } from '@/data/types';
 import {
   createPricesStore,
   itemPrice,
@@ -32,12 +32,14 @@ export function BlackHackPricesGenerator({ table }: Props) {
   useEffect(() => {
     if (store.$seed.get() === null) {
       const state = parse(window.location.search, table) ?? readStorage(table);
+
       if (state) {
         store.hydrate(state);
       } else {
         store.rollAll();
       }
     }
+
     setInitialized(true);
   }, [store, table]);
 
@@ -48,9 +50,11 @@ export function BlackHackPricesGenerator({ table }: Props) {
     const query = serialize({ settlement, seed }, table);
 
     const params = new URLSearchParams(window.location.search);
+
     for (const [key, value] of new URLSearchParams(query)) {
       params.set(key, value);
     }
+
     history.replaceState(null, '', `${window.location.pathname}?${params}${window.location.hash}`);
 
     try {
@@ -61,8 +65,9 @@ export function BlackHackPricesGenerator({ table }: Props) {
   }, [initialized, settlement, seed, table]);
 
   const handleSettlementChange = (next: string | number | null) => {
-    if (next === null) return;
-    store.setSettlement(next as SettlementType);
+    const selected = table.settlements.find((candidate) => candidate === next);
+
+    if (selected !== undefined) store.setSettlement(selected);
   };
 
   const visibleCategories = table.settlementCategories[settlement];

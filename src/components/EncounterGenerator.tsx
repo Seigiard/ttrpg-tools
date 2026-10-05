@@ -28,6 +28,7 @@ export function EncounterGenerator({ table }: Props) {
   // и клиент разойдутся и hydration сломается.
   useEffect(() => {
     if (store.$check.get() === null) store.rollCheck();
+
     if (store.$reaction.get() === null) store.rollReaction();
   }, [store]);
 
@@ -49,6 +50,7 @@ function CheckSection({ table, roll, onRoll }: SectionProps) {
   const rows = table.check.rows;
   const row = roll ? rows[roll.rowIndex] : null;
   const loading = !row;
+
   return (
     <section className="space-y-6">
       <h2 className="font-display text-2xl text-text">Проверка столкновения</h2>
@@ -104,6 +106,7 @@ function ReactionSection({ table, roll, onRoll }: SectionProps) {
   const rows = table.reactions.rows;
   const row = roll ? rows[roll.rowIndex] : null;
   const loading = !row;
+
   return (
     <section className="space-y-6">
       <h2 className="font-display text-2xl text-text">Реакция</h2>

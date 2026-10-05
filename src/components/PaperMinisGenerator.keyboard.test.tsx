@@ -9,11 +9,13 @@ afterEach(() => {
 
 async function openCalibration(frontHeight = 200) {
   localStorage.setItem('pmg-settings', JSON.stringify({ normalization: false }));
+
   // Only the PNG header is read at this seam; no pixel decoding takes place.
   const bytes = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==',
     'base64',
   );
+
   bytes.writeUInt32BE(frontHeight, 20);
   render(<PaperMinisGenerator />);
   await act(async () => {
@@ -22,16 +24,19 @@ async function openCalibration(frontHeight = 200) {
     });
   });
   fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
+
   return within(screen.getByRole('dialog'));
 }
 
 test('calibration lines expose named vertical sliders in the tab order', async () => {
   // #given
   const dialog = await openCalibration();
+
   // #when
   const sliders = ['Голова', 'Ступни'].map((name) => {
     const slider = dialog.getByRole<HTMLButtonElement>('slider', { name });
     slider.focus();
+
     return {
       focused: document.activeElement === slider,
       tabIndex: slider.tabIndex,
@@ -39,12 +44,14 @@ test('calibration lines expose named vertical sliders in the tab order', async (
       value: slider.getAttribute('aria-valuenow'),
     };
   });
+
   // #then
   expect(sliders).toEqual([
     { focused: true, tabIndex: 0, orientation: 'vertical', value: '0' },
     { focused: true, tabIndex: 0, orientation: 'vertical', value: '100' },
   ]);
 });
+
 test.each([
   { frontHeight: 200, backHeight: 400 },
   { frontHeight: 400, backHeight: 200 },
@@ -54,10 +61,12 @@ test.each([
     // #given
     await openCalibration(frontHeight);
     fireEvent.click(screen.getByRole('button', { name: 'Отмена' }));
+
     const bytes = Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==',
       'base64',
     );
+
     bytes.writeUInt32BE(backHeight, 20);
     await act(async () => {
       fireEvent.change(
@@ -83,6 +92,7 @@ test.each([
     });
   },
 );
+
 test('slider ranges announce the movement allowed by the other line', async () => {
   // #given
   const dialog = await openCalibration();

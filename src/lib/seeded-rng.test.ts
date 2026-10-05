@@ -6,6 +6,7 @@ describe('createSeededRng', () => {
   test('одинаковый seed даёт одинаковую последовательность', () => {
     const a = createSeededRng(12345);
     const b = createSeededRng(12345);
+
     for (let i = 0; i < 100; i++) {
       expect(a()).toBe(b());
     }
@@ -21,6 +22,7 @@ describe('createSeededRng', () => {
 
   test('значения — uint32', () => {
     const rng = createSeededRng(7);
+
     for (let i = 0; i < 1000; i++) {
       const v = rng();
       expect(Number.isInteger(v)).toBe(true);
@@ -56,12 +58,14 @@ describe('nextFace', () => {
   test('грани в [1, sides], покрывает все грани d8', () => {
     const rng = createSeededRng(99);
     const seen = new Set<number>();
+
     for (let i = 0; i < 1000; i++) {
       const face = nextFace(rng, 8);
       expect(face).toBeGreaterThanOrEqual(1);
       expect(face).toBeLessThanOrEqual(8);
       seen.add(face);
     }
+
     expect(seen.size).toBe(8);
   });
 

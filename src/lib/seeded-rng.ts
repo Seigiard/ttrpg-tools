@@ -20,7 +20,8 @@ const UINT32_RANGE = 0x1_0000_0000;
 export function randomSeed(): number {
   const buf = new Uint32Array(1);
   crypto.getRandomValues(buf);
-  return buf[0] as number;
+
+  return buf[0];
 }
 
 /**
@@ -33,11 +34,14 @@ export function createSeededRng(seed: number): () => number {
   if (!Number.isInteger(seed) || seed < 0 || seed >= UINT32_RANGE) {
     throw new RangeError(`createSeededRng: seed должен быть целым в [0, 2^32), получено ${seed}`);
   }
+
   let a = seed >>> 0;
+
   return () => {
     a = (a + 0x6d2b79f5) | 0;
     let t = Math.imul(a ^ (a >>> 15), a | 1);
     t = (t + Math.imul(t ^ (t >>> 7), t | 61)) ^ t;
+
     return (t ^ (t >>> 14)) >>> 0;
   };
 }
@@ -50,5 +54,6 @@ export function nextFace(rng: () => number, sides: number): number {
   if (!Number.isInteger(sides) || sides < 1) {
     throw new RangeError(`nextFace: sides должно быть целым >= 1, получено ${sides}`);
   }
+
   return (rng() % sides) + 1;
 }

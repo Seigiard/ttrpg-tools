@@ -7,9 +7,11 @@ const png = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==',
   'base64',
 );
+
 beforeEach(() => {
   localStorage.setItem('pmg-settings', JSON.stringify({ normalization: false }));
 });
+
 afterEach(() => {
   cleanup();
   localStorage.removeItem('pmg-settings');
@@ -37,6 +39,7 @@ async function addBack(bytes = png) {
 test('printer scale shows approximate sizing until a measurement is entered and can be cleared', () => {
   // #given
   render(<PaperMinisGenerator />);
+
   const measurement = screen.getByRole<HTMLInputElement>('spinbutton', {
     name: 'Длина линейки, мм',
   });
@@ -71,9 +74,11 @@ test('blur restores an invalid draft and both PDF actions become available again
   fireEvent.change(count, { target: { value: '3' } });
   // #when
   fireEvent.change(count, { target: { value: '' } });
+
   const disabled = ['Скачать PDF', 'Предпросмотр PDF'].map(
     (name) => screen.getByRole<HTMLButtonElement>('button', { name }).disabled,
   );
+
   fireEvent.blur(count);
   fireEvent.change(margin, { target: { value: '' } });
   fireEvent.blur(margin);
@@ -96,10 +101,7 @@ test('blur restores an invalid draft and both PDF actions become available again
     margin: { value: margin.value, invalid: margin.getAttribute('aria-invalid') },
     afterWidthBlur,
     afterHeightBlur: { width: width.value, height: height.value },
-    dimensionsInvalid: [
-      width.getAttribute('aria-invalid'),
-      height.getAttribute('aria-invalid'),
-    ],
+    dimensionsInvalid: [width.getAttribute('aria-invalid'), height.getAttribute('aria-invalid')],
     enabled: ['Скачать PDF', 'Предпросмотр PDF'].map(
       (name) => !screen.getByRole<HTMLButtonElement>('button', { name }).disabled,
     ),
@@ -139,9 +141,11 @@ test('a thumbnail drop uses the first supported image even after an unsupported 
 test('a JPEG labelled image/jpg is accepted', async () => {
   // #given
   render(<PaperMinisGenerator />);
+
   const bytes = await Bun.file(
     new URL('../lib/paper-minis/fixtures/artwork-4x3.jpg', import.meta.url),
   ).arrayBuffer();
+
   // #when
   await act(async () => {
     fireEvent.change(screen.getByLabelText('Добавить изображения', { selector: 'input' }), {
@@ -164,11 +168,13 @@ test('every artwork file input offers every supported MIME type', async () => {
   // #given
   render(<PaperMinisGenerator />);
   await addFront();
+
   // #when
   const accepts = Array.from(
     document.querySelectorAll<HTMLInputElement>('input[type="file"]'),
     (input) => input.accept,
   );
+
   // #then
   expect(accepts).toEqual([
     'image/png,image/jpeg,image/jpg,image/webp,.zip,application/zip',
@@ -211,7 +217,9 @@ test('the batch file picker accepts exported zip archives', () => {
   // #when
   const input = screen.getByLabelText('Добавить изображения', { selector: 'input' });
   // #then
-  expect(input.getAttribute('accept')).toBe('image/png,image/jpeg,image/jpg,image/webp,.zip,application/zip');
+  expect(input.getAttribute('accept')).toBe(
+    'image/png,image/jpeg,image/jpg,image/webp,.zip,application/zip',
+  );
 });
 
 test('a batch row is titled by its cleaned file name, or numbered when the name is empty', async () => {
@@ -296,6 +304,7 @@ test('download action clicks an attached PDF download anchor', async () => {
       protocol: new URL(this.href).protocol,
     };
   };
+
   try {
     render(<PaperMinisGenerator />);
     await addFront();
@@ -326,11 +335,14 @@ test('printer scale test sheet can download before any minis are added', async (
       protocol: new URL(this.href).protocol,
     };
   };
+
   try {
     render(<PaperMinisGenerator />);
+
     const download = screen.getByRole<HTMLButtonElement>('button', {
       name: 'Скачать тестовый лист масштаба',
     });
+
     // #when
     fireEvent.click(download);
     // #then
@@ -361,15 +373,20 @@ test('export action waits for ready minis and clicks an attached zip download an
       protocol: new URL(this.href).protocol,
     };
   };
+
   try {
     render(<PaperMinisGenerator />);
+
     const emptyDisabled = screen.getByRole<HTMLButtonElement>('button', {
       name: 'Экспорт в ZIP',
     }).disabled;
+
     await addFront();
+
     const readyDisabled = screen.getByRole<HTMLButtonElement>('button', {
       name: 'Экспорт в ZIP',
     }).disabled;
+
     let release!: (bytes: ArrayBuffer) => void;
     const slow = new File([png], 'slow-back.png', { type: 'image/png' });
     slow.arrayBuffer = () =>
@@ -380,9 +397,11 @@ test('export action waits for ready minis and clicks an attached zip download an
       screen.getByLabelText('Оборот: отражение лицевой стороны', { selector: 'input' }),
       { target: { files: [slow] } },
     );
+
     const loadingDisabled = screen.getByRole<HTMLButtonElement>('button', {
       name: 'Экспорт в ZIP',
     }).disabled;
+
     await act(async () => {
       release(Uint8Array.from(png).buffer);
     });
@@ -414,16 +433,18 @@ test('export reports a browser object-URL failure', async () => {
   // #given
   render(<PaperMinisGenerator />);
   await addFront();
+
   const objectUrl = spyOn(URL, 'createObjectURL').mockImplementation(() => {
     throw new Error('Object URL unavailable');
   });
+
   try {
     // #when
     fireEvent.click(screen.getByRole('button', { name: 'Экспорт в ZIP' }));
     // #then
-    expect((await screen.findByText('Не удалось создать архив. Попробуйте ещё раз.')).textContent).toBe(
-      'Не удалось создать архив. Попробуйте ещё раз.',
-    );
+    expect(
+      (await screen.findByText('Не удалось создать архив. Попробуйте ещё раз.')).textContent,
+    ).toBe('Не удалось создать архив. Попробуйте ещё раз.');
   } finally {
     objectUrl.mockRestore();
   }
@@ -433,9 +454,11 @@ test('download reports a browser object-URL failure', async () => {
   // #given
   render(<PaperMinisGenerator />);
   await addFront();
+
   const objectUrl = spyOn(URL, 'createObjectURL').mockImplementation(() => {
     throw new Error('Object URL unavailable');
   });
+
   try {
     // #when
     fireEvent.click(screen.getByRole('button', { name: 'Скачать PDF' }));
@@ -456,15 +479,18 @@ test('preview action shows the generated PDF in an iframe and matching link', as
   // #given
   const objectUrl = spyOn(URL, 'createObjectURL').mockReturnValue('about:blank#pdf-preview');
   const revokeUrl = spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+
   try {
     render(<PaperMinisGenerator />);
     await addFront();
     // #when
     fireEvent.click(screen.getByRole('button', { name: 'Предпросмотр PDF' }));
     const iframe = await screen.findByTitle<HTMLIFrameElement>('Предпросмотр PDF');
+
     const link = screen.getByRole<HTMLAnchorElement>('link', {
       name: 'Открыть PDF в новой вкладке',
     });
+
     // #then
     expect({ src: iframe.src, sameUrl: iframe.src === link.href, target: link.target }).toEqual({
       src: 'about:blank#pdf-preview',
@@ -482,9 +508,11 @@ test('preview reports a browser object-URL failure instead of showing a ready me
   // #given
   render(<PaperMinisGenerator />);
   await addFront();
+
   const objectUrl = spyOn(URL, 'createObjectURL').mockImplementation(() => {
     throw new Error('Object URL unavailable');
   });
+
   try {
     // #when
     fireEvent.click(screen.getByRole('button', { name: 'Предпросмотр PDF' }));
@@ -649,14 +677,16 @@ test('an oversized mini uses danger styling in both the row and calibration dial
   fireEvent.change(screen.getByRole('spinbutton', { name: 'Фигурка, мм' }), {
     target: { value: '30' },
   });
-  const warning = 'Не помещается на лист. Уменьшите размер или поля. Эта миниатюра не попадёт в PDF.';
+
+  const warning =
+    'Не помещается на лист. Уменьшите размер или поля. Эта миниатюра не попадёт в PDF.';
+
   // #when
   fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
   // #then
-  expect(screen.getAllByText(warning).map((element) => element.classList.contains('text-danger'))).toEqual([
-    true,
-    true,
-  ]);
+  expect(
+    screen.getAllByText(warning).map((element) => element.classList.contains('text-danger')),
+  ).toEqual([true, true]);
 });
 
 test('front height dialog applies pointer calibration and row reset clears it', async () => {
@@ -833,6 +863,7 @@ test('Apply after returning lines to their starting values keeps the calibration
   const generate = spyOn(pdf, 'generatePDF').mockResolvedValue(new Uint8Array([1]));
   const objectUrl = spyOn(URL, 'createObjectURL').mockReturnValue('about:blank');
   const revokeUrl = spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+
   try {
     const bytes = Buffer.from(png);
     bytes.writeUInt32BE(201, 20);

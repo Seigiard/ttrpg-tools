@@ -3,6 +3,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { ReferenceList } from './ReferenceList';
 
 beforeEach(cleanup);
+
 afterEach(cleanup);
 
 test('each row shows its own label before its outcome', () => {
@@ -11,6 +12,7 @@ test('each row shows its own label before its outcome', () => {
     { code: 'A', outcome: 'Clear' },
     { code: 'B', outcome: 'Omen' },
   ];
+
   // #when the reference table renders both callbacks
   render(
     <ReferenceList
@@ -33,6 +35,7 @@ test('each row shows its own label before its outcome', () => {
 test.each([0, 1, 2, null])('marks only the rolled row for hitIndex %s', (hitIndex) => {
   // #given a roll or the state before the first roll
   const rows = ['Clear', 'Omen', 'Encounter'];
+
   // #when the reference table is rendered
   const { container } = render(
     <ReferenceList
@@ -45,6 +48,7 @@ test.each([0, 1, 2, null])('marks only the rolled row for hitIndex %s', (hitInde
       {(row) => row}
     </ReferenceList>,
   );
+
   // #then only that row is marked
   expect(
     [...container.querySelectorAll('[data-hit]')].map((row) => [

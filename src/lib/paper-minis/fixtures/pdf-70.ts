@@ -46,10 +46,13 @@ export function pdf70Entries(mode: Pdf70Reconstruction = 'rounded'): PackingEntr
   // not a claim that every combination in that interval has been checked.
   const widthDeltaPx = mode === 'lower' ? -2 : mode === 'upper' ? 2 : 0;
   const rulerDeltaPx = -widthDeltaPx;
+
   return pdf70Measurements.map(({ x, slot, artworkHeightMm }) => {
     const measuredWidthMm = ((x[1] - x[0] + widthDeltaPx) * 100) / (629 + rulerDeltaPx);
+
     const footprintWidthMm =
       mode === 'rounded' ? Math.round(measuredWidthMm * 10) / 10 : measuredWidthMm;
+
     return {
       heightSlot: slot,
       count: 1,
