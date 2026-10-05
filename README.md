@@ -52,6 +52,14 @@ fails if a budget is exceeded or a configured asset glob has no matches. Run
 `bun run size` locally for a fresh build. Investigate unexpected growth before
 changing a budget; explain intentional increases in the PR.
 
+On pull requests, a separate `size-report` job runs
+[`size-limit-action`](https://github.com/andresz1/size-limit-action) and updates a
+comment with each bundle's PR size and percent change against the base branch.
+The action formats sizes in 1024-based KB; Size Limit's CLI uses decimal kB.
+Both builds use the PR's budgets and comparison tool, so the first PR works even
+before the base has Size Limit.
+Fork PRs still run the checks, but GitHub's read-only token cannot post a comment.
+
 ## Деплой
 
 Cloudflare Workers with Static Assets через git-интеграцию.
