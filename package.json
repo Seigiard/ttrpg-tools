@@ -10,6 +10,8 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
+    "size": "bun run build && bun run size:check",
+    "size:check": "size-limit",
     "preview": "astro preview",
     "astro": "astro",
     "test": "bun test",
@@ -49,6 +51,7 @@
     "@happy-dom/global-registrator": "^20.14.5",
     "@oxlint/plugins": "1.86.0",
     "@playwright/test": "^1.63.0",
+    "@size-limit/file": "^14.1.0",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
     "@types/bun": "^1.4.2",
@@ -57,6 +60,7 @@
     "oxlint": "1.86.0",
     "prettier": "^3.9.9",
     "prettier-plugin-astro": "^1.1.0",
+    "size-limit": "^14.1.0",
     "typescript": "^6.0.3"
   }
 }
