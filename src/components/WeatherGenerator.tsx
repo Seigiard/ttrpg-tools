@@ -1,5 +1,5 @@
-import { useStore } from '@nanostores/react';
-import { useEffect, useMemo } from 'react';
+import { useStore } from '@/lib/use-store';
+import { useEffect, useMemo } from 'preact/hooks';
 import { referenceHitClass } from '@/components/ReferenceList';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -27,7 +27,7 @@ export function WeatherGenerator({ table }: Props) {
     }
   }, [store]);
 
-  const handleSeasonChange = (next: string | number | null) => {
+  const handleSeasonChange = (next: string | number) => {
     const selected = table.seasons.find((candidate) => candidate === next);
 
     if (selected !== undefined) store.setSeason(selected);

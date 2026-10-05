@@ -1,5 +1,5 @@
-import { useStore } from '@nanostores/react';
-import { useEffect, useMemo, useState } from 'react';
+import { useStore } from '@/lib/use-store';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'preact/hooks';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -45,7 +45,7 @@ export function BlackHackPricesGenerator({ table }: Props) {
 
   // Каждое изменение стейта — в оба синка (R10): URL через replaceState (KTD3),
   // localStorage той же canonical-строкой (KTD4).
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!initialized || seed === null) return;
     const query = serialize({ settlement, seed }, table);
 
@@ -64,7 +64,7 @@ export function BlackHackPricesGenerator({ table }: Props) {
     }
   }, [initialized, settlement, seed, table]);
 
-  const handleSettlementChange = (next: string | number | null) => {
+  const handleSettlementChange = (next: string | number) => {
     const selected = table.settlements.find((candidate) => candidate === next);
 
     if (selected !== undefined) store.setSettlement(selected);

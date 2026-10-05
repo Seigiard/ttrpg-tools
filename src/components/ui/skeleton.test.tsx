@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, render } from '@testing-library/preact';
 import { Skeleton } from './skeleton';
 
 /**
@@ -7,7 +7,7 @@ import { Skeleton } from './skeleton';
  * оформление, не наличие/тип) — отсюда нулевой layout-shift. Дети всегда в
  * DOM, потому что именно они задают высоту бокса.
  */
-describe('Skeleton', () => {
+describe('Preact Skeleton', () => {
   afterEach(cleanup);
 
   test('loading=false: дети читаемы, узел без маскирующих классов', () => {

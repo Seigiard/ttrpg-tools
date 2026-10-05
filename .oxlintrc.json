@@ -10,7 +10,6 @@
     "dist/",
     "node_modules/",
     ".astro/",
-    "src/components/ui/**",
     "src/lib/utils.ts",
     ".agent/**",
     ".agents/**",
@@ -24,6 +23,12 @@
     ".roo/**",
     ".windsurf/**",
     "tools/oxlint/anti-slop/**"
+  ],
+  "overrides": [
+    {
+      "files": ["e2e/**", "scripts/ui-stack/**"],
+      "rules": { "eslint/no-await-in-loop": "off" }
+    }
   ],
   "jsPlugins": [
     { "name": "anti-slop", "specifier": "./tools/oxlint/anti-slop/index.ts" }

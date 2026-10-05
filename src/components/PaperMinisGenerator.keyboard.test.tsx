@@ -1,11 +1,46 @@
 import { afterEach, expect, test } from 'bun:test';
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/preact';
+import { createPaperMinisStore } from '@/stores/paper-minis-store';
 import PaperMinisGenerator from './PaperMinisGenerator';
+
+let currentStore: ReturnType<typeof createPaperMinisStore>;
+
+function renderGenerator() {
+  currentStore = createPaperMinisStore();
+  render(<PaperMinisGenerator store={currentStore} />);
+}
 
 afterEach(() => {
   cleanup();
   localStorage.removeItem('pmg-settings');
 });
+
+function uploadTo(label: string, files: File[]) {
+  if (label === 'Добавить изображения') {
+    currentStore.ingest(files);
+
+    return;
+  }
+
+  const row = currentStore.$rows.get()[0];
+
+  if (row && label.startsWith('Оборот:')) {
+    void currentStore.setImage(row.id, files[0]!, true);
+
+    return;
+  }
+
+  const target = screen.getByRole('button', {
+    name: label === 'Добавить изображения' ? /Добавить изображения/ : label,
+  });
+
+  const event = new Event('drop', { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'dataTransfer', {
+    configurable: true,
+    value: { files, types: ['Files'] },
+  });
+  target.dispatchEvent(event);
+}
 
 async function openCalibration(frontHeight = 200) {
   localStorage.setItem('pmg-settings', JSON.stringify({ normalization: false }));
@@ -17,13 +52,13 @@ async function openCalibration(frontHeight = 200) {
   );
 
   bytes.writeUInt32BE(frontHeight, 20);
-  render(<PaperMinisGenerator />);
+  renderGenerator();
   await act(async () => {
-    fireEvent.change(screen.getByLabelText('Добавить изображения', { selector: 'input' }), {
-      target: { files: [new File([bytes], 'figure.png', { type: 'image/png' })] },
-    });
+    uploadTo('Добавить изображения', [new File([bytes], 'figure.png', { type: 'image/png' })]);
   });
+  await waitFor(() => expect(currentStore.$rows.get()[0]?.artwork).toBeTruthy());
   fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
+  await waitFor(() => expect(screen.queryByRole('slider', { name: 'Голова' })).toBeTruthy());
 
   return within(screen.getByRole('dialog'));
 }
@@ -69,20 +104,21 @@ test.each([
 
     bytes.writeUInt32BE(backHeight, 20);
     await act(async () => {
-      fireEvent.change(
-        screen.getByLabelText('Оборот: отражение лицевой стороны', { selector: 'input' }),
-        {
-          target: { files: [new File([bytes], 'back.png', { type: 'image/png' })] },
-        },
-      );
+      uploadTo('Оборот: отражение лицевой стороны', [
+        new File([bytes], 'back.png', { type: 'image/png' }),
+      ]);
     });
+    await waitFor(() => expect(currentStore.$rows.get()[0]?.backArtwork).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
+    await waitFor(() => expect(screen.queryByRole('slider', { name: 'Голова' })).toBeTruthy());
     const dialog = within(screen.getByRole('dialog'));
     // #when
     const head = dialog.getByRole('slider', { name: 'Голова' });
     fireEvent.keyDown(head, { key: 'ArrowDown' });
+    await waitFor(() => expect(head.getAttribute('aria-valuenow')).toBe('0.25'));
     const onePixel = head.getAttribute('aria-valuenow');
     fireEvent.keyDown(head, { key: 'ArrowDown', shiftKey: true });
+    await waitFor(() => expect(head.getAttribute('aria-valuenow')).toBe('2.75'));
     const afterShift = [head.getAttribute('aria-valuenow'), head.getAttribute('aria-valuetext')];
     // #then
     expect({ tabs: dialog.queryAllByRole('tab').length, onePixel, afterShift }).toEqual({
@@ -100,6 +136,7 @@ test('slider ranges announce the movement allowed by the other line', async () =
   const feet = dialog.getByRole('slider', { name: 'Ступни' });
   // #when
   fireEvent.keyDown(feet, { key: 'ArrowUp', shiftKey: true });
+  await waitFor(() => expect(feet.getAttribute('aria-valuenow')).toBe('95'));
   // #then
   expect(
     [head, feet].map((el) => [el.getAttribute('aria-valuemin'), el.getAttribute('aria-valuemax')]),
@@ -115,6 +152,7 @@ test('arrow keys prevent scrolling while other keys pass through unchanged', asy
   const head = dialog.getByRole('slider', { name: 'Голова' });
   // #when
   const arrowHandled = fireEvent.keyDown(head, { key: 'ArrowDown' });
+  await waitFor(() => expect(head.getAttribute('aria-valuenow')).toBe('0.5'));
   const afterArrow = head.getAttribute('aria-valuenow');
   const tabHandled = fireEvent.keyDown(head, { key: 'Tab' });
   // #then

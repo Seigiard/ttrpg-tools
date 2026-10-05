@@ -1,12 +1,12 @@
-import type { ReactNode } from 'react';
+import type { ComponentChildren } from 'preact';
 
 interface Props<Row> {
   title: string;
   testId: string;
   rows: readonly Row[];
   hitIndex: number | null;
-  label: (row: Row, index: number) => ReactNode;
-  children: (row: Row) => ReactNode;
+  label: (row: Row, index: number) => ComponentChildren;
+  children: (row: Row) => ComponentChildren;
 }
 
 export function referenceHitClass(isHit: boolean): string {

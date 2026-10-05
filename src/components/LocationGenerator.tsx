@@ -1,7 +1,7 @@
-import { useStore } from '@nanostores/react';
-import { RefreshCw } from 'lucide-react';
-import { useEffect, useMemo } from 'react';
+import { useStore } from '@/lib/use-store';
+import { useEffect, useMemo } from 'preact/hooks';
 import { ReferenceList } from '@/components/ReferenceList';
+import { RefreshCw } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -28,7 +28,7 @@ export function LocationGenerator<Biome extends string>({ table }: Props<Biome>)
     }
   }, [store]);
 
-  const handleBiomeChange = (next: string | number | null) => {
+  const handleBiomeChange = (next: string | number) => {
     const selected = table.biomes.find((candidate) => candidate === next);
 
     if (selected !== undefined) store.setBiome(selected);

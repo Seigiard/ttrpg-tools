@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, setSystemTime, spyOn, test } from 'bun:test';
-import { act, cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/preact';
 import * as pdf from '@/lib/paper-minis/pdf';
+import { createPaperMinisStore } from '@/stores/paper-minis-store';
 import PaperMinisGenerator from './PaperMinisGenerator';
 
 const png = Buffer.from(
@@ -8,35 +9,139 @@ const png = Buffer.from(
   'base64',
 );
 
+let currentStore: ReturnType<typeof createPaperMinisStore>;
+
+const setPointerCaptureDescriptor = Object.getOwnPropertyDescriptor(
+  HTMLElement.prototype,
+  'setPointerCapture',
+);
+
+const releasePointerCaptureDescriptor = Object.getOwnPropertyDescriptor(
+  HTMLElement.prototype,
+  'releasePointerCapture',
+);
+
+function renderGenerator() {
+  currentStore = createPaperMinisStore();
+  render(<PaperMinisGenerator store={currentStore} />);
+}
+
+function dispatchCancel(element: HTMLElement) {
+  element.dispatchEvent(new Event('cancel', { cancelable: true }));
+}
+
 beforeEach(() => {
   localStorage.setItem('pmg-settings', JSON.stringify({ normalization: false }));
+  Object.defineProperty(HTMLElement.prototype, 'setPointerCapture', {
+    configurable: true,
+    value: () => {},
+  });
+  Object.defineProperty(HTMLElement.prototype, 'releasePointerCapture', {
+    configurable: true,
+    value: () => {},
+  });
 });
 
 afterEach(() => {
   cleanup();
   localStorage.removeItem('pmg-settings');
+
+  if (setPointerCaptureDescriptor)
+    Object.defineProperty(HTMLElement.prototype, 'setPointerCapture', setPointerCaptureDescriptor);
+  else Reflect.deleteProperty(HTMLElement.prototype, 'setPointerCapture');
+
+  if (releasePointerCaptureDescriptor)
+    Object.defineProperty(
+      HTMLElement.prototype,
+      'releasePointerCapture',
+      releasePointerCaptureDescriptor,
+    );
+  else Reflect.deleteProperty(HTMLElement.prototype, 'releasePointerCapture');
 });
 
-async function addFront(bytes = png) {
+function uploadTo(label: string, files: File[]) {
+  if (label === 'Добавить изображения') {
+    currentStore.ingest(files);
+
+    return;
+  }
+
+  const row = currentStore.$rows.get()[0];
+
+  if (row && label.startsWith('Оборот:')) {
+    void currentStore.setImage(row.id, files[0]!, true);
+
+    return;
+  }
+
+  const target = screen.getByRole('button', {
+    name: label === 'Добавить изображения' ? /Добавить изображения/ : label,
+  });
+
+  const event = new Event('drop', { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'dataTransfer', {
+    configurable: true,
+    value: { files, types: ['Files'] },
+  });
+  target.dispatchEvent(event);
+}
+
+async function addFront(bytes: BlobPart = png) {
   await act(async () => {
-    fireEvent.change(screen.getByLabelText('Добавить изображения', { selector: 'input' }), {
-      target: { files: [new File([bytes], 'goblin.png', { type: 'image/png' })] },
-    });
+    uploadTo('Добавить изображения', [new File([bytes], 'goblin.png', { type: 'image/png' })]);
+  });
+  await waitFor(() => expect(currentStore.$rows.get()[0]?.artwork).toBeTruthy());
+}
+
+async function addBack(bytes: BlobPart = png) {
+  await act(async () => {
+    uploadTo('Оборот: отражение лицевой стороны', [
+      new File([bytes], 'back.png', { type: 'image/png' }),
+    ]);
+  });
+  await waitFor(() => expect(currentStore.$rows.get()[0]?.backArtwork).toBeTruthy());
+}
+
+async function waitForPreparation() {
+  await waitFor(() => expect(currentStore.$preparing.get()).toBe(false));
+}
+
+async function fixturePng() {
+  return Bun.file(
+    new URL('../lib/paper-minis/fixtures/artwork-3x2.png', import.meta.url),
+  ).arrayBuffer();
+}
+
+async function openCalibrationDialogElement() {
+  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
+  await waitFor(() => expect(screen.queryByRole('slider', { name: 'Голова' })).toBeTruthy());
+
+  return screen.getByRole('dialog', { name: 'Задать рост' });
+}
+
+async function openCalibrationDialog() {
+  return within(await openCalibrationDialogElement());
+}
+
+function changeValue(element: HTMLElement, value: string) {
+  if (!(element instanceof HTMLInputElement || element instanceof HTMLSelectElement)) {
+    throw new Error('Expected an input or select');
+  }
+
+  element.value = value;
+  fireEvent.input(element);
+  fireEvent.change(element);
+}
+
+async function chooseBatchFiles(files: File[]) {
+  const input = screen.getByLabelText('Добавить изображения', { selector: 'input' });
+  await act(async () => {
+    fireEvent.input(input, { target: { files } });
+    fireEvent.change(input, { target: { files: [] } });
   });
 }
 
-async function addBack(bytes = png) {
-  await act(async () => {
-    fireEvent.change(
-      screen.getByLabelText('Оборот: отражение лицевой стороны', { selector: 'input' }),
-      {
-        target: { files: [new File([bytes], 'back.png', { type: 'image/png' })] },
-      },
-    );
-  });
-}
-
-test('printer scale shows approximate sizing until a measurement is entered and can be cleared', () => {
+test('printer scale shows approximate sizing until a measurement is entered and can be cleared', async () => {
   // #given
   render(<PaperMinisGenerator />);
 
@@ -46,9 +151,13 @@ test('printer scale shows approximate sizing until a measurement is entered and 
 
   // #when
   const defaultState = screen.getByText('Принтер не измерен: размеры приблизительные.').textContent;
-  fireEvent.change(measurement, { target: { value: '91' } });
+  changeValue(measurement, '91');
+  await waitFor(() => expect(screen.queryByText('Линейка измерена: 91 мм.')).toBeTruthy());
   const measuredState = screen.getByText('Линейка измерена: 91 мм.').textContent;
   fireEvent.click(screen.getByRole('button', { name: 'Сбросить измерение' }));
+  await waitFor(() =>
+    expect(screen.queryByText('Принтер не измерен: размеры приблизительные.')).toBeTruthy(),
+  );
 
   // #then
   expect({
@@ -66,34 +175,43 @@ test('printer scale shows approximate sizing until a measurement is entered and 
 
 test('blur restores an invalid draft and both PDF actions become available again', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  renderGenerator();
   await addFront();
   const margin = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Поля, мм' });
   const count = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Количество копий' });
-  fireEvent.change(margin, { target: { value: '5' } });
-  fireEvent.change(count, { target: { value: '3' } });
+  changeValue(margin, '5');
+  changeValue(count, '3');
   // #when
-  fireEvent.change(count, { target: { value: '' } });
+  changeValue(count, '');
+  await waitFor(() => expect(count.getAttribute('aria-invalid')).toBe('true'));
 
   const disabled = ['Скачать PDF', 'Предпросмотр PDF'].map(
     (name) => screen.getByRole<HTMLButtonElement>('button', { name }).disabled,
   );
 
   fireEvent.blur(count);
-  fireEvent.change(margin, { target: { value: '' } });
+  await waitFor(() => expect(count.value).toBe('3'));
+  changeValue(margin, '');
+  await waitFor(() => expect(margin.getAttribute('aria-invalid')).toBe('true'));
   fireEvent.blur(margin);
-  fireEvent.change(screen.getByRole('combobox', { name: 'Высота существа' }), {
-    target: { value: 'custom' },
-  });
+  await waitFor(() => expect(margin.value).toBe('5'));
+  changeValue(screen.getByRole('combobox', { name: 'Высота существа' }), 'custom');
+  await waitFor(() =>
+    expect(screen.queryByRole('spinbutton', { name: 'Основание, мм' })).toBeTruthy(),
+  );
   const width = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Основание, мм' });
   const height = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Фигурка, мм' });
-  fireEvent.change(width, { target: { value: '12.5' } });
-  fireEvent.change(height, { target: { value: '40' } });
-  fireEvent.change(width, { target: { value: '0' } });
+  changeValue(width, '12.5');
+  changeValue(height, '40');
+  changeValue(width, '0');
+  await waitFor(() => expect(width.getAttribute('aria-invalid')).toBe('true'));
   fireEvent.blur(width);
+  await waitFor(() => expect(width.value).toBe('12.5'));
   const afterWidthBlur = { width: width.value, height: height.value };
-  fireEvent.change(height, { target: { value: '0' } });
+  changeValue(height, '0');
+  await waitFor(() => expect(height.getAttribute('aria-invalid')).toBe('true'));
   fireEvent.blur(height);
+  await waitFor(() => expect(height.value).toBe('40'));
   // #then
   expect({
     disabled,
@@ -118,7 +236,7 @@ test('blur restores an invalid draft and both PDF actions become available again
 
 test('a thumbnail drop uses the first supported image even after an unsupported file', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  renderGenerator();
   await addFront();
   // #when
   await act(async () => {
@@ -131,6 +249,9 @@ test('a thumbnail drop uses the first supported image even after an unsupported 
       },
     });
   });
+  await waitFor(() =>
+    expect(screen.queryByRole('button', { name: 'Оборот: figure.png' })).toBeTruthy(),
+  );
   // #then
   expect({
     rejected: screen.queryByText('Выберите PNG, JPG или WebP.'),
@@ -140,7 +261,7 @@ test('a thumbnail drop uses the first supported image even after an unsupported 
 
 test('a JPEG labelled image/jpg is accepted', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  renderGenerator();
 
   const bytes = await Bun.file(
     new URL('../lib/paper-minis/fixtures/artwork-4x3.jpg', import.meta.url),
@@ -148,10 +269,10 @@ test('a JPEG labelled image/jpg is accepted', async () => {
 
   // #when
   await act(async () => {
-    fireEvent.change(screen.getByLabelText('Добавить изображения', { selector: 'input' }), {
-      target: { files: [new File([bytes], 'figure.jpg', { type: 'image/jpg' })] },
-    });
+    uploadTo('Добавить изображения', [new File([bytes], 'figure.jpg', { type: 'image/jpg' })]);
   });
+  await waitFor(() => expect(screen.queryAllByRole('article')).toHaveLength(1));
+  await waitForPreparation();
   // #then
   expect({
     rejection:
@@ -166,7 +287,7 @@ test('a JPEG labelled image/jpg is accepted', async () => {
 
 test('every artwork file input offers every supported MIME type', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  renderGenerator();
   await addFront();
 
   // #when
@@ -185,7 +306,7 @@ test('every artwork file input offers every supported MIME type', async () => {
 
 test('the drop zone explains the naming convention with every size id outside the button', () => {
   // #given
-  render(<PaperMinisGenerator />);
+  renderGenerator();
   // #when
   const hint = screen.getByTestId('naming-hint');
   const sizes = hint.querySelector('details');
@@ -213,7 +334,7 @@ test('the drop zone explains the naming convention with every size id outside th
 
 test('the batch file picker accepts exported zip archives', () => {
   // #given
-  render(<PaperMinisGenerator />);
+  renderGenerator();
   // #when
   const input = screen.getByLabelText('Добавить изображения', { selector: 'input' });
   // #then
@@ -222,20 +343,40 @@ test('the batch file picker accepts exported zip archives', () => {
   );
 });
 
+test('the batch file picker keeps the skipped-file warning after native input and change events', async () => {
+  // #given
+  renderGenerator();
+  // #when
+  await chooseBatchFiles([
+    new File([png], 'figure.png', { type: 'image/png' }),
+    new File(['text'], 'notes.txt', { type: 'text/plain' }),
+  ]);
+  await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(1));
+  await waitForPreparation();
+  // #then
+  expect({
+    rows: screen.getAllByRole('article').length,
+    warning:
+      screen.queryByText('Некоторые файлы пропущены: поддерживаются PNG, JPG и WebP.')
+        ?.textContent ?? null,
+  }).toEqual({
+    rows: 1,
+    warning: 'Некоторые файлы пропущены: поддерживаются PNG, JPG и WebP.',
+  });
+});
+
 test('a batch row is titled by its cleaned file name, or numbered when the name is empty', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  renderGenerator();
   // #when
   await act(async () => {
-    fireEvent.change(screen.getByLabelText('Добавить изображения', { selector: 'input' }), {
-      target: {
-        files: [
-          new File([png], 'big-bad_wolf.PNG', { type: 'image/png' }),
-          new File([png], '-.png', { type: 'image/png' }),
-        ],
-      },
-    });
+    uploadTo('Добавить изображения', [
+      new File([png], 'big-bad_wolf.PNG', { type: 'image/png' }),
+      new File([png], '-.png', { type: 'image/png' }),
+    ]);
   });
+  await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(2));
+  await waitForPreparation();
   // #then
   expect(screen.getAllByRole('article').map((row) => row.querySelector('h3')?.textContent)).toEqual(
     ['Big bad wolf', 'Миниатюра 2'],
@@ -244,20 +385,25 @@ test('a batch row is titled by its cleaned file name, or numbered when the name 
 
 test('the back slot announces the selected file and returns to reflection after removal', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  renderGenerator();
   await addFront();
   // #when
   await act(async () => {
-    fireEvent.change(
-      screen.getByLabelText('Оборот: отражение лицевой стороны', { selector: 'input' }),
-      {
-        target: { files: [new File([png], 'back.png', { type: 'image/png' })] },
-      },
-    );
+    uploadTo('Оборот: отражение лицевой стороны', [
+      new File([png], 'back.png', { type: 'image/png' }),
+    ]);
   });
+  await waitFor(() =>
+    expect(screen.queryByRole('button', { name: 'Оборот: back.png' })).toBeTruthy(),
+  );
   const back = screen.getByRole('button', { name: 'Оборот: back.png' });
   const selected = back.getAttribute('aria-label');
   fireEvent.click(screen.getByRole('button', { name: 'Убрать оборот' }));
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('button', { name: 'Оборот: отражение лицевой стороны' }),
+    ).toBeTruthy(),
+  );
   // #then
   expect([
     selected,
@@ -269,13 +415,15 @@ test('the back slot announces the selected file and returns to reflection after 
 
 test('rendered dwarf and bugbear choices retain distinct heights on the same base', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  renderGenerator();
   await addFront();
   const select = screen.getByRole<HTMLSelectElement>('combobox', { name: 'Высота существа' });
   // #when
-  fireEvent.change(select, { target: { value: 'medium-short' } });
+  changeValue(select, 'medium-short');
+  await waitFor(() => expect(select.title).toBe('Основание 25 мм · высота 27 мм'));
   const dwarfGeometry = select.title;
-  fireEvent.change(select, { target: { value: 'medium-tall' } });
+  changeValue(select, 'medium-tall');
+  await waitFor(() => expect(select.title).toBe('Основание 25 мм · высота 43 мм'));
   // #then
   expect({
     dwarf: within(select)
@@ -306,7 +454,7 @@ test('download action clicks an attached PDF download anchor', async () => {
   };
 
   try {
-    render(<PaperMinisGenerator />);
+    renderGenerator();
     await addFront();
     // #when
     fireEvent.click(screen.getByRole('button', { name: 'Скачать PDF' }));
@@ -375,7 +523,7 @@ test('export action waits for ready minis and clicks an attached zip download an
   };
 
   try {
-    render(<PaperMinisGenerator />);
+    renderGenerator();
 
     const emptyDisabled = screen.getByRole<HTMLButtonElement>('button', {
       name: 'Экспорт в ZIP',
@@ -393,9 +541,16 @@ test('export action waits for ready minis and clicks an attached zip download an
       new Promise<ArrayBuffer>((resolve) => {
         release = resolve;
       });
-    fireEvent.change(
+    fireEvent.input(
       screen.getByLabelText('Оборот: отражение лицевой стороны', { selector: 'input' }),
       { target: { files: [slow] } },
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole<HTMLButtonElement>('button', {
+          name: 'Экспорт в ZIP',
+        }).disabled,
+      ).toBe(true),
     );
 
     const loadingDisabled = screen.getByRole<HTMLButtonElement>('button', {
@@ -405,6 +560,7 @@ test('export action waits for ready minis and clicks an attached zip download an
     await act(async () => {
       release(Uint8Array.from(png).buffer);
     });
+    await waitFor(() => expect(currentStore.$rows.get()[0]?.backArtwork).toBeTruthy());
 
     // #when
     fireEvent.click(screen.getByRole('button', { name: 'Экспорт в ZIP' }));
@@ -431,7 +587,7 @@ test('export action waits for ready minis and clicks an attached zip download an
 
 test('export reports a browser object-URL failure', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  renderGenerator();
   await addFront();
 
   const objectUrl = spyOn(URL, 'createObjectURL').mockImplementation(() => {
@@ -452,7 +608,7 @@ test('export reports a browser object-URL failure', async () => {
 
 test('download reports a browser object-URL failure', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  renderGenerator();
   await addFront();
 
   const objectUrl = spyOn(URL, 'createObjectURL').mockImplementation(() => {
@@ -481,7 +637,7 @@ test('preview action shows the generated PDF in an iframe and matching link', as
   const revokeUrl = spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
 
   try {
-    render(<PaperMinisGenerator />);
+    renderGenerator();
     await addFront();
     // #when
     fireEvent.click(screen.getByRole('button', { name: 'Предпросмотр PDF' }));
@@ -506,7 +662,7 @@ test('preview action shows the generated PDF in an iframe and matching link', as
 
 test('preview reports a browser object-URL failure instead of showing a ready message', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  renderGenerator();
   await addFront();
 
   const objectUrl = spyOn(URL, 'createObjectURL').mockImplementation(() => {
@@ -531,7 +687,7 @@ test('preview reports a browser object-URL failure instead of showing a ready me
 
 test('PDF actions wait for a pending image while the editor stays available', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  renderGenerator();
   await addFront();
   let release!: (bytes: ArrayBuffer) => void;
   const file = new File([png], 'slow.png', { type: 'image/png' });
@@ -540,16 +696,18 @@ test('PDF actions wait for a pending image while the editor stays available', as
       release = resolve;
     });
   // #when
-  fireEvent.change(screen.getByLabelText('Добавить изображения', { selector: 'input' }), {
-    target: { files: [file] },
+  await act(async () => {
+    uploadTo('Добавить изображения', [file]);
   });
   const download = screen.getByRole<HTMLButtonElement>('button', { name: 'Скачать PDF' });
   const preview = screen.getByRole<HTMLButtonElement>('button', { name: 'Предпросмотр PDF' });
   const editor = screen.getByRole<HTMLFieldSetElement>('group', { name: 'Редактор миниатюр' });
+  await waitFor(() => expect([download.disabled, preview.disabled]).toEqual([true, true]));
   const during = [download.disabled, preview.disabled, editor.disabled];
   await act(async () => {
     release(Uint8Array.from(png).buffer);
   });
+  await waitFor(() => expect([download.disabled, preview.disabled]).toEqual([false, false]));
   // #then
   expect({ during, after: [download.disabled, preview.disabled, editor.disabled] }).toEqual({
     during: [true, true, false],
@@ -559,23 +717,25 @@ test('PDF actions wait for a pending image while the editor stays available', as
 
 test('height calibration stays disabled while the front loads and does not open after a blocked click', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  renderGenerator();
   let release!: (bytes: ArrayBuffer) => void;
   const file = new File([png], 'pending.png', { type: 'image/png' });
   file.arrayBuffer = () =>
     new Promise((resolve) => {
       release = resolve;
     });
-  fireEvent.change(screen.getByLabelText('Добавить изображения', { selector: 'input' }), {
-    target: { files: [file] },
+  await act(async () => {
+    uploadTo('Добавить изображения', [file]);
   });
-  const button = screen.getByRole<HTMLButtonElement>('button', { name: 'Задать рост' });
+  const button = await screen.findByRole<HTMLButtonElement>('button', { name: 'Задать рост' });
+  await waitFor(() => expect(button.disabled).toBe(true));
   // #when
   const disabledDuringLoad = button.disabled;
   fireEvent.click(button);
   await act(async () => {
     release(Uint8Array.from(png).buffer);
   });
+  await waitFor(() => expect(button.disabled).toBe(false));
   // #then
   expect({
     disabledDuringLoad,
@@ -586,7 +746,7 @@ test('height calibration stays disabled while the front loads and does not open 
 
 test('height calibration stays disabled until the selected back artwork is ready', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  renderGenerator();
   await addFront();
   let release!: (bytes: ArrayBuffer) => void;
   const file = new File([png], 'pending-back.png', { type: 'image/png' });
@@ -594,17 +754,19 @@ test('height calibration stays disabled until the selected back artwork is ready
     new Promise((resolve) => {
       release = resolve;
     });
-  fireEvent.change(
-    screen.getByLabelText('Оборот: отражение лицевой стороны', { selector: 'input' }),
-    { target: { files: [file] } },
-  );
+  await act(async () => {
+    uploadTo('Оборот: отражение лицевой стороны', [file]);
+  });
+  await waitFor(() => expect(currentStore.$rows.get()[0]?.backImage).toBeTruthy());
   const button = screen.getByRole<HTMLButtonElement>('button', { name: 'Задать рост' });
+  await waitFor(() => expect(button.disabled).toBe(true));
   // #when
   const disabledDuringLoad = button.disabled;
   fireEvent.click(button);
   await act(async () => {
     release(Uint8Array.from(png).buffer);
   });
+  await waitFor(() => expect(button.disabled).toBe(false));
   // #then
   expect({
     disabledDuringLoad,
@@ -620,18 +782,23 @@ const overlay = (slot: HTMLElement) =>
 
 test('shared calibration draws the same thumbnail lines on both sides and reset removes them', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  renderGenerator();
   await addFront();
   await addBack();
   const front = screen.getByRole('button', { name: 'Лицевая сторона' });
   const back = screen.getByRole('button', { name: 'Оборот: back.png' });
   const before = [overlay(front), overlay(back)];
   // #when
-  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
-  fireEvent.keyDown(screen.getByRole('slider', { name: 'Голова' }), { key: 'ArrowDown' });
+  const dialog = await openCalibrationDialog();
+  fireEvent.keyDown(dialog.getByRole('slider', { name: 'Голова' }), { key: 'ArrowDown' });
+  await waitFor(() =>
+    expect(dialog.getByRole('slider', { name: 'Голова' }).getAttribute('aria-valuenow')).toBe('90'),
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Применить' }));
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'Сбросить рост' })).toBeTruthy());
   const calibrated = [overlay(front), overlay(back)];
   fireEvent.click(screen.getByRole('button', { name: 'Сбросить рост' }));
+  await waitFor(() => expect(screen.queryByText('Рост задан вручную')).toBeNull());
   // #then
   expect({ before, calibrated, reset: [overlay(front), overlay(back)] }).toEqual({
     before: [
@@ -651,70 +818,70 @@ test('shared calibration draws the same thumbnail lines on both sides and reset 
 
 test('a front-only calibration dialog exposes sliders without an orphan tab stop', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  renderGenerator();
   await addFront();
   // #when
-  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
-  const dialog = within(screen.getByRole('dialog'));
+  const dialog = await openCalibrationDialog();
   // #then
   expect({
     tabs: dialog.queryAllByRole('tab').length,
     panels: dialog.queryAllByRole('tabpanel').length,
     sliders: dialog.getAllByRole('slider').map((el) => el.getAttribute('aria-label')),
   }).toEqual({ tabs: 0, panels: 0, sliders: ['Голова', 'Ступни'] });
+  fireEvent.click(dialog.getByRole('button', { name: 'Отмена' }));
 });
 
 test('an oversized mini uses danger styling in both the row and calibration dialog', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  renderGenerator();
   await addFront();
-  fireEvent.change(screen.getByRole('combobox', { name: 'Высота существа' }), {
-    target: { value: 'custom' },
-  });
-  fireEvent.change(screen.getByRole('spinbutton', { name: 'Основание, мм' }), {
-    target: { value: '300' },
-  });
-  fireEvent.change(screen.getByRole('spinbutton', { name: 'Фигурка, мм' }), {
-    target: { value: '30' },
-  });
+  changeValue(screen.getByRole('combobox', { name: 'Высота существа' }), 'custom');
+  await waitFor(() =>
+    expect(screen.queryByRole('spinbutton', { name: 'Основание, мм' })).toBeTruthy(),
+  );
+  changeValue(screen.getByRole('spinbutton', { name: 'Основание, мм' }), '300');
+  changeValue(screen.getByRole('spinbutton', { name: 'Фигурка, мм' }), '30');
 
   const warning =
     'Не помещается на лист. Уменьшите размер или поля. Эта миниатюра не попадёт в PDF.';
 
   // #when
-  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
+  await openCalibrationDialog();
   // #then
   expect(
     screen.getAllByText(warning).map((element) => element.classList.contains('text-danger')),
   ).toEqual([true, true]);
+  fireEvent.click(screen.getByRole('button', { name: 'Отмена' }));
 });
 
-test('front height dialog applies pointer calibration and row reset clears it', async () => {
+test('front height dialog applies calibration and row reset clears it', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  renderGenerator();
   await addFront();
   // #when
-  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
-  const dialog = screen.getByRole('dialog', { name: 'Задать рост' });
-  const artwork = within(dialog).getByTestId('height-calibration-artwork');
-  Object.defineProperty(
-    within(dialog).getByTestId('calibration-artworks'),
-    'getBoundingClientRect',
-    {
-      configurable: true,
-      value: () => ({ left: 0, top: 0, width: 100, height: 100, right: 100, bottom: 100 }),
-    },
-  );
-  fireEvent.pointerDown(within(dialog).getByRole('slider', { name: 'Голова' }), {
-    pointerId: 1,
-    clientY: 25,
+  const dialog = await openCalibrationDialog();
+  const head = dialog.getByRole('slider', { name: 'Голова' });
+  const area = dialog.getByTestId('height-calibration-artwork');
+  Object.defineProperty(dialog.getByTestId('calibration-artworks'), 'getBoundingClientRect', {
+    value: () => ({ top: 0, height: 100 }),
+    configurable: true,
   });
-  fireEvent.pointerMove(artwork, { pointerId: 1, clientY: 50 });
-  fireEvent.pointerUp(artwork, { pointerId: 1, clientY: 50 });
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Применить' }));
+  fireEvent.pointerDown(head, { button: 0, pointerId: 1, clientY: 25 });
+  fireEvent.pointerMove(area, { pointerId: 1, clientY: 50 });
+  fireEvent.pointerUp(area, { pointerId: 1 });
+  await waitFor(() =>
+    expect(dialog.getByRole('slider', { name: 'Голова' }).getAttribute('aria-valuenow')).toBe('50'),
+  );
+  fireEvent.click(dialog.getByRole('button', { name: 'Применить' }));
+  await waitFor(() => expect(currentStore.$rows.get()[0]?.calibration).toBeTruthy());
+  await waitFor(() => expect(screen.queryByText('Рост задан вручную')).toBeTruthy());
+  await waitFor(() =>
+    expect(screen.queryByText('Миниатюра уменьшена: лимит ширины.')).toBeTruthy(),
+  );
   const label = screen.getByText('Рост задан вручную');
   const warning = screen.getByText('Миниатюра уменьшена: лимит ширины.');
   fireEvent.click(screen.getByRole('button', { name: 'Сбросить рост' }));
+  await waitFor(() => expect(screen.queryByText('Рост задан вручную')).toBeNull());
   // #then
   expect({
     label: label.textContent,
@@ -727,48 +894,43 @@ test('front height dialog applies pointer calibration and row reset clears it', 
   });
 });
 
-test('pointer calibration measures the visible image inside vertical letterboxing', async () => {
+test('calibration applies a visible-image fraction inside vertical letterboxing', async () => {
   // #given
-  const bytes = Buffer.from(png);
-  bytes.writeUInt32BE(400, 16);
-  bytes.writeUInt32BE(100, 20);
-  render(<PaperMinisGenerator />);
+  const bytes = await fixturePng();
+  renderGenerator();
   await addFront(bytes);
-  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
-  const dialog = within(screen.getByRole('dialog'));
-  const area = dialog.getByTestId('height-calibration-artwork');
+  const dialog = await openCalibrationDialog();
   const image = dialog.getByTestId('calibration-artworks');
   // A 400×100 image is centred in a 400×400 area: image top 150, bottom 250.
-  Object.defineProperty(area, 'getBoundingClientRect', {
-    configurable: true,
-    value: () => ({ left: 0, top: 0, width: 400, height: 400, right: 400, bottom: 400 }),
-  });
   Object.defineProperty(image, 'getBoundingClientRect', {
     configurable: true,
     value: () => ({ left: 0, top: 150, width: 400, height: 100, right: 400, bottom: 250 }),
   });
   // #when
   fireEvent.pointerDown(dialog.getByRole('slider', { name: 'Голова' }), {
+    button: 0,
     pointerId: 1,
     clientY: 175,
   });
-  fireEvent.pointerUp(area, { pointerId: 1, clientY: 175 });
+  await waitFor(() =>
+    expect(dialog.getByRole('slider', { name: 'Голова' }).getAttribute('aria-valuenow')).toBe('25'),
+  );
   fireEvent.click(dialog.getByRole('button', { name: 'Применить' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
+  await openCalibrationDialog();
   // #then
-  expect(screen.getByRole('slider', { name: 'Голова' }).getAttribute('aria-valuenow')).toBe('25');
+  await waitFor(() =>
+    expect(screen.getByRole('slider', { name: 'Голова' }).getAttribute('aria-valuenow')).toBe('25'),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Отмена' }));
 });
 
 test('height dialog shows both artworks side by side under one pair of shared lines', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  renderGenerator();
   await addFront();
   // #when
-  const backBytes = Buffer.from(png);
-  backBytes.writeUInt32BE(2, 16);
-  await addBack(backBytes);
-  fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
-  const dialog = within(screen.getByRole('dialog', { name: 'Задать рост' }));
+  await addBack(await fixturePng());
+  const dialog = await openCalibrationDialog();
   const artworks = dialog.getByTestId('calibration-artworks');
   const images = within(artworks).getAllByRole('img');
   // #then
@@ -780,23 +942,23 @@ test('height dialog shows both artworks side by side under one pair of shared li
   }).toEqual({
     tabs: 0,
     images: ['Лицевая сторона', 'Оборот'],
-    aspectRatio: '3 / 1',
+    aspectRatio: '2.5 / 1',
     sliders: ['Голова', 'Ступни'],
   });
+  fireEvent.click(dialog.getByRole('button', { name: 'Отмена' }));
 });
 
 test('opening calibration moves focus inside and Escape cancels and restores the opener', async () => {
   // #given
-  render(<PaperMinisGenerator />);
+  renderGenerator();
   await addFront();
   const opener = screen.getByRole('button', { name: 'Задать рост' });
   opener.focus();
   // #when
-  fireEvent.click(opener);
-  const dialog = screen.getByRole('dialog');
+  const dialog = await openCalibrationDialogElement();
   await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
   fireEvent.keyDown(screen.getByRole('slider', { name: 'Голова' }), { key: 'ArrowDown' });
-  fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+  dispatchCancel(dialog);
   // #then
   await waitFor(() =>
     expect({
@@ -811,22 +973,23 @@ test.each(['pointerCancel', 'lostPointerCapture'] as const)(
   '%s ends calibration dragging',
   async (end) => {
     // #given
-    render(<PaperMinisGenerator />);
+    renderGenerator();
     await addFront();
-    fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
-    const dialog = within(screen.getByRole('dialog'));
+    const dialog = await openCalibrationDialog();
     const head = dialog.getByRole('slider', { name: 'Голова' });
     const area = dialog.getByTestId('height-calibration-artwork');
     Object.defineProperty(dialog.getByTestId('calibration-artworks'), 'getBoundingClientRect', {
       value: () => ({ top: 0, height: 100 }),
       configurable: true,
     });
-    fireEvent.pointerDown(head, { pointerId: 1, button: 0, clientY: 25 });
+    fireEvent.pointerDown(head, { button: 0, pointerId: 1, clientY: 25 });
+    await waitFor(() => expect(head.getAttribute('aria-valuenow')).toBe('25'));
     // #when
-    fireEvent[end](head, { pointerId: 1 });
+    fireEvent[end](area, { pointerId: 1 });
     fireEvent.pointerMove(area, { pointerId: 1, clientY: 50 });
     // #then
-    expect(head.getAttribute('aria-valuenow')).toBe('25');
+    expect(currentStore.$calibration.get()?.lines.head).toBe(0.25);
+    fireEvent.click(dialog.getByRole('button', { name: 'Отмена' }));
   },
 );
 
@@ -834,10 +997,9 @@ test.each([{ button: 2 }, { button: 0, ctrlKey: true }])(
   'context-menu press %j does not start calibration',
   async (press) => {
     // #given
-    render(<PaperMinisGenerator />);
+    renderGenerator();
     await addFront();
-    fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
-    const dialog = within(screen.getByRole('dialog'));
+    const dialog = await openCalibrationDialog();
     Object.defineProperty(dialog.getByTestId('calibration-artworks'), 'getBoundingClientRect', {
       value: () => ({ top: 0, height: 100 }),
       configurable: true,
@@ -853,8 +1015,15 @@ test.each([{ button: 2 }, { button: 0, ctrlKey: true }])(
       clientY: 50,
     });
     fireEvent.click(dialog.getByRole('button', { name: 'Применить' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Задать рост' })).toBeNull());
     // #then
-    expect(screen.queryByText('Рост задан вручную') !== null).toBe(false);
+    expect({
+      session: currentStore.$calibration.get(),
+      calibration: currentStore.$rows.get()[0]?.calibration,
+    }).toEqual({
+      session: undefined,
+      calibration: undefined,
+    });
   },
 );
 
@@ -865,39 +1034,34 @@ test('Apply after returning lines to their starting values keeps the calibration
   const revokeUrl = spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
 
   try {
-    const bytes = Buffer.from(png);
-    bytes.writeUInt32BE(201, 20);
-    render(<PaperMinisGenerator />);
+    const bytes = await fixturePng();
+    renderGenerator();
     await addFront(bytes);
-    fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
-    const dialog = within(screen.getByRole('dialog'));
+    const dialog = await openCalibrationDialog();
     Object.defineProperty(dialog.getByTestId('calibration-artworks'), 'getBoundingClientRect', {
       configurable: true,
       value: () => ({ top: 0, height: 100 }),
     });
-    fireEvent.pointerDown(dialog.getByRole('slider', { name: 'Голова' }), {
-      pointerId: 1,
-      clientY: 25,
-    });
-    fireEvent.pointerUp(dialog.getByTestId('height-calibration-artwork'), {
-      pointerId: 1,
-      clientY: 25,
-    });
+    currentStore.setCalibrationLine('head', 0.25);
+    await waitFor(() =>
+      expect(dialog.getByRole('slider', { name: 'Голова' }).getAttribute('aria-valuenow')).toBe(
+        '25',
+      ),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Применить' }));
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Предпросмотр PDF' }));
     });
     await waitFor(() => expect(screen.getByTitle('Предпросмотр PDF')).toBeDefined());
-    fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
-    const head = screen.getByRole('slider', { name: 'Голова' });
+    const reopenedDialog = await openCalibrationDialog();
+    const head = reopenedDialog.getByRole('slider', { name: 'Голова' });
     // #when
     fireEvent.keyDown(head, { key: 'ArrowDown' });
     fireEvent.keyDown(head, { key: 'ArrowUp' });
     fireEvent.click(screen.getByRole('button', { name: 'Применить' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Задать рост' })).toBeNull());
     // #then
-    expect(screen.queryByText('Настройки или изображения изменились. Обновите предпросмотр.')).toBe(
-      null,
-    );
+    expect(currentStore.$previewStale.get()).toBe(false);
   } finally {
     generate.mockRestore();
     objectUrl.mockRestore();

@@ -1,0 +1,65 @@
+{
+  "packageJson": {
+    "dependencies": {
+      "@astrojs/preact": "^6.0.5",
+      "@nanostores/preact": "^1.1.0",
+      "@tailwindcss/vite": "^4.3.3",
+      "astro": "^7.3.5",
+      "class-variance-authority": "^0.7.1",
+      "clsx": "^2.1.1",
+      "fflate": "^0.8.3",
+      "lucide-preact": "^1.50.0",
+      "nanostores": "^1.5.4",
+      "pdf-lib": "^1.17.1",
+      "preact": "^10.29.0",
+      "tailwind-merge": "^3.7.0",
+      "tailwindcss": "^4.3.3",
+      "tw-animate-css": "^1.4.0"
+    },
+    "devDependencies": {
+      "@astrojs/check": "^0.9.10",
+      "@happy-dom/global-registrator": "^20.14.5",
+      "@playwright/test": "^1.63.0",
+      "@testing-library/dom": "^10.4.2",
+      "@testing-library/preact": "^3.2.4",
+      "@types/bun": "^1.4.2",
+      "happy-dom": "^20.14.5",
+      "oxfmt": "^0.71.0",
+      "oxlint": "^1.86.0",
+      "prettier": "^3.9.9",
+      "prettier-plugin-astro": "^1.1.0",
+      "typescript": "^6.0.3"
+    }
+  },
+  "bunLockSnippets": {
+    "astro": [
+      "        \"astro\": \"^7.3.5\",",
+      "    \"astro\": [\"astro@7.3.5\", \"\", { \"dependencies\": { \"@astrojs/compiler-rs\": \"^0.5.0\", \"@astrojs/internal-helpers\": \"0.11.0\", \"@astrojs/markdown-satteri\": \"0.4.2\", \"@astrojs/telemetry\": \"3.3.3\", \"@capsizecss/unpack\": \"^4.0.0\", \"@clack/prompts\": \"^1.1.0\", \"@oslojs/encoding\": \"^1.1.0\", \"am-i-vibing\": \"^0.4.0\", \"aria-query\": \"^5.3.2\", \"axobject-query\": \"^4.1.0\", \"ci-info\": \"^4.4.0\", \"clsx\": \"^2.1.1\", \"common-ancestor-path\": \"^2.0.0\", \"cookie\": \"^2.0.1\", \"devalue\": \"^5.8.1\", \"diff\": \"^9.0.0\", \"dset\": \"^3.1.4\", \"es-module-lexer\": \"^2.0.0\", \"esbuild\": \"^0.28.0\", \"find-proc\": \"0.2.0\", \"flattie\": \"^1.1.1\", \"fontace\": \"~0.4.1\", \"get-tsconfig\": \"5.0.0-beta.4\", \"github-slugger\": \"^2.0.0\", \"html-escaper\": \"3.0.3\", \"http-cache-semantics\": \"^4.2.0\", \"js-yaml\": \"^4.3.2\", \"jsonc-parser\": \"^3.3.1\", \"magic-string\": \"^1.0.0\", \"magicast\": \"^0.5.2\", \"mrmime\": \"^2.0.1\", \"neotraverse\": \"^1.0.1\", \"obug\": \"^3.0.0\", \"p-limit\": \"^7.3.0\", \"p-queue\": \"^9.1.0\", \"package-manager-detector\": \"^1.6.0\", \"piccolore\": \"^0.1.3\", \"picomatch\": \"^4.0.4\", \"shiki\": \"^4.0.2\", \"smol-toml\": \"^1.8.0\", \"svgo\": \"^4.1.0\", \"tinyclip\": \"^1.0.1\", \"tinyexec\": \"^1.0.4\", \"tinyglobby\": \"^0.2.15\", \"ultrahtml\": \"^1.6.0\", \"unifont\": \"~0.7.5\", \"unstorage\": \"^1.17.5\", \"verkit\": \"^0.4.0\", \"vite\": \"^8.0.13\", \"vitefu\": \"^1.1.2\", \"xxhash-wasm\": \"^1.1.0\", \"yargs-parser\": \"^22.0.0\", \"zod\": \"^4.5.4\" }, \"optionalDependencies\": { \"sharp\": \"^0.35.4\" }, \"peerDependencies\": { \"@astrojs/markdown-remark\": \"^7.3.0\" }, \"optionalPeers\": [\"@astrojs/markdown-remark\"], \"bin\": { \"astro\": \"./bin/astro.mjs\" } }, \"sha512-1p/ernaq/RuESbM5NMjWzbO6SiebMGrGcYlGjMfBhzzgM+n/X7AUmVyw8BqW2QYCdivpsHwJBcD1fqmlTZjZHg==\"],",
+      "    \"prettier-plugin-astro\": [\"prettier-plugin-astro@1.1.0\", \"\", { \"dependencies\": { \"@astrojs/compiler-rs\": \"^0.4.0\", \"@prettier/parse-srcset\": \"^3.1.0\", \"sass-formatter\": \"^0.8.0\" }, \"peerDependencies\": { \"prettier\": \"^3.5.3\" } }, \"sha512-ujJ1VX+iin4eYJPHVCEbmXHzrEVsi1SaVehHtbAteTZv8VTrZyBiZPmYc6Ud6+fkr/UBMXuEu3N3+d49h7YfKw==\"],"
+    ],
+    "@astrojs/react": [],
+    "react": [
+      "    \"@astrojs/preact\": [\"@astrojs/preact@6.0.5\", \"\", { \"dependencies\": { \"@astrojs/internal-helpers\": \"0.11.0\", \"@preact/preset-vite\": \"^2.10.5\", \"@preact/signals\": \"^2.8.2\", \"devalue\": \"^5.8.1\", \"preact-render-to-string\": \"^6.6.6\", \"vite\": \"^8.0.13\" }, \"peerDependencies\": { \"preact\": \"^10.6.5\" } }, \"sha512-ONNVrPUM3PxEGJ0Z1MseRRXn0MCirTxEzH84ZUphD8WoR2WOvgHAf4C/0RVc4dmJigytHG3UFg+hsZd/oFz03w==\"],",
+      "    \"@nanostores/preact\": [\"@nanostores/preact@1.1.0\", \"\", { \"peerDependencies\": { \"nanostores\": \"^1.2.0\", \"preact\": \">=10.0.0\" } }, \"sha512-oiu9z85AiZlBTKJ8YsfAs8TALpDij70LmmKuRkeF22rS9zUBhVtYDWXEvV1qUUStNNwSFdhTMkwzOYL/IsA+UA==\"],",
+      "    \"@testing-library/preact\": [\"@testing-library/preact@3.2.4\", \"\", { \"dependencies\": { \"@testing-library/dom\": \"^8.11.1\" }, \"peerDependencies\": { \"preact\": \">=10 || ^10.0.0-alpha.0 || ^10.0.0-beta.0\" } }, \"sha512-F+kJ243LP6VmEK1M809unzTE/ijg+bsMNuiRN0JEDIJBELKKDNhdgC/WrUSZ7klwJvtlO3wQZ9ix+jhObG07Fg==\"],",
+      "    \"lucide-preact\": [\"lucide-preact@1.50.0\", \"\", { \"peerDependencies\": { \"preact\": \"^10.27.2 || ^11.0.0-0\" } }, \"sha512-2uVhbwFV8PTQ7Kq7HGwAm48d8CnZNmCv1JEVYnLIRap3ZcOdEZexomAOai5ljGCp6RoySrthX0iwI7dFYmvfWw==\"],",
+      "    \"preact\": [\"preact@10.29.8\", \"\", { \"peerDependencies\": { \"preact-render-to-string\": \">=5\" }, \"optionalPeers\": [\"preact-render-to-string\"] }, \"sha512-ej2aVZ+vZ8WO7tvlQWRM9N63A0KzF9q4mWJfDUHgYaIofWY9hu74QdnQrjoPMmZi2/nZ5gN0bJCQF49xQqx09Q==\"],"
+    ],
+    "react-dom": [],
+    "@base-ui/react": [],
+    "@nanostores/react": [],
+    "nanostores": [
+      "        \"nanostores\": \"^1.5.4\",",
+      "    \"@nanostores/preact\": [\"@nanostores/preact@1.1.0\", \"\", { \"peerDependencies\": { \"nanostores\": \"^1.2.0\", \"preact\": \">=10.0.0\" } }, \"sha512-oiu9z85AiZlBTKJ8YsfAs8TALpDij70LmmKuRkeF22rS9zUBhVtYDWXEvV1qUUStNNwSFdhTMkwzOYL/IsA+UA==\"],",
+      "    \"nanostores\": [\"nanostores@1.5.4\", \"\", {}, \"sha512-4UXY7OAJEK0Y6V3SudBU7cXjAzTDc189R78dDOh0Xbm19gpKYto6WizSg58LJf12lTsRxKSLGyE117OiLpM4DQ==\"],"
+    ],
+    "@playwright/test": [
+      "        \"@playwright/test\": \"^1.63.0\",",
+      "    \"@playwright/test\": [\"@playwright/test@1.63.0\", \"\", { \"dependencies\": { \"playwright\": \"1.63.0\" }, \"bin\": { \"playwright\": \"cli.js\" } }, \"sha512-oxMK4vllB9RK5NQ2l1pq1IfOf2AvnEuj/vYGDj0H2nMtmtZpKtCwt/l00GEO6xjGfpBNAvjovvYdCm50dRQkpQ==\"],"
+    ],
+    "pdf-lib": [
+      "        \"pdf-lib\": \"^1.17.1\",",
+      "    \"pdf-lib\": [\"pdf-lib@1.17.1\", \"\", { \"dependencies\": { \"@pdf-lib/standard-fonts\": \"^1.0.0\", \"@pdf-lib/upng\": \"^1.0.1\", \"pako\": \"^1.0.11\", \"tslib\": \"^1.11.1\" } }, \"sha512-V/mpyJAoTsN4cnP31vc0wfNA1+p20evqqnap0KLoRUN0Yk/p3wN52DOEsL4oBFcLdb76hlpKPtzJIgo67j/XLw==\"],"
+    ]
+  }
+}

@@ -6,10 +6,10 @@
 
 ## Стек
 
-- [Astro 6](https://astro.build/) — статика по умолчанию, React islands там где нужен интерактив.
-- React 19 + TypeScript (strict).
+- [Astro 7](https://astro.build/) — статика по умолчанию, Preact islands там где нужен интерактив.
+- Preact + TypeScript (strict).
 - [Tailwind CSS v4](https://tailwindcss.com/) — токены через `@theme` в `src/styles/global.css`.
-- [shadcn/ui](https://ui.shadcn.com/) с Base UI как primitive layer.
+- Локальные UI-примитивы в `src/components/ui/`.
 - [oxlint](https://oxc.rs/docs/guide/usage/linter.html) — линт TS/TSX (Rust, быстро).
 - [oxfmt](https://oxc.rs/docs/guide/usage/formatter.html) — форматтер TS/TSX/CSS (Prettier-совместимый).
 - [Prettier + prettier-plugin-astro](https://github.com/withastro/prettier-plugin-astro) — форматирование `.astro` файлов.
@@ -37,6 +37,19 @@ bun run typecheck  # astro check
 ```
 
 Перед первым локальным запуском browser-тестов установите Chromium: `bunx playwright install chromium`.
+
+### Lint coverage
+
+Oxlint applies the vendored anti-slop rules to TypeScript and TSX, including
+expressions and handlers in JSX. Local UI primitives are linted too. They are
+owned code in this branch.
+
+Sequential awaits are allowed in the measurement harness and parity tests:
+samples must run without competing work, and browser actions depend on earlier
+actions. Other Oxlint and anti-slop rules remain enabled there.
+
+See [the experiment lint check](docs/experiments/ui-stack/lint-compatibility.md)
+for coverage details and verification results for both candidates.
 
 ### Bundle size budgets
 
