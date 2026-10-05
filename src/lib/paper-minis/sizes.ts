@@ -148,6 +148,7 @@ export const CUSTOM_SIZE_NAME = 'Свой размер';
 // category name has one source.
 export function slotName(size: HeightSlot): string {
   const { category, grade } = HEIGHT_SLOTS[size];
+
   return grade
     ? `${CATEGORY_NAMES[category]}, ${grade === 'short' ? 'низкий' : 'высокий'}`
     : CATEGORY_NAMES[category];
@@ -160,6 +161,7 @@ export function slotName(size: HeightSlot): string {
 export function slotLabel(size: MiniSize): string {
   if (size === 'custom') return CUSTOM_SIZE_NAME;
   const { realHeight, typical } = HEIGHT_SLOTS[size];
+
   return `${slotName(size)} · ${realHeight} · ${typical}`;
 }
 
@@ -167,15 +169,19 @@ export function slotLabel(size: MiniSize): string {
 // table so it cannot drift from what prints.
 export function slotGeometryLabel(size: MiniSize): string {
   if (size === 'custom') return 'Ширина основания и высота фигурки задаются отдельно';
+
   return `Основание ${resolveBaseWidthMm({ heightSlot: size })} мм · высота ${HEIGHT_SLOTS[size].figureHeightMm} мм`;
 }
 
 export const DEFAULT_CUSTOM_WIDTH_MM = 30;
+
 export const DEFAULT_CUSTOM_HEIGHT_MM = 30;
+
 export const DEFAULT_HEIGHT_SLOT: MiniSize = 'medium';
 
 export function resolveFigureHeightMm(e: Pick<Entry, 'heightSlot' | 'customHeightMm'>): number {
   if (e.heightSlot === 'custom') return validDimension(e.customHeightMm);
+
   return HEIGHT_SLOTS[e.heightSlot].figureHeightMm;
 }
 
@@ -186,12 +192,14 @@ export function resolveFigureHeightMm(e: Pick<Entry, 'heightSlot' | 'customHeigh
 // custom height would leave no way to set it at all.
 function resolveBaseWidthMm(e: Pick<Entry, 'heightSlot' | 'customWidthMm'>): number {
   if (e.heightSlot === 'custom') return validDimension(e.customWidthMm);
+
   return CATEGORY_BASE_WIDTH_MM[HEIGHT_SLOTS[e.heightSlot].category];
 }
 
 // A custom entry's tab is half its own base; only the slots carry page-bound caps.
 export function resolveTabHeightMm(e: Pick<Entry, 'heightSlot' | 'customWidthMm'>): number {
   if (e.heightSlot === 'custom') return resolveBaseWidthMm(e) / 2;
+
   return CATEGORY_TAB_HEIGHT_MM[HEIGHT_SLOTS[e.heightSlot].category];
 }
 
@@ -209,6 +217,7 @@ export function hasPackableDimensions(
   e: Pick<Entry, 'heightSlot' | 'customWidthMm' | 'customHeightMm'>,
 ): boolean {
   const { baseWidthMm, figureHeightMm } = resolveSizeDimensionsMm(e);
+
   return baseWidthMm > 0 && figureHeightMm > 0;
 }
 

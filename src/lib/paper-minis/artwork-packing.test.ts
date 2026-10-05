@@ -5,8 +5,10 @@ import type { PreparedArtwork, Entry } from './types.ts';
 import { test as t } from 'bun:test';
 
 const square: PreparedArtwork = { bytes: new Uint8Array(), format: 'png', width: 100, height: 100 };
+
 // Preserve the pre-margin layout contract for prepared artwork.
 const opts = { pageSize: 'a4', numberDuplicates: false, marginMm: 0 } as const;
+
 const entry = (count: number, artwork: PreparedArtwork | null = square): Entry => ({
   image: null,
   artwork,
@@ -50,6 +52,7 @@ t('unprepared entries preserve the source indices of packed and oversized entrie
     entry(1),
     { ...entry(1), heightSlot: 'custom' as const, customWidthMm: 200, customHeightMm: 30 },
   ];
+
   // #when
   const result = packEntries(entries, opts);
   // #then
@@ -86,6 +89,7 @@ t('a custom entry carries both of its dimensions into the fit and the stand', ()
 t('each row reports why it does not print yet', () => {
   // #given
   const file = new File([], 'front.png');
+
   const entries: Entry[] = [
     entry(1, null),
     { ...entry(1, null), image: file },
@@ -96,6 +100,7 @@ t('each row reports why it does not print yet', () => {
     { ...entry(0), image: file },
     { ...entry(1), image: file },
   ];
+
   // #when
   const result = packEntries(entries, opts);
   // #then
@@ -108,18 +113,22 @@ t('each row reports why it does not print yet', () => {
 t('resolveEntry reports readiness and the geometry the sheet layout places', () => {
   // #given
   const loading: Entry = { ...entry(1), backImage: new File([], 'back.png') };
+
   const oversized: Entry = {
     ...entry(1),
     heightSlot: 'custom',
     customWidthMm: 200,
     customHeightMm: 30,
   };
+
   const empty = entry(0);
   const normal = entry(1);
+
   // #when
   const resolved = [loading, oversized, empty].map((candidate, entryIndex) =>
     resolveEntry(candidate, entryIndex, opts),
   );
+
   const resolvedNormal = resolveEntry(normal, 0, opts);
   const placed = packEntries([normal], opts).pages[0].placements[0].mini;
   // #then
@@ -146,6 +155,7 @@ t('prepared back artwork proportions reach fitting through packEntries', () => {
     backImage: new File([], 'back.png'),
     backArtwork: { ...square, width: 150, height: 100 },
   };
+
   // #when
   const mini = packEntries([e], opts).pages[0].placements[0].mini;
   // #then
@@ -168,6 +178,7 @@ t(
       entry(1),
       { ...entry(2), heightSlot: 'custom', customWidthMm: 140, customHeightMm: 140 },
     ];
+
     // #when
     const result = packEntries(entries, { ...opts, marginMm: 2 });
     // #then

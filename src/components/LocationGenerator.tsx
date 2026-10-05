@@ -29,8 +29,9 @@ export function LocationGenerator<Biome extends string>({ table }: Props<Biome>)
   }, [store]);
 
   const handleBiomeChange = (next: string | number | null) => {
-    if (next === null) return;
-    store.setBiome(next as Biome);
+    const selected = table.biomes.find((candidate) => candidate === next);
+
+    if (selected !== undefined) store.setBiome(selected);
   };
 
   return (
@@ -189,6 +190,7 @@ function ReferenceTables<Biome extends string>({
 }: ReferenceTablesProps<Biome>) {
   const highlightLandmark = roll && roll.biome === biome ? roll.landmarkIndex : null;
   const highlightDetail = roll ? roll.detailIndex : null;
+
   return (
     <div className="grid gap-8 md:grid-cols-2">
       <ReferenceList

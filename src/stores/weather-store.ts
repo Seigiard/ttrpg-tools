@@ -24,7 +24,7 @@ export interface WeatherStore {
 }
 
 export function createWeatherStore(table: WeatherTable): WeatherStore {
-  const firstSeason = table.seasons[0] as Season;
+  const firstSeason = table.seasons[0];
   const $season = atom<Season>(firstSeason);
   const $roll = atom<RangePick | null>(null);
 

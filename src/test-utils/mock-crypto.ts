@@ -11,12 +11,16 @@
 export function mockCrypto(sequence: number[]): () => void {
   const original = crypto.getRandomValues.bind(crypto);
   let i = 0;
-  crypto.getRandomValues = ((buf: Uint32Array) => {
+  crypto.getRandomValues = <T extends ArrayBufferView | null>(buf: T): T => {
+    if (!(buf instanceof Uint32Array)) throw new Error('Expected a Uint32Array');
     const value = sequence[i++];
+
     if (value === undefined) throw new Error('тестовая последовательность исчерпана');
     buf[0] = value;
+
     return buf;
-  }) as typeof crypto.getRandomValues;
+  };
+
   return () => {
     crypto.getRandomValues = original;
   };

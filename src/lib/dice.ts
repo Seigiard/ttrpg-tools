@@ -19,6 +19,7 @@ export function roll(sides: number): number {
   if (!Number.isInteger(sides) || sides < 1) {
     throw new RangeError(`roll(sides): sides должно быть целым >= 1, получено ${sides}`);
   }
+
   if (sides === 1) return 1;
 
   // limit — наибольшее значение Uint32, кратное sides.
@@ -26,10 +27,12 @@ export function roll(sides: number): number {
   const limit = Math.floor(UINT32_RANGE / sides) * sides;
 
   const buf = new Uint32Array(1);
+
   // eslint-disable-next-line no-constant-condition
   while (true) {
     crypto.getRandomValues(buf);
     const value = buf[0];
+
     if (value < limit) {
       return (value % sides) + 1;
     }
@@ -41,12 +44,14 @@ export function roll(sides: number): number {
  *
  * @throws RangeError если таблица пуста.
  */
-export function pick<T>(table: readonly T[]): { index: number; value: T } {
+export function pick<T>(table: readonly T[]) {
   if (table.length === 0) {
     throw new RangeError('pick(table): таблица пуста');
   }
+
   const index = roll(table.length) - 1;
-  return { index, value: table[index] as T };
+
+  return { index, value: table[index] };
 }
 
 /**
@@ -73,9 +78,12 @@ export function rollDice(spec: RollSpec): number {
   if (!Number.isInteger(spec.count) || spec.count < 1) {
     throw new RangeError(`rollDice: count должно быть целым >= 1, получено ${spec.count}`);
   }
+
   let sum = 0;
+
   for (let i = 0; i < spec.count; i++) {
     sum += roll(spec.sides);
   }
+
   return sum;
 }

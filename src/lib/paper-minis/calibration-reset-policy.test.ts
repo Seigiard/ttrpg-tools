@@ -1,11 +1,9 @@
 import { expect, test } from 'bun:test';
 import type { Entry, HeightCalibration, PreparedArtwork } from './types';
-import {
-  calibrationAfterChange,
-  type CalibrationChange,
-} from './calibration-reset-policy';
+import { calibrationAfterChange, type CalibrationChange } from './calibration-reset-policy';
 
 const saved: HeightCalibration = { head: 0.2, feet: 0.8 };
+
 const prepared: PreparedArtwork = {
   bytes: Uint8Array.from([1]),
   format: 'png',
@@ -33,12 +31,7 @@ test.each([
     undefined,
   ],
   ['add missing back', mini({ artwork: prepared }), 'select-back', saved],
-  [
-    'replace loading front',
-    mini({ image: new File([''], 'front.png') }),
-    'select-front',
-    saved,
-  ],
+  ['replace loading front', mini({ image: new File([''], 'front.png') }), 'select-front', saved],
   [
     'replace failed front',
     mini({ image: new File([''], 'front.png'), frontError: 'failed' }),

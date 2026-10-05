@@ -28,8 +28,9 @@ export function WeatherGenerator({ table }: Props) {
   }, [store]);
 
   const handleSeasonChange = (next: string | number | null) => {
-    if (next === null) return;
-    store.setSeason(next as Season);
+    const selected = table.seasons.find((candidate) => candidate === next);
+
+    if (selected !== undefined) store.setSeason(selected);
   };
 
   return (
@@ -105,6 +106,7 @@ interface ReferenceTableProps {
 
 function ReferenceTable({ table, season, roll }: ReferenceTableProps) {
   const hitRow = roll ? roll.rowIndex : null;
+
   return (
     <section data-testid="reference-weather">
       <h3 className="font-mono text-xs uppercase tracking-wider text-text-muted">
@@ -134,6 +136,7 @@ function ReferenceTable({ table, season, roll }: ReferenceTableProps) {
             {table.rows.map((row, i) => {
               const rangeLabel = formatRangeLabel(row);
               const isHitRow = i === hitRow;
+
               return (
                 <tr
                   key={rangeLabel}
@@ -145,6 +148,7 @@ function ReferenceTable({ table, season, roll }: ReferenceTableProps) {
                     const c = row.cells[s];
                     const isHit = isHitRow && s === season;
                     const tone = !isHit && s === season ? 'text-text' : referenceHitClass(isHit);
+
                     return (
                       <td
                         key={s}

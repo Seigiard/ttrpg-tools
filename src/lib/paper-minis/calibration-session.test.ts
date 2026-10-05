@@ -73,12 +73,7 @@ test('the minimum gap allowed while moving a line is also accepted on Apply', ()
 
 test.each([
   ['unchanged lines', undefined, undefined, { state: 'unchanged' }],
-  [
-    'invalid lines',
-    undefined,
-    ['head', Number.NaN] as const,
-    { state: 'invalid' },
-  ],
+  ['invalid lines', undefined, ['head', Number.NaN] as const, { state: 'invalid' }],
   [
     'new lines',
     { head: 0.2, feet: 0.8 },

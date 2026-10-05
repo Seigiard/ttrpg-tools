@@ -42,17 +42,21 @@ export function validateRanges(rows: readonly RangeBounds[], roll: RollSpec): vo
   const min = roll.count;
   const max = roll.count * roll.sides;
   let expected = min;
+
   for (const row of rows) {
     if (row.max < row.min) {
       throw new RangeError(`RangeTable: max ${row.max} меньше min ${row.min}`);
     }
+
     if (row.min !== expected) {
       throw new RangeError(
         `RangeTable: разрыв или пересечение у строки ${row.min}–${row.max}, ожидалось начало ${expected}`,
       );
     }
+
     expected = row.max + 1;
   }
+
   if (expected !== max + 1) {
     throw new RangeError(
       `RangeTable: строки покрывают до ${expected - 1}, ожидалось до ${max} (формула ${roll.count}d${roll.sides})`,
@@ -69,8 +73,10 @@ export function pickRange(rows: readonly RangeBounds[], roll: RollSpec): RangePi
   validateRanges(rows, roll);
   const sum = rollDice(roll);
   const rowIndex = findRangeIndex(rows, sum);
+
   if (rowIndex === -1) {
     throw new RangeError(`pickRange: сумма ${sum} вне диапазонов таблицы`);
   }
+
   return { sum, rowIndex };
 }

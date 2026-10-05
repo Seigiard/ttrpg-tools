@@ -31,6 +31,7 @@ import {
 export type { PageSizeKey };
 
 const MM_TO_PT = 72 / 25.4;
+
 const mm = (v: number) => v * MM_TO_PT;
 
 const MARK_GREY = 0.5;
@@ -40,17 +41,27 @@ const MARK_GREY = 0.5;
 // care in the layout can undo, so the sheet has to let the user see it happen.
 // 100 mm makes a 3% shrink a 3 mm shortfall, visible against any ruler.
 export const SCALE_BAR_MM = 100;
+
 const SCALE_BAR_Y_FROM_TOP_MM = 5.5;
+
 const SCALE_BAR_THICKNESS_MM = 0.4;
+
 const SCALE_TICK_MM = 1.5;
+
 const SCALE_MAJOR_TICK_MM = 2.5;
+
 const SCALE_TICK_WIDTH_MM = 0.3;
+
 const SCALE_TEXT_PT = 7;
+
 const SCALE_NOTE_GAP_MM = 1.5;
+
 export const SCALE_BAR_NOTE =
   'Print with Scale to Fit. This bar should be 100 mm; if not, reprint the printer test sheet.';
+
 const TEST_SHEET_INSTRUCTION =
   'Print with Scale to Fit, measure the ruler, then enter the measured length.';
+
 const TEST_SHEET_TICK_WIDTH_MM = 0.2;
 
 export type GenerateOptions = PackOptions;
@@ -71,21 +82,27 @@ export async function generatePDF(
   // add their image bytes to the document.
   const faces = new Map<number, FaceImages>();
   const cache = new Map<PreparedArtwork, PDFImage>();
+
   const embed = async (artwork: PreparedArtwork) => {
     let img = cache.get(artwork);
+
     if (!img) {
       img = await (artwork.format === 'jpg'
         ? pdf.embedJpg(artwork.bytes)
         : pdf.embedPng(artwork.bytes));
       cache.set(artwork, img);
     }
+
     return img;
   };
+
   const placedEntryIndices = new Set(
     layout.pages.flatMap((page) => page.placements.map(({ mini }) => mini.entryIndex)),
   );
+
   for (const entryIndex of placedEntryIndices) {
     const entry = entries[entryIndex];
+
     if (!entry?.artwork) throw new Error('Layout refers to an entry without prepared artwork.');
     faces.set(entryIndex, {
       // oxlint-disable-next-line no-await-in-loop -- Keep embedding sequential to cap image memory while writing one PDF document.
@@ -98,37 +115,30 @@ export async function generatePDF(
   const { w: pageWmm, h: pageHmm } = PAGE_SIZES_MM[opts.pageSize];
   const scale = printerScale(opts);
   const scaledPageHmm = pageHmm * scale;
+
   for (const [pageIndex, page] of layout.pages.entries()) {
     const pdfPage = pdf.addPage([mm(pageWmm), mm(pageHmm)]);
-    pdfPage.pushOperators(pushGraphicsState(), concatTransformationMatrix(1 / scale, 0, 0, 1 / scale, 0, 0));
+    pdfPage.pushOperators(
+      pushGraphicsState(),
+      concatTransformationMatrix(1 / scale, 0, 0, 1 / scale, 0, 0),
+    );
     const layoutTopMm = scaledPageHmm - (pageIndex === 0 ? SCALE_BAR_BAND_MM : 0);
+
     for (const { mini, xMm, yMm, rotated } of page.placements) {
       if (rotated) {
         // Turn the whole local drawing clockwise about the footprint's top-left.
         pdfPage.pushOperators(
           pushGraphicsState(),
-          concatTransformationMatrix(
-            0,
-            -1,
-            1,
-            0,
-            mm(xMm),
-            mm(layoutTopMm - yMm),
-          ),
+          concatTransformationMatrix(0, -1, 1, 0, mm(xMm), mm(layoutTopMm - yMm)),
         );
         drawMini(pdfPage, mini, faces.get(mini.entryIndex)!, 0, mini.totalHeightMm, font);
         pdfPage.pushOperators(popGraphicsState());
         continue;
       }
-      drawMini(
-        pdfPage,
-        mini,
-        faces.get(mini.entryIndex)!,
-        xMm,
-        layoutTopMm - yMm,
-        font,
-      );
+
+      drawMini(pdfPage, mini, faces.get(mini.entryIndex)!, xMm, layoutTopMm - yMm, font);
     }
+
     if (pageIndex === 0) drawScaleBar(pdfPage, scaledPageHmm, noteFont);
     pdfPage.pushOperators(popGraphicsState());
   }
@@ -153,16 +163,24 @@ export async function generatePrinterScaleTestSheet(pageSize: PageSizeKey): Prom
     height: mm(SCALE_BAR_THICKNESS_MM),
     color: rgb(0, 0, 0),
   });
+
   for (let tickMm = 0; tickMm <= SCALE_BAR_MM; tickMm++) {
     const length = tickMm % 10 === 0 ? SCALE_MAJOR_TICK_MM * 2 : SCALE_TICK_MM;
     page.drawRectangle({
-      x: mm(xMm + Math.min(Math.max(tickMm - TEST_SHEET_TICK_WIDTH_MM / 2, 0), SCALE_BAR_MM - TEST_SHEET_TICK_WIDTH_MM)),
+      x: mm(
+        xMm +
+          Math.min(
+            Math.max(tickMm - TEST_SHEET_TICK_WIDTH_MM / 2, 0),
+            SCALE_BAR_MM - TEST_SHEET_TICK_WIDTH_MM,
+          ),
+      ),
       y: mm(yMm - length),
       width: mm(TEST_SHEET_TICK_WIDTH_MM),
       height: mm(length),
       color: rgb(0, 0, 0),
     });
   }
+
   const textWidth = font.widthOfTextAtSize(TEST_SHEET_INSTRUCTION, SCALE_TEXT_PT);
   page.drawText(TEST_SHEET_INSTRUCTION, {
     x: (mm(pageWmm) - textWidth) / 2,
@@ -171,6 +189,7 @@ export async function generatePrinterScaleTestSheet(pageSize: PageSizeKey): Prom
     font,
     color: rgb(0, 0, 0),
   });
+
   return pdf.save();
 }
 
@@ -213,6 +232,7 @@ function drawMini(
   const backW = mm(back.imageWidthMm);
   const backOffX = mm(back.imageOffsetXMm);
   pdfPage.pushOperators(pushGraphicsState());
+
   if (images.back) {
     // The back artwork is drawn as seen from behind. Fold plus walking round
     // the mini is a 180° rotation, so rotated it reads the right way round.
@@ -225,6 +245,7 @@ function drawMini(
     // CTM [1 0 0 -1 e f] maps (px,py) → (e+px, f-py).
     pdfPage.pushOperators(concatTransformationMatrix(1, 0, 0, -1, x + backOffX, backTop));
   }
+
   pdfPage.drawImage(images.back ?? images.front, {
     x: 0,
     y: 0,
@@ -276,19 +297,23 @@ function drawCutMarks(pdfPage: PDFPage, mini: PackedMini, x: number, yBottom: nu
     setLineWidth(mm(CUT_MARK_STROKE_MM)),
     setStrokingGrayscaleColor(MARK_GREY),
   ];
+
   const segment = (x1: number, y1: number, x2: number, y2: number) =>
     ops.push(moveTo(x1, y1), lineTo(x2, y2));
+
   for (const edge of [left, right]) {
     const inward = edge === left ? arm : -arm;
     segment(edge + inward, bottom, edge, bottom);
     segment(edge, bottom, edge, bottom + arm);
     segment(edge + inward, top, edge, top);
     segment(edge, top, edge, top - arm);
+
     for (const y of ticks) {
       segment(edge, y, edge + inward, y);
       segment(edge, y - arm, edge, y + arm);
     }
   }
+
   ops.push(stroke(), popGraphicsState());
   pdfPage.pushOperators(...ops);
 }
@@ -304,14 +329,17 @@ function drawScaleBar(pdfPage: PDFPage, pageHmm: number, font: PDFFont) {
     height: mm(SCALE_BAR_THICKNESS_MM),
     color,
   });
+
   for (let tickMm = 0; tickMm <= SCALE_BAR_MM; tickMm += 10) {
     const length = tickMm % 50 === 0 ? SCALE_MAJOR_TICK_MM : SCALE_TICK_MM;
+
     // The end ticks sit inside the bar's ends, so the bar's own length is the
     // measurement and the ticks never add to it.
-  const x = Math.min(
-    Math.max(tickMm - SCALE_TICK_WIDTH_MM / 2, 0),
-    SCALE_BAR_MM - SCALE_TICK_WIDTH_MM,
-  );
+    const x = Math.min(
+      Math.max(tickMm - SCALE_TICK_WIDTH_MM / 2, 0),
+      SCALE_BAR_MM - SCALE_TICK_WIDTH_MM,
+    );
+
     pdfPage.drawRectangle({
       x: mm(x),
       y: mm(barY - length),
@@ -320,6 +348,7 @@ function drawScaleBar(pdfPage: PDFPage, pageHmm: number, font: PDFFont) {
       color,
     });
   }
+
   // Above the bar: the ticks hang below it, and the note is too long to sit
   // beside a 100 mm bar on a scaled A4 or Letter width.
   pdfPage.drawText(SCALE_BAR_NOTE, {
