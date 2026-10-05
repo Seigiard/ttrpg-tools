@@ -22,6 +22,7 @@ describe('mausritterLocations', () => {
     for (const biome of mausritterLocations.biomes) {
       expect(() => validateTable(mausritterLocations.landmarks[biome])).not.toThrow();
     }
+
     expect(() => validateTable(mausritterLocations.details)).not.toThrow();
   });
 
@@ -39,6 +40,7 @@ describe('mausritterLocations', () => {
         expect(row.ru.length).toBeGreaterThan(0);
       }
     }
+
     for (const row of mausritterLocations.details.rows) {
       expect(row.ru.length).toBeGreaterThan(0);
     }

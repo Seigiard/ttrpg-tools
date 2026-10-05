@@ -8,6 +8,7 @@ import {
 } from './sizes.ts';
 
 export type FigureFitLimit = 'height' | 'width' | 'page';
+
 export type FigureFitMm = {
   imageWidthMm: number;
   imageHeightMm: number;
@@ -26,7 +27,9 @@ export const PAGE_SIZES_MM = {
 export type PageSizeKey = keyof typeof PAGE_SIZES_MM;
 
 export const DEFAULT_FIGURE_MARGIN_MM = 2;
+
 export const DEFAULT_PRINTER_SCALE = 0.91;
+
 export const SCALE_BAR_BAND_MM = 10;
 
 export type PackOptions = {
@@ -40,25 +43,22 @@ export function printerScale(opts: Pick<PackOptions, 'printerScale'>): number {
   return opts.printerScale ?? DEFAULT_PRINTER_SCALE;
 }
 
-export function usableAreaMm(opts: Pick<PackOptions, 'pageSize' | 'printerScale'>): {
-  widthMm: number;
-  heightMm: number;
-} {
+export function usableAreaMm(opts: Pick<PackOptions, 'pageSize' | 'printerScale'>) {
   const full = fullPageAreaMm(opts);
+
   return { widthMm: full.widthMm, heightMm: full.heightMm - SCALE_BAR_BAND_MM };
 }
 
 // Later sheets have no scale bar, so minis may use their complete scaled height.
-export function fullPageAreaMm(opts: Pick<PackOptions, 'pageSize' | 'printerScale'>): {
-  widthMm: number;
-  heightMm: number;
-} {
+export function fullPageAreaMm(opts: Pick<PackOptions, 'pageSize' | 'printerScale'>) {
   const scale = printerScale(opts);
   const { w, h } = PAGE_SIZES_MM[opts.pageSize];
+
   return { widthMm: w * scale, heightMm: h * scale };
 }
 
 export const CUT_MARK_ARM_MM = 1.5;
+
 export const CUT_MARK_STROKE_MM = 0.2;
 
 export type MiniLevels = {
@@ -110,6 +110,7 @@ export type MiniOrientation = 'upright' | 'rotated' | 'oversized';
 // What one row will become in print. `empty` covers every row with nothing to
 // print yet: no image, or no copies or sizing dimensions to pack it with.
 export type EntryState = 'empty' | 'loading' | 'failed' | MiniOrientation;
+
 export type EntryStatus = { state: EntryState; limits: FigureFitLimit[] };
 
 // One entry resolved against the page options. Every copy shares the geometry,
@@ -132,9 +133,12 @@ export function footprintMm(
 
 function miniOrientation(mini: PackedMini, opts: PackOptions): MiniOrientation {
   const usable = fullPageAreaMm(opts);
+
   const fits = ({ widthMm, heightMm }: { widthMm: number; heightMm: number }) =>
     widthMm <= usable.widthMm && heightMm <= usable.heightMm;
+
   if (fits(footprintMm(mini, false))) return 'upright';
+
   return fits(footprintMm(mini, true)) ? 'rotated' : 'oversized';
 }
 
@@ -164,6 +168,7 @@ function miniOrientation(mini: PackedMini, opts: PackOptions): MiniOrientation {
 // here — the number is a judgement about how far a figure may spread, not a
 // limit the paper forces.
 export const MAX_WIDTH_TO_SLOT_HEIGHT = 1.5;
+
 // Leave room for raised weapons without letting a short marked gap make a giant mini.
 export const MAX_CALIBRATED_HEIGHT_TO_SLOT_HEIGHT = 2;
 
@@ -187,23 +192,30 @@ export function fitFigure(
   const calibrationScale = validGap ?? 1;
   let imageHeightMm = figureHeightMm / calibrationScale;
   let imageWidthMm = aspect * imageHeightMm;
+
   if (validGap && imageHeightMm > figureHeightMm * MAX_CALIBRATED_HEIGHT_TO_SLOT_HEIGHT) {
     imageHeightMm = figureHeightMm * MAX_CALIBRATED_HEIGHT_TO_SLOT_HEIGHT;
     imageWidthMm = aspect * imageHeightMm;
     limits.push('height');
   }
+
   if (imageWidthMm > maxWidthMm) {
     imageWidthMm = maxWidthMm;
     imageHeightMm = maxWidthMm / aspect;
+
     if (validGap) limits.push('width');
   }
+
   if (maxImageHeightMm != null && imageHeightMm > maxImageHeightMm) {
     imageHeightMm = maxImageHeightMm;
     imageWidthMm = aspect * imageHeightMm;
     limits.push('page');
   }
+
   return { imageWidthMm, imageHeightMm, limits };
 }
+
+type MiniFaceFits = { front: FigureFitMm; back?: FigureFitMm };
 
 // Resolve both faces together. A shared calibration gives both faces the same
 // printed height. The wider face's cap shrinks both by the same factor so
@@ -211,22 +223,26 @@ export function fitFigure(
 function fitMiniFaces(
   e: PackingEntry & { naturalWidth: number; naturalHeight: number },
   opts: PackOptions,
-): { front: FigureFitMm; back?: FigureFitMm } {
+): MiniFaceFits {
   const dimensions = resolveSizeDimensionsMm(e);
   const { widthMm: usableWidthMm, heightMm: usableHeightMm } = fullPageAreaMm(opts);
   const marginMm = opts.marginMm ?? DEFAULT_FIGURE_MARGIN_MM;
   const imageSpaceMm = (usableHeightMm - marginMm * 2 - resolveTabHeightMm(e) * 4) / 2;
   const calibrated = calibrationGap(e.calibration);
+
   // Page fitting belongs to the whole calibrated mini. Do not promise a page
   // fit when the base/tabs alone cannot fit.
   const maxImageHeightMm = (aspect: number) =>
     calibrated && imageSpaceMm > 0 && dimensions.baseWidthMm + marginMm * 2 <= usableWidthMm
       ? Math.min(imageSpaceMm, (usableWidthMm - marginMm * 2) / aspect)
       : undefined;
-  let faces: { front: FigureFitMm; back?: FigureFitMm };
+
+  let faces: MiniFaceFits;
+
   if (e.backNaturalWidth && e.backNaturalHeight && calibrated) {
     const frontAspect = e.naturalWidth / e.naturalHeight;
     const backAspect = e.backNaturalWidth / e.backNaturalHeight;
+
     // Fit the wider face first so width still precedes page in the cap order.
     const shared = fitFigure(
       dimensions,
@@ -235,6 +251,7 @@ function fitMiniFaces(
       e.calibration,
       maxImageHeightMm(Math.max(frontAspect, backAspect)),
     );
+
     faces = {
       front: { ...shared, imageWidthMm: frontAspect * shared.imageHeightMm },
       back: { ...shared, imageWidthMm: backAspect * shared.imageHeightMm },
@@ -260,6 +277,7 @@ function fitMiniFaces(
           : undefined,
     };
   }
+
   return faces;
 }
 
@@ -271,12 +289,14 @@ const fitLimitLabels: Record<FigureFitLimit, string> = {
 
 function fitLimitWarning(limits: readonly FigureFitLimit[]): string | undefined {
   if (!limits.length) return undefined;
+
   return `Миниатюра уменьшена: ${limits.map((limit) => fitLimitLabels[limit]).join(', ')}.`;
 }
 
 export function entryStatusWarning(status: EntryStatus): string | undefined {
   if (status.state === 'oversized')
     return 'Не помещается на лист. Уменьшите размер или поля. Эта миниатюра не попадёт в PDF.';
+
   return fitLimitWarning(status.limits);
 }
 
@@ -300,27 +320,34 @@ export function resolveMini(
   ) {
     return undefined;
   }
+
   const { baseWidthMm } = resolveSizeDimensionsMm(e);
   const marginMm = opts.marginMm ?? DEFAULT_FIGURE_MARGIN_MM;
   const tabHMm = resolveTabHeightMm(e);
+
   const { front, back: rawBackFit } = fitMiniFaces(
     { ...e, naturalWidth: e.naturalWidth, naturalHeight: e.naturalHeight },
     opts,
   );
+
   const { imageWidthMm, imageHeightMm } = front;
+
   const backFit = rawBackFit && {
     imageWidthMm: rawBackFit.imageWidthMm,
     imageHeightMm: rawBackFit.imageHeightMm,
   };
+
   // A figure may overhang its base, so the reserved column is the widest of
   // base and faces.
   const contentWidthMm = Math.max(baseWidthMm, imageWidthMm, backFit?.imageWidthMm ?? 0);
   const totalWidthMm = contentWidthMm + marginMm * 2;
   const imageOffsetXMm = marginMm + (contentWidthMm - imageWidthMm) / 2;
+
   const back = backFit && {
     ...backFit,
     imageOffsetXMm: marginMm + (contentWidthMm - backFit.imageWidthMm) / 2,
   };
+
   const faceHeightMm = Math.max(imageHeightMm, backFit?.imageHeightMm ?? 0);
   const baseOffsetXMm = marginMm + (contentWidthMm - baseWidthMm) / 2;
   const floorStripTopMm = tabHMm * 2;
@@ -332,6 +359,7 @@ export function resolveMini(
   // chained sum can round one ulp above the usable height and reject the mini.
   const topMm = faceHeightMm * 2 + marginMm * 2 + tabHMm * 4;
   const backFaceTopMm = topMm - tabHMm;
+
   const levels: MiniLevels = {
     floorStripTopMm,
     frontTabTopMm,
@@ -345,9 +373,11 @@ export function resolveMini(
       edgeTicksMm: [floorStripTopMm, frontTabTopMm, foldMm, backFaceTopMm],
     },
   };
+
   const backBadgeOffsetXMm = ((back?.imageWidthMm ?? imageWidthMm) - baseWidthMm) / 2;
   const limits = [...new Set([...front.limits, ...(rawBackFit?.limits ?? [])])];
   const copies: PackedMini[] = [];
+
   for (let i = 0; i < e.count; i++) {
     copies.push({
       entryIndex,
@@ -370,8 +400,10 @@ export function resolveMini(
       label: opts.numberDuplicates ? String(i + 1) : undefined,
     });
   }
+
   // A count that is not a number passes the check above but yields no copy.
   if (copies.length === 0) return undefined;
+
   return { entryIndex, orientation: miniOrientation(copies[0], opts), limits, copies };
 }
 

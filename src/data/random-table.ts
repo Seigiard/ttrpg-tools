@@ -32,6 +32,7 @@ export function rangeSize(spec: RollSpec): number {
 export function validateTable<T>(table: RandomTable<T>): void {
   const spec = resolveSpec(table);
   const expected = rangeSize(spec);
+
   if (table.rows.length !== expected) {
     throw new RangeError(
       `RandomTable: длина ${table.rows.length} не соответствует формуле ${spec.count}d${spec.sides} (ожидается ${expected})`,
@@ -45,14 +46,16 @@ export function validateTable<T>(table: RandomTable<T>): void {
  *
  * @throws RangeError если таблица пуста или длина не совпадает со спекой.
  */
-export function pickFromTable<T>(table: RandomTable<T>): { index: number; value: T } {
+export function pickFromTable<T>(table: RandomTable<T>) {
   if (table.rows.length === 0) {
     throw new RangeError('pickFromTable: таблица пуста');
   }
+
   const spec = resolveSpec(table);
   validateTable(table);
   const sum = rollDice(spec);
   // Минимальная сумма count d sides — это count (каждый кубик минимум 1).
   const index = sum - spec.count;
-  return { index, value: table.rows[index] as T };
+
+  return { index, value: table.rows[index] };
 }

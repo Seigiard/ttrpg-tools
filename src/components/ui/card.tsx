@@ -4,11 +4,7 @@ import { cn } from '@/lib/utils';
 
 type DivProps = JSX.IntrinsicElements['div'];
 
-function Card({
-  className,
-  size = 'default',
-  ...props
-}: DivProps & { size?: 'default' | 'sm' }) {
+function Card({ className, size = 'default', ...props }: DivProps & { size?: 'default' | 'sm' }) {
   return (
     <div
       data-slot="card"
@@ -39,7 +35,10 @@ function CardTitle({ className, ...props }: DivProps) {
   return (
     <div
       data-slot="card-title"
-      className={cn('text-base leading-snug font-medium group-data-[size=sm]/card:text-sm', className)}
+      className={cn(
+        'text-base leading-snug font-medium group-data-[size=sm]/card:text-sm',
+        className,
+      )}
       {...props}
     />
   );
@@ -47,7 +46,11 @@ function CardTitle({ className, ...props }: DivProps) {
 
 function CardDescription({ className, ...props }: DivProps) {
   return (
-    <div data-slot="card-description" className={cn('text-sm text-muted-foreground', className)} {...props} />
+    <div
+      data-slot="card-description"
+      className={cn('text-sm text-muted-foreground', className)}
+      {...props}
+    />
   );
 }
 
@@ -62,14 +65,19 @@ function CardAction({ className, ...props }: DivProps) {
 }
 
 function CardContent({ className, ...props }: DivProps) {
-  return <div data-slot="card-content" className={cn('px-(--card-spacing)', className)} {...props} />;
+  return (
+    <div data-slot="card-content" className={cn('px-(--card-spacing)', className)} {...props} />
+  );
 }
 
 function CardFooter({ className, ...props }: DivProps) {
   return (
     <div
       data-slot="card-footer"
-      className={cn('flex items-center rounded-b-xl border-t bg-muted/50 p-(--card-spacing)', className)}
+      className={cn(
+        'flex items-center rounded-b-xl border-t bg-muted/50 p-(--card-spacing)',
+        className,
+      )}
       {...props}
     />
   );

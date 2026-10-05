@@ -38,43 +38,56 @@ export function planBatch(files: readonly File[]): PlannedRow[] {
   const parsed = files.map(parseFile);
   const backs = parsed.filter((item) => item.side === 'back');
   const backOf = new Map<ParsedFile, ParsedFile>();
+
   for (const front of parsed) {
     if (front.side !== 'front') continue;
     const matches = backs.filter((candidate) => compatible(front, candidate));
+
     // Two or more matching backs are ambiguous: the planner never guesses a pair.
     if (matches.length === 1) backOf.set(front, matches[0]);
   }
+
   const attached = new Set(backOf.values());
+
   // An unattached back is planned as a front at its own position, so no dropped
   // file disappears from the result.
-  return parsed
-    .filter((item) => item.side === 'front' || !attached.has(item))
-    .map((front) => {
-      const row: PlannedRow = { name: front.name, front: front.file };
-      const back = backOf.get(front);
-      if (back) row.back = back.file;
-      const heightSlot = front.heightSlot ?? back?.heightSlot;
-      if (heightSlot) row.heightSlot = heightSlot;
-      const customWidthMm = front.customWidthMm ?? back?.customWidthMm;
-      if (customWidthMm !== undefined) row.customWidthMm = customWidthMm;
-      const customHeightMm = front.customHeightMm ?? back?.customHeightMm;
-      if (customHeightMm !== undefined) row.customHeightMm = customHeightMm;
-      if (front.count !== undefined) row.count = front.count;
-      const calibration = front.calibration ?? back?.calibration;
-      if (calibration) row.calibration = calibration;
-      return row;
-    });
+  return parsed.flatMap((front) => {
+    if (front.side !== 'front' && attached.has(front)) return [];
+    const row: PlannedRow = { name: front.name, front: front.file };
+    const back = backOf.get(front);
+
+    if (back) row.back = back.file;
+    const heightSlot = front.heightSlot ?? back?.heightSlot;
+
+    if (heightSlot) row.heightSlot = heightSlot;
+    const customWidthMm = front.customWidthMm ?? back?.customWidthMm;
+
+    if (customWidthMm !== undefined) row.customWidthMm = customWidthMm;
+    const customHeightMm = front.customHeightMm ?? back?.customHeightMm;
+
+    if (customHeightMm !== undefined) row.customHeightMm = customHeightMm;
+
+    if (front.count !== undefined) row.count = front.count;
+    const calibration = front.calibration ?? back?.calibration;
+
+    if (calibration) row.calibration = calibration;
+
+    return [row];
+  });
 }
 
 // An unsized side fits any size, so one shared back covers every size of a creature.
 function compatible(front: ParsedFile, back: ParsedFile): boolean {
   if (front.key !== back.key) return false;
+
   return !front.heightSlot || !back.heightSlot || sizeKey(front) === sizeKey(back);
 }
 
 function sizeKey(file: ParsedFile): string | undefined {
   if (!file.heightSlot) return undefined;
+
   if (file.heightSlot !== 'custom') return file.heightSlot;
+
   return `custom-${file.customWidthMm}x${file.customHeightMm}`;
 }
 
@@ -82,9 +95,12 @@ function parseFile(file: File): ParsedFile {
   const tokens = stem(file.name)
     .split(separators)
     .filter((token) => token !== '');
+
   const { nameTokens, side, heightSlot, customWidthMm, customHeightMm, count, calibration } =
     readMarkers(tokens);
+
   const raw = nameTokens.join(' ');
+
   return {
     file,
     side,
@@ -108,49 +124,62 @@ function readMarkers(tokens: readonly string[]) {
   let customHeightMm: number | undefined;
   let count: number | undefined;
   let calibration: HeightCalibration | undefined;
+
   while (end > 0) {
     const token = tokens[end - 1].toLowerCase();
+
     if (count === undefined && /^x\d+$/i.test(token)) {
       const parsed = parseCount(token);
+
       if (parsed !== undefined) count = parsed;
       end -= 1;
       continue;
     }
+
     if (calibration === undefined && end > 1) {
       const parsed = parseCalibration(tokens[end - 2], token);
+
       if (parsed !== undefined) {
         if (parsed) calibration = parsed;
         end -= 2;
         continue;
       }
     }
+
     if (side === undefined && (token === 'front' || token === 'back')) {
       side = token;
       end -= 1;
       continue;
     }
+
     if (heightSlot === undefined) {
       const custom = end > 1 ? parseCustomSize(tokens[end - 2], token) : undefined;
+
       if (custom) {
         if (custom.valid) {
           heightSlot = 'custom';
           customWidthMm = custom.width;
           customHeightMm = custom.height;
         }
+
         end -= 2;
         continue;
       }
+
       // The two-token id wins, so `ogre-large-tall` is Large tall, not "Ogre large" + `tall`.
       const pair = end > 1 ? slotById.get(`${tokens[end - 2].toLowerCase()}-${token}`) : undefined;
       const slot = pair ?? slotById.get(token);
+
       if (slot) {
         heightSlot = slot;
         end -= pair ? 2 : 1;
         continue;
       }
     }
+
     break;
   }
+
   return {
     nameTokens: tokens.slice(0, end),
     side: side ?? 'front',
@@ -164,31 +193,42 @@ function readMarkers(tokens: readonly string[]) {
 
 function parseCount(token: string): number | undefined {
   const value = Number(token.slice(1));
+
   return Number.isInteger(value) && value > 1 ? value : undefined;
 }
 
 function parseCustomSize(label: string, dimensions: string) {
   if (label.toLowerCase() !== 'custom') return undefined;
+
   if (!/^\d+(\.\d+)?x\d+(\.\d+)?$/i.test(dimensions)) return undefined;
   const [rawWidth, rawHeight, extra] = dimensions.split('x');
+
   if (extra !== undefined || rawWidth === undefined || rawHeight === undefined)
     return { valid: false } as const;
   const width = Number(rawWidth);
   const height = Number(rawHeight);
+
   if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0)
     return { valid: false } as const;
+
   return { valid: true, width, height } as const;
 }
 
-function parseCalibration(headToken: string, feetToken: string): HeightCalibration | null | undefined {
+function parseCalibration(
+  headToken: string,
+  feetToken: string,
+): HeightCalibration | null | undefined {
   const headMatch = /^h(\d{3}|1000)$/i.exec(headToken);
   const feetMatch = /^f(\d{3}|1000)$/i.exec(feetToken);
+
   if (!headMatch || !feetMatch) return undefined;
   const calibration = { head: Number(headMatch[1]) / 1000, feet: Number(feetMatch[1]) / 1000 };
+
   return calibrationGap(calibration) === undefined ? null : calibration;
 }
 
 function stem(fileName: string) {
   const dot = fileName.lastIndexOf('.');
+
   return dot < 0 ? fileName : fileName.slice(0, dot);
 }

@@ -26,7 +26,9 @@ function panelId(baseId: string, value: TabValue) {
 }
 
 type DivProps = JSX.IntrinsicElements['div'];
+
 type ButtonProps = JSX.IntrinsicElements['button'];
+
 type ButtonKeyDownEvent = Parameters<NonNullable<ButtonProps['onKeyDown']>>[0];
 
 interface TabsProps extends Omit<DivProps, 'onChange'> {
@@ -54,12 +56,15 @@ function Tabs({
     if (value === undefined) {
       setUncontrolledValue(next);
     }
+
     setFocusedTabId(tabId(baseId, next));
     onValueChange?.(next);
   };
 
   return (
-    <TabsContext.Provider value={{ value: currentValue, setValue, focusedTabId, setFocusedTabId, orientation, baseId }}>
+    <TabsContext.Provider
+      value={{ value: currentValue, setValue, focusedTabId, setFocusedTabId, orientation, baseId }}
+    >
       <div
         data-slot="tabs"
         data-orientation={orientation}
@@ -93,6 +98,7 @@ interface TabsListProps extends DivProps, VariantProps<typeof tabsListVariants> 
 
 function TabsList({ className, variant = 'default', ...props }: TabsListProps) {
   const context = useContext(TabsContext);
+
   return (
     <div
       role="tablist"
@@ -109,8 +115,16 @@ interface TabsTriggerProps extends Omit<ButtonProps, 'value'> {
   value: TabValue;
 }
 
-function TabsTrigger({ className, value, disabled, onClick, onKeyDown, ...props }: TabsTriggerProps) {
+function TabsTrigger({
+  className,
+  value,
+  disabled,
+  onClick,
+  onKeyDown,
+  ...props
+}: TabsTriggerProps) {
   const context = useContext(TabsContext);
+
   if (!context) throw new Error('TabsTrigger must be used inside Tabs');
   const selected = context.value === value;
   const id = tabId(context.baseId, value);
@@ -135,10 +149,12 @@ function TabsTrigger({ className, value, disabled, onClick, onKeyDown, ...props 
       )}
       onClick={(event) => {
         onClick?.(event);
+
         if (!event.defaultPrevented && !disabled) context.setValue(value);
       }}
       onKeyDown={(event) => {
         onKeyDown?.(event);
+
         if (event.defaultPrevented) return;
         moveFocus(event, context.orientation, context.setFocusedTabId);
       }}
@@ -154,8 +170,10 @@ interface TabsContentProps extends DivProps {
 
 function TabsContent({ className, value, ...props }: TabsContentProps) {
   const context = useContext(TabsContext);
+
   if (!context) throw new Error('TabsContent must be used inside Tabs');
   const selected = context.value === value;
+
   return (
     <div
       role="tabpanel"
@@ -176,16 +194,28 @@ function moveFocus(
 ) {
   const forwardKey = orientation === 'vertical' ? 'ArrowDown' : 'ArrowRight';
   const backwardKey = orientation === 'vertical' ? 'ArrowUp' : 'ArrowLeft';
-  if (event.key !== forwardKey && event.key !== backwardKey && event.key !== 'Home' && event.key !== 'End') {
+
+  if (
+    event.key !== forwardKey &&
+    event.key !== backwardKey &&
+    event.key !== 'Home' &&
+    event.key !== 'End'
+  ) {
     return;
   }
 
   const list = event.currentTarget.closest('[role="tablist"]');
-  const tabs = Array.from(list?.querySelectorAll('[role="tab"]:not(:disabled)') ?? []) as HTMLButtonElement[];
+
+  const tabs = Array.from(
+    list?.querySelectorAll<HTMLButtonElement>('button[role="tab"]:not(:disabled)') ?? [],
+  );
+
   const currentIndex = tabs.indexOf(event.currentTarget);
+
   if (currentIndex === -1 || tabs.length === 0) return;
 
   event.preventDefault();
+
   const nextIndex =
     event.key === 'Home'
       ? 0
@@ -194,7 +224,9 @@ function moveFocus(
         : event.key === forwardKey
           ? (currentIndex + 1) % tabs.length
           : (currentIndex - 1 + tabs.length) % tabs.length;
+
   const next = tabs[nextIndex];
+
   if (!next) return;
   setFocusedTabId(next.id);
   next.focus();

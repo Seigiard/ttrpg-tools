@@ -196,11 +196,13 @@ describe('EncounterGenerator (Preact presentation)', () => {
 
     const checkCard = screen.getByTestId('check-result-card');
     const reactionCard = screen.getByTestId('reaction-result-card');
+
     for (const card of [checkCard, reactionCard]) {
       // Skeleton-обёртки вшиты в карточку — значит высоту держит контент в обоих состояниях.
       expect(card.querySelector('[data-slot="skeleton"]')).not.toBeNull();
       // После броска маска снята.
     }
+
     await waitFor(() => {
       expect(checkCard.querySelector('[data-loading="true"]')).toBeNull();
       expect(reactionCard.querySelector('[data-loading="true"]')).toBeNull();
@@ -217,7 +219,9 @@ describe('EncounterGenerator (Preact presentation)', () => {
       expect(checkRef.querySelector('[data-hit="true"]')?.getAttribute('data-row-index')).toBe('1');
 
       const reactionRef = screen.getByTestId('reaction-reference');
-      expect(reactionRef.querySelector('[data-hit="true"]')?.getAttribute('data-row-index')).toBe('0');
+      expect(reactionRef.querySelector('[data-hit="true"]')?.getAttribute('data-row-index')).toBe(
+        '0',
+      );
     });
   });
 });

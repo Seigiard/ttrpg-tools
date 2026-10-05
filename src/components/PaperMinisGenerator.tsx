@@ -1,4 +1,4 @@
-import { Fragment, type ComponentChildren, type JSX, type Ref } from 'preact';
+import { Fragment, type ComponentChildren, type Ref, type TargetedEvent } from 'preact';
 import { useStore } from '@/lib/use-store';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Button } from '@/components/ui/button';
@@ -8,12 +8,9 @@ import { ARTWORK_ACCEPT, artworkMimeType } from '@/lib/paper-minis/artwork-forma
 import { isSupportedArtwork } from '@/lib/paper-minis/artwork';
 import type { CalibrationLine } from '@/lib/paper-minis/calibration-session';
 import { entryStatusWarning } from '@/lib/paper-minis/geometry';
-import {
-  buildFilename,
-  buildPrinterScaleTestSheetFilename,
-} from '@/lib/paper-minis/pdf-filenames';
+import { buildFilename, buildPrinterScaleTestSheetFilename } from '@/lib/paper-minis/pdf-filenames';
 import { HEIGHT_SLOT_ORDER, slotLabel, slotGeometryLabel, slotName } from '@/lib/paper-minis/sizes';
-import type { HeightCalibration, MiniSize, PreparedArtwork } from '@/lib/paper-minis/types';
+import type { HeightCalibration, PreparedArtwork } from '@/lib/paper-minis/types';
 
 const field =
   'min-h-11 w-full rounded-lg border border-border bg-surface-elevated px-3 text-text focus-visible:outline-2 focus-visible:outline-primary';
@@ -22,6 +19,7 @@ function buildZipFilename(date = new Date()) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
+
   return `paper-minis-${year}-${month}-${day}.zip`;
 }
 
@@ -30,22 +28,29 @@ function useArtworkUrl(artwork?: PreparedArtwork | null) {
   useEffect(() => {
     if (!artwork) {
       setUrl(undefined);
+
       return;
     }
+
     let next: string;
+
     try {
       next = URL.createObjectURL(
-        new Blob([artwork.bytes as BlobPart], {
+        new Blob([artwork.bytes.slice()], {
           type: artworkMimeType(artwork.format),
         }),
       );
     } catch {
       setUrl(undefined);
+
       return;
     }
+
     setUrl(next);
+
     return () => URL.revokeObjectURL(next);
   }, [artwork]);
+
   return url;
 }
 
@@ -137,12 +142,15 @@ function ArtworkSlot({
 }) {
   const url = useArtworkUrl(artwork);
   const input = useRef<HTMLInputElement>(null);
-  const handleFileInput = (event: JSX.TargetedEvent<HTMLInputElement, Event>) => {
-    const target = event.target as HTMLInputElement;
+
+  const handleFileInput = (event: TargetedEvent<HTMLInputElement, Event>) => {
+    const target = event.currentTarget;
     const file = target.files?.[0];
+
     if (file) onFile(file);
     target.value = '';
   };
+
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-surface-elevated">
       <div className="border-b border-border px-3 py-2">
@@ -162,6 +170,7 @@ function ArtworkSlot({
           event.stopPropagation();
           const dropped = Array.from(event.dataTransfer?.files ?? []);
           const file = dropped.find(isSupportedArtwork) ?? dropped[0];
+
           if (file) onFile(file);
         }}
       >
@@ -217,6 +226,7 @@ function CalibrationArtwork({
   const totalAspect =
     artwork.width / artwork.height +
     (backArtwork && backUrl ? backArtwork.width / backArtwork.height : 0);
+
   return (
     <span className="relative block h-full w-full [container-type:size]">
       <span
@@ -262,6 +272,7 @@ function HeightCalibrationDialog({
 
   function setLineFromClientY(which: 'head' | 'feet', clientY: number) {
     const box = artworkRef.current?.getBoundingClientRect();
+
     if (!box || box.height <= 0) return;
     const fraction = (clientY - box.top) / box.height;
     onSetLine(which, fraction);
@@ -377,7 +388,11 @@ function HeightCalibrationDialog({
 
 type PaperMinisGeneratorStore = ReturnType<typeof createPaperMinisStore>;
 
-export default function PaperMinisGenerator({ store: providedStore }: { store?: PaperMinisGeneratorStore }) {
+export default function PaperMinisGenerator({
+  store: providedStore,
+}: {
+  store?: PaperMinisGeneratorStore;
+}) {
   const fallbackStore = useMemo(() => createPaperMinisStore(), []);
   const store = providedStore ?? fallbackStore;
   const rows = useStore(store.$rows);
@@ -396,19 +411,39 @@ export default function PaperMinisGenerator({ store: providedStore }: { store?: 
   const calibrationOpener = useRef<HTMLButtonElement>(null);
   const [dragging, setDragging] = useState(false);
   const files = useRef<HTMLInputElement>(null);
-  const handlePageSize = (event: JSX.TargetedEvent<HTMLSelectElement, Event>) =>
-    store.settings({ pageSize: (event.target as HTMLSelectElement).value as 'a4' | 'letter' });
-  const handleMargin = (event: JSX.TargetedEvent<HTMLInputElement, Event>) =>
-    store.setMargin((event.target as HTMLInputElement).value);
-  const handleSetAllSizes = (event: JSX.TargetedEvent<HTMLSelectElement, Event>) =>
-    store.setAllSizes((event.target as HTMLSelectElement).value as MiniSize);
-  const handleNumberDuplicates = (event: JSX.TargetedEvent<HTMLInputElement, Event>) =>
-    store.settings({ numberDuplicates: (event.target as HTMLInputElement).checked });
-  const handleNormalization = (event: JSX.TargetedEvent<HTMLInputElement, Event>) =>
-    store.settings({ normalization: (event.target as HTMLInputElement).checked });
-  const handleBatchInput = (event: JSX.TargetedEvent<HTMLInputElement, Event>) => {
-    const target = event.target as HTMLInputElement;
+
+  const handlePageSize = (event: TargetedEvent<HTMLSelectElement, Event>) => {
+    const pageSize = event.currentTarget.value;
+
+    if (pageSize === 'a4' || pageSize === 'letter') store.settings({ pageSize });
+  };
+
+  const handleMargin = (event: TargetedEvent<HTMLInputElement, Event>) =>
+    store.setMargin(event.currentTarget.value);
+
+  const handleSetAllSizes = (event: TargetedEvent<HTMLSelectElement, Event>) => {
+    const size = HEIGHT_SLOT_ORDER.find((slot) => slot === event.currentTarget.value);
+
+    if (size !== undefined) store.setAllSizes(size);
+  };
+
+  const handleRowSize = (id: number, event: TargetedEvent<HTMLSelectElement, Event>) => {
+    const value = event.currentTarget.value;
+    const size = value === 'custom' ? value : HEIGHT_SLOT_ORDER.find((slot) => slot === value);
+
+    if (size !== undefined) store.setSize(id, size);
+  };
+
+  const handleNumberDuplicates = (event: TargetedEvent<HTMLInputElement, Event>) =>
+    store.settings({ numberDuplicates: event.currentTarget.checked });
+
+  const handleNormalization = (event: TargetedEvent<HTMLInputElement, Event>) =>
+    store.settings({ normalization: event.currentTarget.checked });
+
+  const handleBatchInput = (event: TargetedEvent<HTMLInputElement, Event>) => {
+    const target = event.currentTarget;
     const selected = Array.from(target.files ?? []);
+
     if (selected.length === 0) return;
     store.ingest(selected);
     target.value = '';
@@ -420,13 +455,17 @@ export default function PaperMinisGenerator({ store: providedStore }: { store?: 
   useEffect(() => {
     if (!preview) {
       setPreviewUrl(undefined);
+
       return;
     }
+
     try {
       const url = URL.createObjectURL(
-        new Blob([preview.bytes as BlobPart], { type: 'application/pdf' }),
+        new Blob([preview.bytes.slice()], { type: 'application/pdf' }),
       );
+
       setPreviewUrl(url);
+
       return () => URL.revokeObjectURL(url);
     } catch {
       setPreviewUrl(undefined);
@@ -435,8 +474,10 @@ export default function PaperMinisGenerator({ store: providedStore }: { store?: 
   }, [preview, store]);
   useEffect(() => {
     let depth = 0;
+
     const hasFiles = (event: DragEvent) =>
       Array.from(event.dataTransfer?.types ?? []).includes('Files');
+
     const enter = (event: DragEvent) => {
       if (hasFiles(event) && store.$acceptsFiles.get()) {
         event.preventDefault();
@@ -444,29 +485,36 @@ export default function PaperMinisGenerator({ store: providedStore }: { store?: 
         setDragging(true);
       }
     };
+
     const over = (event: DragEvent) => {
       if (hasFiles(event)) event.preventDefault();
     };
+
     const leave = () => {
       depth = Math.max(0, depth - 1);
+
       if (!depth) setDragging(false);
     };
+
     // Capture clears the overlay even when a thumbnail consumes the drop.
     const clear = () => {
       depth = 0;
       setDragging(false);
     };
+
     const drop = (event: DragEvent) => {
       if (hasFiles(event)) {
         event.preventDefault();
         store.ingest(Array.from(event.dataTransfer?.files ?? []));
       }
     };
+
     window.addEventListener('dragenter', enter);
     window.addEventListener('dragover', over);
     window.addEventListener('dragleave', leave);
     window.addEventListener('drop', clear, true);
     window.addEventListener('drop', drop);
+
     return () => {
       window.removeEventListener('dragenter', enter);
       window.removeEventListener('dragover', over);
@@ -478,12 +526,13 @@ export default function PaperMinisGenerator({ store: providedStore }: { store?: 
 
   async function download() {
     const bytes = await store.download();
+
     if (!bytes) return;
     let url: string | undefined;
+
     try {
-      const nextUrl = URL.createObjectURL(
-        new Blob([bytes as BlobPart], { type: 'application/pdf' }),
-      );
+      const nextUrl = URL.createObjectURL(new Blob([bytes.slice()], { type: 'application/pdf' }));
+
       url = nextUrl;
       const anchor = document.createElement('a');
       anchor.href = nextUrl;
@@ -500,12 +549,13 @@ export default function PaperMinisGenerator({ store: providedStore }: { store?: 
 
   async function downloadPrinterScaleTestSheet() {
     let url: string | undefined;
+
     try {
       const { generatePrinterScaleTestSheet } = await import('@/lib/paper-minis/pdf');
       const bytes = await generatePrinterScaleTestSheet(settings.pageSize);
-      const nextUrl = URL.createObjectURL(
-        new Blob([bytes as BlobPart], { type: 'application/pdf' }),
-      );
+
+      const nextUrl = URL.createObjectURL(new Blob([bytes.slice()], { type: 'application/pdf' }));
+
       url = nextUrl;
       const anchor = document.createElement('a');
       anchor.href = nextUrl;
@@ -522,12 +572,13 @@ export default function PaperMinisGenerator({ store: providedStore }: { store?: 
 
   async function exportZip() {
     const bytes = await store.exportZip();
+
     if (!bytes) return;
     let url: string | undefined;
+
     try {
-      const nextUrl = URL.createObjectURL(
-        new Blob([bytes as BlobPart], { type: 'application/zip' }),
-      );
+      const nextUrl = URL.createObjectURL(new Blob([bytes.slice()], { type: 'application/zip' }));
+
       url = nextUrl;
       const anchor = document.createElement('a');
       anchor.href = nextUrl;
@@ -612,12 +663,8 @@ export default function PaperMinisGenerator({ store: providedStore }: { store?: 
                     step="any"
                     value={inputs.printerMeasurement.text}
                     aria-invalid={!inputs.printerMeasurement.valid}
-                    onInput={(event) =>
-                      store.setPrinterMeasurement((event.target as HTMLInputElement).value)
-                    }
-                    onChange={(event) =>
-                      store.setPrinterMeasurement((event.target as HTMLInputElement).value)
-                    }
+                    onInput={(event) => store.setPrinterMeasurement(event.currentTarget.value)}
+                    onChange={(event) => store.setPrinterMeasurement(event.currentTarget.value)}
                     onBlur={store.commitPrinterMeasurement}
                   />
                 </label>
@@ -764,6 +811,7 @@ export default function PaperMinisGenerator({ store: providedStore }: { store?: 
                 const status = packed.entries[index];
                 const statusWarning = status && entryStatusWarning(status);
                 const rowInputs = inputs.rows[row.id];
+
                 return (
                   <article
                     key={row.id}
@@ -835,7 +883,7 @@ export default function PaperMinisGenerator({ store: providedStore }: { store?: 
                             className="min-h-11"
                             disabled={!row.artwork || status?.state === 'loading'}
                             onClick={(event) => {
-                              calibrationOpener.current = event.target as HTMLButtonElement;
+                              calibrationOpener.current = event.currentTarget;
                               store.openCalibration(row.id);
                             }}
                           >
@@ -861,12 +909,8 @@ export default function PaperMinisGenerator({ store: providedStore }: { store?: 
                           className={field}
                           value={row.heightSlot}
                           title={slotGeometryLabel(row.heightSlot)}
-                          onInput={(event) =>
-                            store.setSize(row.id, (event.target as HTMLSelectElement).value as MiniSize)
-                          }
-                          onChange={(event) =>
-                            store.setSize(row.id, (event.target as HTMLSelectElement).value as MiniSize)
-                          }
+                          onInput={(event) => handleRowSize(row.id, event)}
+                          onChange={(event) => handleRowSize(row.id, event)}
                         >
                           <SizeOptions custom />
                         </select>
@@ -881,8 +925,8 @@ export default function PaperMinisGenerator({ store: providedStore }: { store?: 
                           required
                           value={rowInputs.count.text}
                           aria-invalid={!rowInputs.count.valid}
-                          onInput={(event) => store.setCount(row.id, (event.target as HTMLInputElement).value)}
-                          onChange={(event) => store.setCount(row.id, (event.target as HTMLInputElement).value)}
+                          onInput={(event) => store.setCount(row.id, event.currentTarget.value)}
+                          onChange={(event) => store.setCount(row.id, event.currentTarget.value)}
                           onBlur={() => store.commitCount(row.id)}
                         />
                       </label>
@@ -890,6 +934,7 @@ export default function PaperMinisGenerator({ store: providedStore }: { store?: 
                         <div className="grid grid-cols-2 gap-2 sm:col-span-2">
                           {(['customWidthMm', 'customHeightMm'] as const).map((key, i) => {
                             const dimension = i === 0 ? 'width' : 'height';
+
                             return (
                               <label key={key} className="text-sm">
                                 {i === 0 ? 'Основание, мм' : 'Фигурка, мм'}
@@ -902,12 +947,12 @@ export default function PaperMinisGenerator({ store: providedStore }: { store?: 
                                   aria-invalid={!rowInputs[key].valid}
                                   onInput={(event) =>
                                     store.setCustomDimensions(row.id, {
-                                      [dimension]: (event.target as HTMLInputElement).value,
+                                      [dimension]: event.currentTarget.value,
                                     })
                                   }
                                   onChange={(event) =>
                                     store.setCustomDimensions(row.id, {
-                                      [dimension]: (event.target as HTMLInputElement).value,
+                                      [dimension]: event.currentTarget.value,
                                     })
                                   }
                                   onBlur={() => store.commitCustomDimension(row.id, dimension)}
@@ -936,17 +981,19 @@ export default function PaperMinisGenerator({ store: providedStore }: { store?: 
                       status?.state === 'failed' && row.frontError,
                       row.normalizationWarning,
                       row.backWarning,
-                    ]
-                      .filter(Boolean)
-                      .map((warning, i) => (
-                        <p
-                          key={i}
-                          role="status"
-                          className="mt-3 border-l-2 border-warning pl-3 text-sm text-warning"
-                        >
-                          {warning}
-                        </p>
-                      ))}
+                    ].flatMap((warning, i) =>
+                      warning
+                        ? [
+                            <p
+                              key={i}
+                              role="status"
+                              className="mt-3 border-l-2 border-warning pl-3 text-sm text-warning"
+                            >
+                              {warning}
+                            </p>,
+                          ]
+                        : [],
+                    )}
                   </article>
                 );
               })}

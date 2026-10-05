@@ -60,6 +60,7 @@ describe('validateRanges', () => {
       { min: 1, max: 1 },
       { min: 3, max: 6 },
     ];
+
     expect(() => validateRanges(broken, { count: 1, sides: 6 })).toThrow(RangeError);
   });
 

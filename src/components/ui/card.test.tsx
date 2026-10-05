@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { cleanup, render, screen } from '@testing-library/preact';
-import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './card';
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from './card';
 
 describe('Preact Card', () => {
   afterEach(cleanup);

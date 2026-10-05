@@ -23,6 +23,8 @@
 bun install
 bun run dev        # http://localhost:4321
 bun run build      # сборка в dist/
+bun run size       # production build + bundle size check
+bun run size:check # check an existing dist/ build
 bun run preview    # просмотр сборки
 bun test           # быстрые unit-тесты
 bun run test:browser # browser-тесты Paper minis
@@ -35,6 +37,41 @@ bun run typecheck  # astro check
 ```
 
 Перед первым локальным запуском browser-тестов установите Chromium: `bunx playwright install chromium`.
+
+### Lint coverage
+
+Oxlint applies the vendored anti-slop rules to TypeScript and TSX, including
+expressions and handlers in JSX. Local UI primitives are linted too. They are
+owned code in this branch.
+
+Sequential awaits are allowed in the measurement harness and parity tests:
+samples must run without competing work, and browser actions depend on earlier
+actions. Other Oxlint and anti-slop rules remain enabled there.
+
+See [the experiment lint check](docs/experiments/ui-stack/lint-compatibility.md)
+for coverage details and verification results for both candidates.
+
+### Bundle size budgets
+
+[Size Limit](https://github.com/ai/size-limit) checks production assets in
+`dist/_astro/` with Brotli compression. `.size-limit.json` sets aggregate budgets
+of **360 kB for JavaScript** and **10 kB for CSS**. JavaScript includes all chunks,
+including lazy PDF and ZIP exports. These totals measure the whole site's assets,
+not the initial download of a single page.
+
+The initial baseline is 287.23 kB of JavaScript and 7.57 kB of CSS. Budgets leave
+about 25% headroom, rounded up. CI runs `bun run size:check` after its build and
+fails if a budget is exceeded or a configured asset glob has no matches. Run
+`bun run size` locally for a fresh build. Investigate unexpected growth before
+changing a budget; explain intentional increases in the PR.
+
+On pull requests, a separate `size-report` job runs
+[`size-limit-action`](https://github.com/andresz1/size-limit-action) and updates a
+comment with each bundle's PR size and percent change against the base branch.
+The action formats sizes in 1024-based KB; Size Limit's CLI uses decimal kB.
+Both builds use the PR's budgets and comparison tool, so the first PR works even
+before the base has Size Limit.
+Fork PRs still run the checks, but GitHub's read-only token cannot post a comment.
 
 ## Деплой
 
@@ -66,7 +103,7 @@ bun run deploy   # build + wrangler deploy
 
 **Если что-то отвалится:** проверь в Cloudflare → Project → Build logs. Чаще всего — несовместимость версий Node/Bun или забытый `BUN_VERSION`.
 
-CI на GitHub Actions проверяет lint + format + unit + browser + typecheck + build на PR (`.github/workflows/ci.yml`) — Cloudflare сам деплоит, GA только страхует от слома `main`.
+CI на GitHub Actions проверяет lint + format + unit + browser + typecheck + build + bundle size на PR (`.github/workflows/ci.yml`) — Cloudflare сам деплоит, GA только страхует от слома `main`.
 
 ## Документация
 

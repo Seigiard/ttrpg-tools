@@ -29,7 +29,9 @@ export function LocationGenerator<Biome extends string>({ table }: Props<Biome>)
   }, [store]);
 
   const handleBiomeChange = (next: string | number) => {
-    store.setBiome(next as Biome);
+    const selected = table.biomes.find((candidate) => candidate === next);
+
+    if (selected !== undefined) store.setBiome(selected);
   };
 
   return (
@@ -143,7 +145,9 @@ function ResultRow({
     <div className="flex items-start justify-between gap-4" data-testid={testId}>
       <div className="flex-1">
         <div className="flex items-baseline gap-3">
-          <span className="font-mono text-xs uppercase tracking-wider text-text-muted">{label}</span>
+          <span className="font-mono text-xs uppercase tracking-wider text-text-muted">
+            {label}
+          </span>
           <span className="font-mono text-xs text-text-muted">
             <Skeleton loading={loading}>{rollLabel}</Skeleton>
           </span>
@@ -179,9 +183,14 @@ interface ReferenceTablesProps<Biome extends string> {
   roll: Roll<Biome> | null;
 }
 
-function ReferenceTables<Biome extends string>({ table, biome, roll }: ReferenceTablesProps<Biome>) {
+function ReferenceTables<Biome extends string>({
+  table,
+  biome,
+  roll,
+}: ReferenceTablesProps<Biome>) {
   const highlightLandmark = roll && roll.biome === biome ? roll.landmarkIndex : null;
   const highlightDetail = roll ? roll.detailIndex : null;
+
   return (
     <div className="grid gap-8 md:grid-cols-2">
       <ReferenceList

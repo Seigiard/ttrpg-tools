@@ -14,6 +14,7 @@ class FakePreviewProcess extends EventEmitter {
 
   kill(signal: NodeJS.Signals) {
     this.killedWith = signal;
+
     return true;
   }
 }
@@ -31,6 +32,7 @@ describe('withPreview', () => {
       },
       {
         assertPortFree: async () => {},
+        // SAFETY: This fake implements the process members used by withPreview.
         spawn: () => proc as never,
         waitForPreview: async () => {
           throw new Error('preview never became ready');
@@ -40,13 +42,17 @@ describe('withPreview', () => {
 
     // #then
     let error: unknown;
+
     try {
       await run;
     } catch (caught) {
       error = caught;
     }
+
     expect(error).toBeInstanceOf(Error);
-    expect((error as Error).message).toContain('preview never became ready');
+
+    if (!(error instanceof Error)) throw new Error('Expected preview readiness to fail');
+    expect(error.message).toContain('preview never became ready');
     expect(proc.killedWith).toBe('SIGTERM');
   });
 });

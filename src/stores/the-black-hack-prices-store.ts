@@ -32,7 +32,7 @@ export interface PricesStore {
 }
 
 export function createPricesStore(table: PriceTable): PricesStore {
-  const $settlement = atom<SettlementType>(table.settlements[0] as SettlementType);
+  const $settlement = atom<SettlementType>(table.settlements[0]);
   const $seed = atom<number | null>(null);
   const $rolls = computed($seed, (seed) => (seed === null ? null : expandRolls(seed, table)));
 
@@ -61,5 +61,6 @@ export function itemPrice(
   item: PriceItem,
 ): number {
   const sum = faces.reduce((acc, face) => acc + face, 0);
+
   return sum * category.multiplier * (item.multiplier ?? 1);
 }

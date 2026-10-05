@@ -42,7 +42,13 @@ const buttonVariants = cva(
 
 type ButtonProps = JSX.IntrinsicElements['button'] & VariantProps<typeof buttonVariants>;
 
-function Button({ className, variant = 'default', size = 'default', type = 'button', ...props }: ButtonProps) {
+function Button({
+  className,
+  variant = 'default',
+  size = 'default',
+  type = 'button',
+  ...props
+}: ButtonProps) {
   return (
     <button
       data-slot="button"

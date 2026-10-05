@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs';
 
 function StatefulTabs() {
   const [value, setValue] = useState('spring');
+
   return (
     <Tabs value={value} onValueChange={(next) => setValue(String(next))}>
       <TabsList>
@@ -23,7 +24,10 @@ describe('Preact Tabs', () => {
   test('clicking a tab changes selection and visible panel', () => {
     // #given controlled tabs with one selected value
     // Queries stay inside this render: CI runs test files concurrently on one document.
-    const screen = within(render(<StatefulTabs />).container as HTMLElement);
+    const { container } = render(<StatefulTabs />);
+
+    if (!(container instanceof HTMLElement)) throw new Error('Expected an HTML container');
+    const screen = within(container);
 
     // #when the user selects another tab
     fireEvent.click(screen.getByRole('tab', { name: 'Зима' }));
@@ -38,7 +42,10 @@ describe('Preact Tabs', () => {
   test('arrow keys move focus between tab triggers without selecting', () => {
     // #given horizontal tabs where keyboard users move through triggers
     // Queries stay inside this render: CI runs test files concurrently on one document.
-    const screen = within(render(<StatefulTabs />).container as HTMLElement);
+    const { container } = render(<StatefulTabs />);
+
+    if (!(container instanceof HTMLElement)) throw new Error('Expected an HTML container');
+    const screen = within(container);
     const spring = screen.getByRole('tab', { name: 'Весна' });
     const winter = screen.getByRole('tab', { name: 'Зима' });
     spring.focus();

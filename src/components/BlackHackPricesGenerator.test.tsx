@@ -13,10 +13,12 @@ import { BlackHackPricesGenerator } from './BlackHackPricesGenerator';
  */
 
 const STORAGE_KEY = 'the-black-hack:prices';
+
 const PAGE_URL = 'http://localhost/the-black-hack/prices';
 
 function setPageUrl(url: string): void {
-  (window as unknown as { happyDOM: { setURL(url: string): void } }).happyDOM.setURL(url);
+  // SAFETY: The Bun preload registers a happy-dom window with the setURL API.
+  (window as typeof window & { happyDOM: { setURL(url: string): void } }).happyDOM.setURL(url);
 }
 
 function currentUrlParam(name: string): string | null {
@@ -38,6 +40,7 @@ describe('BlackHackPricesGenerator (Preact)', () => {
       restoreCrypto();
       restoreCrypto = null;
     }
+
     storage.restore();
   });
 
@@ -65,7 +68,10 @@ describe('BlackHackPricesGenerator (Preact)', () => {
     const common = blackHackPrices.categories[0];
     const expected = itemPrice(rolls[0][0], common, common.items[0]);
     await waitFor(() => {
-      const firstPrice = screen.getByTestId('category-common').querySelector('[data-testid="item-price"]');
+      const firstPrice = screen
+        .getByTestId('category-common')
+        .querySelector('[data-testid="item-price"]');
+
       expect(firstPrice?.textContent).toContain(String(expected));
     });
   });
@@ -186,7 +192,9 @@ describe('BlackHackPricesGenerator (Preact)', () => {
     const expected = itemPrice(rolls[1][armorIndex], rare, armor);
     await waitFor(() => {
       const row = screen.getByText(armor.ru).closest('tr');
-      expect(row?.querySelector('[data-testid="item-price"]')?.textContent).toContain(String(expected));
+      expect(row?.querySelector('[data-testid="item-price"]')?.textContent).toContain(
+        String(expected),
+      );
     });
   });
 

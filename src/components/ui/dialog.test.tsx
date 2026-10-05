@@ -9,8 +9,7 @@ function dispatchCancel(element: HTMLElement) {
 
 // happy-dom lays nothing out, so the dialog box is placed explicitly.
 function placeDialog(dialog: HTMLElement) {
-  dialog.getBoundingClientRect = () =>
-    ({ left: 100, top: 100, right: 300, bottom: 300, width: 200, height: 200, x: 100, y: 100 }) as DOMRect;
+  dialog.getBoundingClientRect = () => new DOMRect(100, 100, 200, 200);
 }
 
 describe('Preact Dialog', () => {

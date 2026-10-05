@@ -4,6 +4,7 @@ import { useContext, useEffect, useId, useRef, useState } from 'preact/hooks';
 import { cn } from '@/lib/utils';
 
 type DialogElementProps = JSX.IntrinsicElements['dialog'];
+
 type HeadingProps = JSX.IntrinsicElements['h2'];
 
 interface DialogContextValue {
@@ -13,7 +14,9 @@ interface DialogContextValue {
 }
 
 const DialogContext = createContext<DialogContextValue | null>(null);
+
 let scrollLockDepth = 0;
+
 let previousBodyOverflow = '';
 
 interface DialogProps {
@@ -33,7 +36,11 @@ function Dialog({ open, defaultOpen = false, onOpenChange, children }: DialogPro
     onOpenChange?.(next);
   };
 
-  return <DialogContext.Provider value={{ open: currentOpen, setOpen, titleId }}>{children}</DialogContext.Provider>;
+  return (
+    <DialogContext.Provider value={{ open: currentOpen, setOpen, titleId }}>
+      {children}
+    </DialogContext.Provider>
+  );
 }
 
 interface DialogContentProps extends DialogElementProps {
@@ -45,6 +52,7 @@ function DialogContent({ className, finalFocus, children, onClick, ...props }: D
   const popupRef = useRef<HTMLDialogElement>(null);
   const setOpenRef = useRef<(open: boolean) => void>(() => {});
   const finalFocusRef = useRef<RefObject<HTMLElement | null> | undefined>(undefined);
+
   if (!context) throw new Error('DialogContent must be used inside Dialog');
   const { open, setOpen, titleId } = context;
 
@@ -57,14 +65,19 @@ function DialogContent({ className, finalFocus, children, onClick, ...props }: D
     if (!open) return;
 
     const dialog = popupRef.current;
-    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    const previousFocus =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
     if (dialog && !dialog.open) dialog.showModal();
     const target = firstFocusable(dialog) ?? dialog;
     target?.focus();
+
     if (scrollLockDepth === 0) {
       previousBodyOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
     }
+
     scrollLockDepth += 1;
 
     const onCancel = (event: Event) => {
@@ -80,11 +93,14 @@ function DialogContent({ className, finalFocus, children, onClick, ...props }: D
 
     dialog?.addEventListener('cancel', onCancel);
     dialog?.addEventListener('keydown', onKeyDown);
+
     return () => {
       dialog?.removeEventListener('cancel', onCancel);
       dialog?.removeEventListener('keydown', onKeyDown);
+
       if (dialog?.open) dialog.close();
       scrollLockDepth -= 1;
+
       if (scrollLockDepth === 0) document.body.style.overflow = previousBodyOverflow;
       const restoreTarget = finalFocusRef.current?.current ?? previousFocus;
       restoreTarget?.focus();
@@ -106,15 +122,18 @@ function DialogContent({ className, finalFocus, children, onClick, ...props }: D
       {...props}
       onClick={(event) => {
         onClick?.(event);
+
         // Clicks on the ::backdrop and on the dialog's own padding both target the
         // dialog element; only a point outside its box is a backdrop click.
         if (event.defaultPrevented || event.target !== event.currentTarget) return;
         const box = event.currentTarget.getBoundingClientRect();
+
         const inside =
           event.clientX >= box.left &&
           event.clientX <= box.right &&
           event.clientY >= box.top &&
           event.clientY <= box.bottom;
+
         if (!inside) setOpen(false);
       }}
     >
@@ -125,16 +144,21 @@ function DialogContent({ className, finalFocus, children, onClick, ...props }: D
 
 function DialogTitle({ className, ...props }: HeadingProps) {
   const context = useContext(DialogContext);
+
   return <h2 id={context?.titleId} className={className} {...props} />;
 }
 
 function focusableElements(container: HTMLElement | null) {
   if (!container) return [];
+
   return Array.from(
     container.querySelectorAll<HTMLElement>(
       'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
     ),
-  ).filter((element) => !element.hasAttribute('disabled') && element.getAttribute('aria-hidden') !== 'true');
+  ).filter(
+    (element) =>
+      !element.hasAttribute('disabled') && element.getAttribute('aria-hidden') !== 'true',
+  );
 }
 
 function firstFocusable(container: HTMLElement | null) {
@@ -143,18 +167,27 @@ function firstFocusable(container: HTMLElement | null) {
 
 function trapFocus(event: KeyboardEvent, container: HTMLElement | null) {
   const focusable = focusableElements(container);
+
   if (focusable.length === 0) {
     event.preventDefault();
     container?.focus();
+
     return;
   }
 
   const first = focusable[0];
   const last = focusable[focusable.length - 1];
-  if (event.shiftKey && (document.activeElement === first || document.activeElement === container)) {
+
+  if (
+    event.shiftKey &&
+    (document.activeElement === first || document.activeElement === container)
+  ) {
     event.preventDefault();
     last?.focus();
-  } else if (!event.shiftKey && (document.activeElement === last || document.activeElement === container)) {
+  } else if (
+    !event.shiftKey &&
+    (document.activeElement === last || document.activeElement === container)
+  ) {
     event.preventDefault();
     first?.focus();
   }

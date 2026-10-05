@@ -7,5 +7,6 @@ export async function canvasToPngBytes(canvas: HTMLCanvasElement): Promise<Uint8
       artworkMimeType('png'),
     );
   });
+
   return new Uint8Array(await blob.arrayBuffer());
 }

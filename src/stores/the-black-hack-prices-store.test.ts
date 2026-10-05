@@ -41,8 +41,10 @@ describe('createPricesStore', () => {
     expect(rolls).not.toBeNull();
     blackHackPrices.categories.forEach((category, i) => {
       expect(rolls?.[i]).toHaveLength(category.items.length);
+
       for (const faces of rolls?.[i] ?? []) {
         expect(faces).toHaveLength(category.roll.count);
+
         for (const face of faces) {
           expect(face).toBeGreaterThanOrEqual(1);
           expect(face).toBeLessThanOrEqual(category.roll.sides);
@@ -90,6 +92,7 @@ describe('createPricesStore', () => {
     restoreCrypto = mockCrypto([10, 20]);
     const store = createPricesStore(blackHackPrices);
     const events: Array<number | null> = [];
+
     const unsubscribe = store.$seed.subscribe((seed) => {
       events.push(seed);
     });

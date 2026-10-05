@@ -18,16 +18,22 @@ afterEach(() => {
 function uploadTo(label: string, files: File[]) {
   if (label === 'Добавить изображения') {
     currentStore.ingest(files);
+
     return;
   }
+
   const row = currentStore.$rows.get()[0];
+
   if (row && label.startsWith('Оборот:')) {
     void currentStore.setImage(row.id, files[0]!, true);
+
     return;
   }
+
   const target = screen.getByRole('button', {
     name: label === 'Добавить изображения' ? /Добавить изображения/ : label,
   });
+
   const event = new Event('drop', { bubbles: true, cancelable: true });
   Object.defineProperty(event, 'dataTransfer', {
     configurable: true,
@@ -38,11 +44,13 @@ function uploadTo(label: string, files: File[]) {
 
 async function openCalibration(frontHeight = 200) {
   localStorage.setItem('pmg-settings', JSON.stringify({ normalization: false }));
+
   // Only the PNG header is read at this seam; no pixel decoding takes place.
   const bytes = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==',
     'base64',
   );
+
   bytes.writeUInt32BE(frontHeight, 20);
   renderGenerator();
   await act(async () => {
@@ -51,16 +59,19 @@ async function openCalibration(frontHeight = 200) {
   await waitFor(() => expect(currentStore.$rows.get()[0]?.artwork).toBeTruthy());
   fireEvent.click(screen.getByRole('button', { name: 'Задать рост' }));
   await waitFor(() => expect(screen.queryByRole('slider', { name: 'Голова' })).toBeTruthy());
+
   return within(screen.getByRole('dialog'));
 }
 
 test('calibration lines expose named vertical sliders in the tab order', async () => {
   // #given
   const dialog = await openCalibration();
+
   // #when
   const sliders = ['Голова', 'Ступни'].map((name) => {
     const slider = dialog.getByRole<HTMLButtonElement>('slider', { name });
     slider.focus();
+
     return {
       focused: document.activeElement === slider,
       tabIndex: slider.tabIndex,
@@ -68,12 +79,14 @@ test('calibration lines expose named vertical sliders in the tab order', async (
       value: slider.getAttribute('aria-valuenow'),
     };
   });
+
   // #then
   expect(sliders).toEqual([
     { focused: true, tabIndex: 0, orientation: 'vertical', value: '0' },
     { focused: true, tabIndex: 0, orientation: 'vertical', value: '100' },
   ]);
 });
+
 test.each([
   { frontHeight: 200, backHeight: 400 },
   { frontHeight: 400, backHeight: 200 },
@@ -83,10 +96,12 @@ test.each([
     // #given
     await openCalibration(frontHeight);
     fireEvent.click(screen.getByRole('button', { name: 'Отмена' }));
+
     const bytes = Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==',
       'base64',
     );
+
     bytes.writeUInt32BE(backHeight, 20);
     await act(async () => {
       uploadTo('Оборот: отражение лицевой стороны', [
@@ -113,6 +128,7 @@ test.each([
     });
   },
 );
+
 test('slider ranges announce the movement allowed by the other line', async () => {
   // #given
   const dialog = await openCalibration();

@@ -7,10 +7,11 @@ export function useStore<Value>(store: ReadableAtom<Value>): Value {
   const [, render] = useReducer((revision: number) => revision + 1, 0);
 
   useLayoutEffect(
-    () => store.subscribe(() => {
-      // subscribe also checks for changes between render and subscription.
-      if (value !== store.get()) render(undefined);
-    }),
+    () =>
+      store.subscribe(() => {
+        // subscribe also checks for changes between render and subscription.
+        if (value !== store.get()) render(undefined);
+      }),
     [store, value],
   );
 
