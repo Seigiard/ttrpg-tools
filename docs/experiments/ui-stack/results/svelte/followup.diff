@@ -1,0 +1,142 @@
+commit 292552cc8fb0e47b5a66ce593e3479fd39811de7
+Author: Andrew Borisenko <seigiard@gmail.com>
+Date:   Fri Oct 2 15:24:43 2026 +0200
+
+    feat(encounters): show the last five check outcomes (experiment follow-up, Svelte)
+
+diff --git a/src/components/EncounterGenerator.svelte b/src/components/EncounterGenerator.svelte
+index d7fd326..e09cda3 100644
+--- a/src/components/EncounterGenerator.svelte
++++ b/src/components/EncounterGenerator.svelte
+@@ -20,6 +20,7 @@
+   const store = createEncounterStore(table);
+   const checkStore = store.$check;
+   const reactionStore = store.$reaction;
++  let checkHistory = $state<Array<{ sum: number; label: string }>>([]);
+ 
+   const outcomeTone: Record<EncounterCheckOutcome, string> = {
+     encounter: 'text-secondary',
+@@ -27,8 +28,19 @@
+     clear: 'text-text-muted',
+   };
+ 
++  function rollCheck() {
++    store.rollCheck();
++    const nextCheck = store.$check.get();
++    if (!nextCheck) return;
++
++    checkHistory = [
++      { sum: nextCheck.sum, label: table.check.rows[nextCheck.rowIndex]!.ru },
++      ...checkHistory,
++    ].slice(0, 5);
++  }
++
+   onMount(() => {
+-    if (store.$check.get() === null) store.rollCheck();
++    if (store.$check.get() === null) rollCheck();
+     if (store.$reaction.get() === null) store.rollReaction();
+   });
+ 
+@@ -41,9 +53,7 @@
+ <div class="space-y-12">
+   <section class="space-y-6">
+     <h2 class="font-display text-2xl text-text">Проверка столкновения</h2>
+-    <Button size="lg" onclick={store.rollCheck} data-testid="check-roll-button"
+-      >Проверить (d6)</Button
+-    >
++    <Button size="lg" onclick={rollCheck} data-testid="check-roll-button">Проверить (d6)</Button>
+ 
+     <Card data-testid="check-result-card">
+       <CardHeader>
+@@ -70,6 +80,32 @@
+       </CardContent>
+     </Card>
+ 
++    <div class="space-y-3">
++      <div class="flex items-center justify-between gap-3">
++        <h3 class="font-display text-lg text-text">Последние проверки</h3>
++        <Button
++          variant="outline"
++          size="sm"
++          onclick={() => (checkHistory = [])}
++          data-testid="check-history-clear"
++        >
++          Очистить
++        </Button>
++      </div>
++      <ul class="space-y-2" data-testid="check-history">
++        {#each checkHistory as item, index (`${item.sum}-${item.label}-${index}`)}
++          <li
++            class="flex items-center justify-between rounded-lg border border-border bg-surface px-3 py-2 text-sm"
++          >
++            <!-- prettier-ignore -->
++            <span class="font-mono text-xs text-text-muted">d6 = {item.sum}</span><span
++              class="font-semibold text-text">{item.label}</span
++            >
++          </li>
++        {/each}
++      </ul>
++    </div>
++
+     <ReferenceList
+       title="Исходы · d6"
+       testId="check-reference"
+diff --git a/src/components/EncounterGenerator.svelte.test.ts b/src/components/EncounterGenerator.svelte.test.ts
+index 1d92b89..31b0001 100644
+--- a/src/components/EncounterGenerator.svelte.test.ts
++++ b/src/components/EncounterGenerator.svelte.test.ts
+@@ -47,6 +47,54 @@ describe('EncounterGenerator (presentation)', () => {
+     expect(screen.getByTestId('check-result').getAttribute('data-outcome')).toBe('clear');
+   });
+ 
++  test('история проверок растёт от нового к старому', async () => {
++    // #given mount: check d6=1; reaction. Затем клики: d6=2, d6=3
++    restoreCrypto = mockCrypto([0, 0, 0, 1, 2]);
++    render(EncounterGenerator, { table: mausritterEncounters });
++    // #when check rolls twice
++    await fireEvent.click(screen.getByTestId('check-roll-button'));
++    await fireEvent.click(screen.getByTestId('check-roll-button'));
++    // #then history is newest first
++    const entries = Array.from(screen.getByTestId('check-history').querySelectorAll('li'));
++    expect(entries.map((entry) => entry.textContent)).toEqual([
++      'd6 = 3Ничего',
++      'd6 = 2Предзнаменование',
++      'd6 = 1Столкновение',
++    ]);
++  });
++
++  test('история проверок хранит не больше пяти записей', async () => {
++    // #given mount: check d6=1; reaction. Затем клики: d6=2..6
++    restoreCrypto = mockCrypto([0, 0, 0, 1, 2, 3, 4, 5]);
++    render(EncounterGenerator, { table: mausritterEncounters });
++    // #when check rolls five more times
++    await fireEvent.click(screen.getByTestId('check-roll-button'));
++    await fireEvent.click(screen.getByTestId('check-roll-button'));
++    await fireEvent.click(screen.getByTestId('check-roll-button'));
++    await fireEvent.click(screen.getByTestId('check-roll-button'));
++    await fireEvent.click(screen.getByTestId('check-roll-button'));
++    // #then only the last five entries remain
++    const entries = Array.from(screen.getByTestId('check-history').querySelectorAll('li'));
++    expect(entries.map((entry) => entry.textContent)).toEqual([
++      'd6 = 6Ничего',
++      'd6 = 5Ничего',
++      'd6 = 4Ничего',
++      'd6 = 3Ничего',
++      'd6 = 2Предзнаменование',
++    ]);
++  });
++
++  test('кнопка очистки удаляет историю проверок', async () => {
++    // #given mount: check d6=1; reaction. Затем клик: d6=2
++    restoreCrypto = mockCrypto([0, 0, 0, 1]);
++    render(EncounterGenerator, { table: mausritterEncounters });
++    // #when history is cleared
++    await fireEvent.click(screen.getByTestId('check-roll-button'));
++    await fireEvent.click(screen.getByTestId('check-history-clear'));
++    // #then no history entries remain
++    expect(screen.getByTestId('check-history').querySelectorAll('li')).toHaveLength(0);
++  });
++
+   test('результат реакции показывает отношение и вопрос', () => {
+     // #given reaction 2d6=12 (mock 5,5) → дружелюбное; check d6 (mock 0)
+     restoreCrypto = mockCrypto([0, 5, 5]);

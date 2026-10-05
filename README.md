@@ -6,11 +6,12 @@
 
 ## Стек
 
-- [Astro 6](https://astro.build/) — статика по умолчанию, React islands там где нужен интерактив.
-- React 19 + TypeScript (strict).
+- [Astro 7](https://astro.build/) — статика по умолчанию, Svelte islands там где нужен интерактив.
+- Svelte 5 + TypeScript (strict).
 - [Tailwind CSS v4](https://tailwindcss.com/) — токены через `@theme` в `src/styles/global.css`.
-- [shadcn/ui](https://ui.shadcn.com/) с Base UI как primitive layer.
-- [oxlint](https://oxc.rs/docs/guide/usage/linter.html) — линт TS/TSX (Rust, быстро).
+- Локальные UI-примитивы в `src/components/ui/`.
+- [oxlint](https://oxc.rs/docs/guide/usage/linter.html) — lint for TypeScript and Svelte script blocks.
+- ESLint + `svelte-eslint-parser` — anti-slop and Svelte checks across scripts and templates.
 - [oxfmt](https://oxc.rs/docs/guide/usage/formatter.html) — форматтер TS/TSX/CSS (Prettier-совместимый).
 - [Prettier + prettier-plugin-astro](https://github.com/withastro/prettier-plugin-astro) — форматирование `.astro` файлов.
 - `bun` — менеджер пакетов и test runner.
@@ -26,17 +27,34 @@ bun run build      # сборка в dist/
 bun run size       # production build + bundle size check
 bun run size:check # check an existing dist/ build
 bun run preview    # просмотр сборки
-bun test           # быстрые unit-тесты
+bun run test       # быстрые unit-тесты (`bun test --parallel=1`)
 bun run test:browser # browser-тесты Paper minis
-bun run lint       # oxlint
-bun run lint:fix   # oxlint --fix
+bun run lint       # Oxlint + Svelte-aware ESLint
+bun run lint:fix   # fix with both lint engines
+bun run lint:svelte # Svelte scripts and templates only
 bun run format     # oxfmt
 bun run format:check
 bun run format:astro
-bun run typecheck  # astro check
+bun run typecheck  # astro check + svelte-check
 ```
 
 Перед первым локальным запуском browser-тестов установите Chromium: `bunx playwright install chromium`.
+
+### Lint coverage
+
+The ESLint pass imports the vendored anti-slop plugin through its existing
+`eslintCompatPlugin` adapter. Rule levels come from `.oxlintrc.json`, so both
+engines use the same anti-slop policy. `svelte-eslint-parser` delegates TypeScript
+to `@typescript-eslint/parser` and visits expressions in templates too.
+The pass also runs `eslint-plugin-svelte`'s recommended checks.
+
+Local UI primitives are linted too. They are owned code in this branch.
+Sequential awaits are allowed in the measurement harness and parity tests:
+samples must run without competing work, and browser actions depend on earlier
+actions. Other Oxlint and anti-slop rules remain enabled there.
+
+See [the experiment lint check](docs/experiments/ui-stack/lint-compatibility.md)
+for coverage details and verification results for both candidates.
 
 ### Bundle size budgets
 

@@ -25,16 +25,16 @@ bun run dev          # дев-сервер, http://localhost:4321
 bun run build        # сборка в dist/
 bun run size         # production build + bundle size check
 bun run size:check   # check an existing dist/ build
-bun test             # unit-тесты
+bun run test         # unit-тесты (`bun test --parallel=1`)
 bun run test:browser # Playwright/Chromium: browser-тесты Paper minis
 bun test src/data/range-table.test.ts   # один файл
 bun test -t "pickRange"                  # по паттерну имени describe/test
-bun run lint         # oxlint (TS/TSX)
-bun run typecheck    # astro check
+bun run lint         # Oxlint + Svelte-aware ESLint (scripts and templates)
+bun run typecheck    # astro check + svelte-check
 bun run format       # oxfmt (TS/TSX/CSS); .astro — bun run format:astro (prettier)
 ```
 
-CI (`.github/workflows/ci.yml`) на каждый PR гоняет **lint + format:check + typecheck + test + build + size:check + test:browser** — всё должно проходить. Перед завершением работы прогоняй эти же шаги; `size:check` запускай после сборки. Деплой (Cloudflare Workers + Static Assets) идёт сам из `main`; см. README.
+CI (`.github/workflows/ci.yml`) на каждый PR гоняет **lint + format:check + typecheck + test + test:browser + build + size:check** — всё должно проходить. Перед завершением работы прогоняй эти же шаги. Деплой (Cloudflare Workers + Static Assets) идёт сам из `main`; см. README.
 
 Тесты используют happy-dom через `preload` в `bunfig.toml` (`test-setup.ts`) — DOM доступен без ручной настройки. Алиас `@/` → `src/`.
 
@@ -42,7 +42,7 @@ Browser-тесты Paper minis живут в `tests/paper-minis/`. Меняеш�
 
 ## Архитектура: генераторы по таблицам
 
-Каждый инструмент — Astro-страница со statiс-контентом + React-остров (`client:load`). Генератор разложен на изолированные слои; добавление нового идёт по этой же цепочке:
+Каждый инструмент — Astro-страница со statiс-контентом + Svelte-остров (`client:load`). Генератор разложен на изолированные слои; добавление нового идёт по этой же цепочке:
 
 1. **Данные** — `src/data/<system>/<tool>.ts`: чистые таблицы + формула `RollSpec` (`{count, sides}`). Перевод авторский, шероховатость оригинала (открытые вопросы в скобках) сохраняем.
 2. **Хелпер броска** — переиспользуй существующий, не пиши свой RNG:
@@ -50,17 +50,17 @@ Browser-тесты Paper minis живут в `tests/paper-minis/`. Меняеш�
    - суммы сгруппированы в диапазоны (`2d6 → 3–5`, `d6 → 3–6`) → `data/range-table.ts` (`pickRange` / `validateRanges` / `findRangeIndex`). `weather-table.ts` — тонкая доменная обёртка над ним; новые range-генераторы строятся на `range-table`.
    - честный RNG (crypto + rejection sampling против modulo-bias) живёт в `src/lib/dice.ts` — единственный источник случайности.
 3. **Стор** — `src/stores/<tool>-store.ts`: фабрика `create…Store(table)` возвращает nanostores-атомы (`$…`) + операции. Без React — логика state-машины тестируется здесь напрямую.
-4. **Компонент** — `src/components/<Tool>Generator.tsx`: только presentation. Стор создаётся через `useMemo(() => create…Store(table), [table])`, подписка — `useStore` из `@nanostores/react`. Примитивы UI (`Button`, `Card`, `Tabs`) — в `src/components/ui/` (shadcn-стиль); переиспользуй их, не верстай сырыми элементами.
+4. **Компонент** — `src/components/<Tool>Generator.svelte`: только presentation. Стор создаётся один раз из static Astro props, подписка — через Svelte `$store`. Примитивы UI (`Button`, `Card`, `Tabs`) — в `src/components/ui/`; переиспользуй их, не верстай сырыми элементами.
 5. **Страница** — `src/pages/<system>/<tool>.astro` (`ToolLayout` + `AttributionFooter`) и карточка-ссылка в `src/pages/index.astro`.
 
 ### SSR-гоча
 
-Первый бросок — в `useEffect` на клиенте, **не** в store-init и не в `useState`. Иначе SSR-снепшот и клиент дадут разные значения и hydration сломается:
+Первый бросок — в `onMount` на клиенте, **не** в store-init и не в `$state`. Иначе SSR-снепшот и клиент дадут разные значения и hydration сломается:
 
-```tsx
-useEffect(() => {
+```svelte
+onMount(() => {
   if (store.$roll.get() === null) store.rollAll();
-}, [store]);
+});
 ```
 
 ## Тесты: инварианты, не зеркала
