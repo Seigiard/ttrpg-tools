@@ -13,10 +13,12 @@ import { BlackHackPricesGenerator } from './BlackHackPricesGenerator';
  */
 
 const STORAGE_KEY = 'the-black-hack:prices';
+
 const PAGE_URL = 'http://localhost/the-black-hack/prices';
 
 function setPageUrl(url: string): void {
-  (window as unknown as { happyDOM: { setURL(url: string): void } }).happyDOM.setURL(url);
+  // SAFETY: The Bun preload registers a happy-dom window with the setURL API.
+  (window as typeof window & { happyDOM: { setURL(url: string): void } }).happyDOM.setURL(url);
 }
 
 function currentUrlParam(name: string): string | null {
@@ -38,6 +40,7 @@ describe('BlackHackPricesGenerator', () => {
       restoreCrypto();
       restoreCrypto = null;
     }
+
     storage.restore();
   });
 
@@ -62,19 +65,18 @@ describe('BlackHackPricesGenerator', () => {
     const rolls = expandRolls(777, blackHackPrices);
     const common = blackHackPrices.categories[0];
     const expected = itemPrice(rolls[0][0], common, common.items[0]);
+
     const firstPrice = screen
       .getByTestId('category-common')
       .querySelector('[data-testid="item-price"]');
+
     expect(firstPrice?.textContent).toContain(String(expected));
   });
 
   test('URL-стейт приоритетнее localStorage, localStorage перезаписан стейтом из URL', () => {
     // #given AE2: в хранилище «город», в ссылке «большой город»
     restoreCrypto = mockCrypto([]);
-    storage.store.set(
-      STORAGE_KEY,
-      serialize({ settlement: 'town', seed: 111 }, blackHackPrices),
-    );
+    storage.store.set(STORAGE_KEY, serialize({ settlement: 'town', seed: 111 }, blackHackPrices));
     const urlQuery = serialize({ settlement: 'city', seed: 222 }, blackHackPrices);
     setPageUrl(`${PAGE_URL}?${urlQuery}`);
 

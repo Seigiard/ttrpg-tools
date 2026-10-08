@@ -51,6 +51,7 @@ describe('createWeatherStore', () => {
     restoreCrypto = mockCrypto([0, 0, 5, 5]);
     const store = createWeatherStore(mausritterWeather);
     const events: Array<number | null> = [];
+
     const unsubscribe = store.$roll.subscribe((roll) => {
       events.push(roll?.sum ?? null);
     });

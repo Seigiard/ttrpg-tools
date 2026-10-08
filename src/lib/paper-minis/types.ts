@@ -1,3 +1,5 @@
+import type { PreparedArtworkFormat } from './artwork-formats';
+
 // The size category a slot carries: a label the player knows from the rules,
 // and the one thing that still fixes the base width.
 export type SizeCategory = 'tiny' | 'small' | 'medium' | 'large' | 'huge' | 'gargantuan';
@@ -19,8 +21,15 @@ export type HeightSlot =
 export type MiniSize = HeightSlot | 'custom';
 
 export type Entry = {
+  // Set only by a batch upload and never touched by replacing an image. Empty or
+  // missing means the view shows its numbered fallback title.
+  name?: string;
   image: File | null;
   artwork: PreparedArtwork | null;
+  // Set when `image` could not be prepared; cleared when a new image is chosen.
+  frontError?: string;
+  // One pair of figure bounds shared by both faces.
+  calibration?: HeightCalibration;
   normalizationWarning?: string;
   // Optional, drawn as the creature looks from behind. While `backImage` is set
   // and `backArtwork` is null, the back is loading and the entry is not ready.
@@ -33,17 +42,22 @@ export type Entry = {
   count: number;
 };
 
+export type HeightCalibration = {
+  head: number;
+  feet: number;
+};
+
 export type PreparedArtwork = {
   readonly bytes: Uint8Array;
-  readonly format: 'png' | 'jpg';
+  readonly format: PreparedArtworkFormat;
   readonly width: number; // pixels in the prepared bytes
   readonly height: number;
 };
 
-// Geometry-only input keeps packing independent of image preparation.
+// Test seam for exercising geometry without constructing prepared artwork.
 export type PackingEntry = Pick<
   Entry,
-  'heightSlot' | 'customWidthMm' | 'customHeightMm' | 'count'
+  'heightSlot' | 'customWidthMm' | 'customHeightMm' | 'count' | 'calibration'
 > & {
   naturalWidth?: number;
   naturalHeight?: number;

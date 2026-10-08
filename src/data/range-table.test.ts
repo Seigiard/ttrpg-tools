@@ -1,6 +1,25 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { mockCrypto } from '@/test-utils/mock-crypto';
-import { findRangeIndex, pickRange, type RangeBounds, validateRanges } from './range-table';
+import {
+  findRangeIndex,
+  formatRangeLabel,
+  pickRange,
+  type RangeBounds,
+  validateRanges,
+} from './range-table';
+
+describe('formatRangeLabel', () => {
+  test.each([
+    [{ min: 2, max: 2 }, '2'],
+    [{ min: 3, max: 5 }, '3–5'],
+  ] as const)('formats %o as %s', (row, expected) => {
+    // #given a reference table range
+    // #when its label is rendered
+    const label = formatRangeLabel(row);
+    // #then a single value or an en-dash range identifies the outcome
+    expect(label).toBe(expected);
+  });
+});
 
 const d6: readonly RangeBounds[] = [
   { min: 1, max: 1 },
@@ -41,6 +60,7 @@ describe('validateRanges', () => {
       { min: 1, max: 1 },
       { min: 3, max: 6 },
     ];
+
     expect(() => validateRanges(broken, { count: 1, sides: 6 })).toThrow(RangeError);
   });
 

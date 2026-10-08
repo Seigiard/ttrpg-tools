@@ -49,14 +49,14 @@ describe('LocationGenerator (presentation)', () => {
     render(<LocationGenerator table={mausritterLocations} />);
 
     const landmarkTable = screen.getByTestId('reference-landmarks');
-    expect(
-      landmarkTable.querySelector('[data-hit="true"]')?.getAttribute('data-row-index'),
-    ).toBe('4');
+    expect(landmarkTable.querySelector('[data-hit="true"]')?.getAttribute('data-row-index')).toBe(
+      '4',
+    );
 
     const detailTable = screen.getByTestId('reference-details');
-    expect(
-      detailTable.querySelector('[data-hit="true"]')?.getAttribute('data-row-index'),
-    ).toBe('11');
+    expect(detailTable.querySelector('[data-hit="true"]')?.getAttribute('data-row-index')).toBe(
+      '11',
+    );
   });
 
   test('detail.question рендерится italic под основным значением', () => {

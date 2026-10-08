@@ -23,7 +23,10 @@ Single-context: one `GLOSSARY.md` at the repo root and ADRs in `docs/adr/`. See 
 ```sh
 bun run dev          # дев-сервер, http://localhost:4321
 bun run build        # сборка в dist/
-bun test             # все тесты
+bun run size         # production build + bundle size check
+bun run size:check   # check an existing dist/ build
+bun test             # unit-тесты
+bun run test:browser # Playwright/Chromium: browser-тесты Paper minis
 bun test src/data/range-table.test.ts   # один файл
 bun test -t "pickRange"                  # по паттерну имени describe/test
 bun run lint         # oxlint (TS/TSX)
@@ -31,9 +34,11 @@ bun run typecheck    # astro check
 bun run format       # oxfmt (TS/TSX/CSS); .astro — bun run format:astro (prettier)
 ```
 
-CI (`.github/workflows/ci.yml`) на каждый PR гоняет **lint + format:check + typecheck + test + build** — всё должно проходить. Перед завершением работы прогоняй эти же шаги. Деплой (Cloudflare Workers + Static Assets) идёт сам из `main`; см. README.
+CI (`.github/workflows/ci.yml`) на каждый PR гоняет **lint + format:check + typecheck + test + build + size:check + test:browser** — всё должно проходить. Перед завершением работы прогоняй эти же шаги; `size:check` запускай после сборки. Деплой (Cloudflare Workers + Static Assets) идёт сам из `main`; см. README.
 
 Тесты используют happy-dom через `preload` в `bunfig.toml` (`test-setup.ts`) — DOM доступен без ручной настройки. Алиас `@/` → `src/`.
+
+Browser-тесты Paper minis живут в `tests/paper-minis/`. Меняешь путь с Canvas API, декодированием изображения или скачиванием PDF — добавь сценарий только для поведения, которого не видит happy-dom, и запусти `bun run test:browser`. Chromium ставится один раз: `bunx playwright install chromium`.
 
 ## Архитектура: генераторы по таблицам
 
@@ -68,4 +73,4 @@ useEffect(() => {
 
 ## Дизайн
 
-Токены — `src/styles/global.css` (`@theme` Tailwind v4), правила и палитра — `docs/DESIGN.md`. Используй семантические классы (`bg-primary`, `text-text-muted`, `font-display`), не сырые hex. Только системные шрифты. Цвет — не единственный носитель смысла (подсветка строки = цвет + левая граница + bold).
+Токены — `src/styles/global.css` (`@theme` Tailwind v4), правила и палитра — `docs/DESIGN.md`. Используй семантические классы (`bg-primary`, `text-text-muted`, `font-display`), не сырые hex. Только системные шрифты. Цвет — не единственный носитель смысла (подсветка строки = цвет + левая граница).

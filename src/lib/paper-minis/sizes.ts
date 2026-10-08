@@ -1,7 +1,6 @@
 import type { Entry, HeightSlot, MiniSize, SizeCategory } from './types';
 
 export type SizeDimensionsMm = { baseWidthMm: number; figureHeightMm: number };
-export type FigureFitMm = { imageWidthMm: number; imageHeightMm: number };
 
 // printableminimaker ADR-0002: base width is a convention, not a measurement. A creature's space
 // is the area it controls in combat, explicitly not its physical size, and the
@@ -9,7 +8,7 @@ export type FigureFitMm = { imageWidthMm: number; imageHeightMm: number };
 // stand and to signal relative size, which the six categories still do well
 // enough — so the category is what fixes it, and every slot that
 // carries the category inherits the number.
-export const CATEGORY_BASE_WIDTH_MM: Record<SizeCategory, number> = {
+const CATEGORY_BASE_WIDTH_MM: Record<SizeCategory, number> = {
   tiny: 20,
   small: 25,
   medium: 25,
@@ -27,7 +26,7 @@ export const CATEGORY_BASE_WIDTH_MM: Record<SizeCategory, number> = {
 // bases neither fits Letter at any margin. Their tabs are cut to what keeps
 // them on Letter through a 5 mm figure margin, so a Gargantuan stands on a
 // shallow 75 × 13 mm footprint rather than falling off the sheet.
-export const CATEGORY_TAB_HEIGHT_MM: Record<SizeCategory, number> = {
+const CATEGORY_TAB_HEIGHT_MM: Record<SizeCategory, number> = {
   tiny: 10,
   small: 12.5,
   medium: 12.5,
@@ -36,7 +35,7 @@ export const CATEGORY_TAB_HEIGHT_MM: Record<SizeCategory, number> = {
   gargantuan: 6.5,
 };
 
-export const CATEGORY_NAMES: Record<SizeCategory, string> = {
+const CATEGORY_NAMES: Record<SizeCategory, string> = {
   tiny: 'Крошечный',
   small: 'Маленький',
   medium: 'Средний',
@@ -44,15 +43,6 @@ export const CATEGORY_NAMES: Record<SizeCategory, string> = {
   huge: 'Огромный',
   gargantuan: 'Громадный',
 };
-
-export const SIZE_CATEGORY_ORDER = [
-  'tiny',
-  'small',
-  'medium',
-  'large',
-  'huge',
-  'gargantuan',
-] as const satisfies readonly SizeCategory[];
 
 export type HeightSlotSpec = {
   category: SizeCategory;
@@ -153,15 +143,12 @@ export const HEIGHT_SLOT_ORDER = [
 
 export const CUSTOM_SIZE_NAME = 'Свой размер';
 
-export function slotsOfCategory(category: SizeCategory): HeightSlot[] {
-  return HEIGHT_SLOT_ORDER.filter((slot) => HEIGHT_SLOTS[slot].category === category);
-}
-
 // A slot's own name: its size category, and the grade within it where the
 // category carries more than one slot. Composed rather than stored, so the
 // category name has one source.
 export function slotName(size: HeightSlot): string {
   const { category, grade } = HEIGHT_SLOTS[size];
+
   return grade
     ? `${CATEGORY_NAMES[category]}, ${grade === 'short' ? 'низкий' : 'высокий'}`
     : CATEGORY_NAMES[category];
@@ -174,6 +161,7 @@ export function slotName(size: HeightSlot): string {
 export function slotLabel(size: MiniSize): string {
   if (size === 'custom') return CUSTOM_SIZE_NAME;
   const { realHeight, typical } = HEIGHT_SLOTS[size];
+
   return `${slotName(size)} · ${realHeight} · ${typical}`;
 }
 
@@ -181,15 +169,19 @@ export function slotLabel(size: MiniSize): string {
 // table so it cannot drift from what prints.
 export function slotGeometryLabel(size: MiniSize): string {
   if (size === 'custom') return 'Ширина основания и высота фигурки задаются отдельно';
+
   return `Основание ${resolveBaseWidthMm({ heightSlot: size })} мм · высота ${HEIGHT_SLOTS[size].figureHeightMm} мм`;
 }
 
 export const DEFAULT_CUSTOM_WIDTH_MM = 30;
+
 export const DEFAULT_CUSTOM_HEIGHT_MM = 30;
+
 export const DEFAULT_HEIGHT_SLOT: MiniSize = 'medium';
 
 export function resolveFigureHeightMm(e: Pick<Entry, 'heightSlot' | 'customHeightMm'>): number {
   if (e.heightSlot === 'custom') return validDimension(e.customHeightMm);
+
   return HEIGHT_SLOTS[e.heightSlot].figureHeightMm;
 }
 
@@ -198,14 +190,16 @@ export function resolveFigureHeightMm(e: Pick<Entry, 'heightSlot' | 'customHeigh
 // has no valid width yet, which callers treat as "not packable". Custom stays
 // the one escape hatch that names a base width directly — deriving it from the
 // custom height would leave no way to set it at all.
-export function resolveBaseWidthMm(e: Pick<Entry, 'heightSlot' | 'customWidthMm'>): number {
+function resolveBaseWidthMm(e: Pick<Entry, 'heightSlot' | 'customWidthMm'>): number {
   if (e.heightSlot === 'custom') return validDimension(e.customWidthMm);
+
   return CATEGORY_BASE_WIDTH_MM[HEIGHT_SLOTS[e.heightSlot].category];
 }
 
 // A custom entry's tab is half its own base; only the slots carry page-bound caps.
 export function resolveTabHeightMm(e: Pick<Entry, 'heightSlot' | 'customWidthMm'>): number {
   if (e.heightSlot === 'custom') return resolveBaseWidthMm(e) / 2;
+
   return CATEGORY_TAB_HEIGHT_MM[HEIGHT_SLOTS[e.heightSlot].category];
 }
 
@@ -217,61 +211,14 @@ export function resolveSizeDimensionsMm(
   return { baseWidthMm: resolveBaseWidthMm(e), figureHeightMm: resolveFigureHeightMm(e) };
 }
 
-// The dimension rule packing applies, shared so the PDF writer embeds artwork
-// for exactly the entries that will be drawn. A custom entry needs both of its
+// The dimension rule packing applies. A custom entry needs both of its
 // numbers: the height scales the figure, the width stands it up.
 export function hasPackableDimensions(
   e: Pick<Entry, 'heightSlot' | 'customWidthMm' | 'customHeightMm'>,
 ): boolean {
   const { baseWidthMm, figureHeightMm } = resolveSizeDimensionsMm(e);
+
   return baseWidthMm > 0 && figureHeightMm > 0;
-}
-
-// A figure is never wider than this multiple of the height its slot prints at.
-// Height comes from the height slot, so width is the axis that can run away:
-// without a cap, a figure spread out sideways would swallow the sheet. Hitting
-// the cap scales the whole figure down rather than cropping it, so that mini
-// prints short of its slot's height.
-//
-// The denominator is the slot's height, not the figure's printed one, so this
-// does not bound the printed width-to-height ratio and is not meant to: the
-// artwork's own proportions are preserved through the scale-down, which is what
-// keeps the figure uncropped. A 4:1 Medium prints 52.5 × 13.125 mm — still 4:1.
-//
-// The cap is measured against the slot's figure height, not the base width, and
-// that is load-bearing. A base-width cap contains no slot term — every slot of a
-// category shares one base — so a capped figure's height collapsed to the same
-// millimetres for every slot of that category, which is exactly the
-// dwarf-and-bugbear-print-alike defect printableminimaker#24 exists to remove. Against the
-// figure's own height the scale-down is proportional, so the slots stay ordered
-// at every aspect ratio.
-//
-// 1.5 because it sits close to the 1.67 the old base-width cap gave a Medium,
-// so the common case barely moves, and it leaves the page real slack: the
-// tallest slot's widest figure reserves 111 × 1.5 plus two figure margins,
-// against A4's 190 mm of usable width. The page would in fact hold about 1.67
-// here — the number is a judgement about how far a figure may spread, not a
-// limit the paper forces.
-export const MAX_WIDTH_TO_SLOT_HEIGHT = 1.5;
-
-// The one place a height slot becomes millimetres of artwork. Fits a figure to
-// its slot's height, letting width follow the artwork's proportions, then scales
-// the whole figure down if it passes the width cap. Aspect ratio is preserved
-// throughout and nothing is cropped.
-export function fitFigure(
-  { figureHeightMm }: SizeDimensionsMm,
-  imgWidthPx: number,
-  imgHeightPx: number,
-): FigureFitMm {
-  const maxWidthMm = figureHeightMm * MAX_WIDTH_TO_SLOT_HEIGHT;
-  const aspect = imgWidthPx / imgHeightPx;
-  let imageHeightMm = figureHeightMm;
-  let imageWidthMm = aspect * figureHeightMm;
-  if (imageWidthMm > maxWidthMm) {
-    imageWidthMm = maxWidthMm;
-    imageHeightMm = maxWidthMm / aspect;
-  }
-  return { imageWidthMm, imageHeightMm };
 }
 
 function validDimension(value: number | undefined): number {

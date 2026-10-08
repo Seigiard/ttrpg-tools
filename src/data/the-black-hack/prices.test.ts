@@ -4,9 +4,11 @@ import { blackHackPrices, computePricesVersion, totalDiceCount } from './prices'
 describe('blackHackPrices', () => {
   test('у каждого предмета непустой ru, имена уникальны в пределах таблицы', () => {
     const names = blackHackPrices.categories.flatMap((c) => c.items.map((i) => i.ru));
+
     for (const name of names) {
       expect(name.trim().length).toBeGreaterThan(0);
     }
+
     expect(new Set(names).size).toBe(names.length);
   });
 
@@ -38,6 +40,7 @@ describe('blackHackPrices', () => {
       const keys = blackHackPrices.settlementCategories[settlement];
       expect(keys.length).toBeGreaterThan(0);
       expect(keys).toContain('common');
+
       for (const key of keys) {
         expect(blackHackPrices.categories.some((c) => c.key === key)).toBe(true);
       }
@@ -57,7 +60,9 @@ describe('computePricesVersion', () => {
     const [first, ...rest] = blackHackPrices.categories;
     const trimmed = [{ ...first, items: first.items.slice(0, -1) }, ...rest];
 
-    expect(computePricesVersion(trimmed)).not.toBe(computePricesVersion(blackHackPrices.categories));
+    expect(computePricesVersion(trimmed)).not.toBe(
+      computePricesVersion(blackHackPrices.categories),
+    );
   });
 
   test('меняется при изменении порядка предметов', () => {
@@ -66,6 +71,8 @@ describe('computePricesVersion', () => {
     const [a, b, ...tail] = first.items;
     const swapped = [{ ...first, items: [b, a, ...tail] }, ...rest];
 
-    expect(computePricesVersion(swapped)).not.toBe(computePricesVersion(blackHackPrices.categories));
+    expect(computePricesVersion(swapped)).not.toBe(
+      computePricesVersion(blackHackPrices.categories),
+    );
   });
 });
