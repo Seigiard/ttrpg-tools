@@ -1,11 +1,11 @@
-import { defineRule } from "@oxlint/plugins";
-import type { ESTree } from "@oxlint/plugins";
+import { defineRule } from '@oxlint/plugins';
+import type { ESTree } from '@oxlint/plugins';
 
 import {
   containsUnknownType,
   functionParameterBindingName,
   functionParameterTypeAnnotation,
-} from "../shared/function-parameters.ts";
+} from '../shared/function-parameters.ts';
 type ParameterOwner =
   | ESTree.ArrowFunctionExpression
   | ESTree.Function
@@ -18,8 +18,8 @@ type ParameterOwner =
 function isTypePredicateSubject(owner: ParameterOwner, parameterName: string): boolean {
   const predicate = owner.returnType?.typeAnnotation;
   return (
-    predicate?.type === "TSTypePredicate" &&
-    predicate.parameterName.type === "Identifier" &&
+    predicate?.type === 'TSTypePredicate' &&
+    predicate.parameterName.type === 'Identifier' &&
     predicate.parameterName.name === parameterName
   );
 }
@@ -27,14 +27,14 @@ function isTypePredicateSubject(owner: ParameterOwner, parameterName: string): b
 /** Disallow unknown inputs except explicitly named error-cause enrichment. */
 export const noUnknownParametersRule = defineRule({
   meta: {
-    type: "problem",
+    type: 'problem',
     docs: {
       description:
-        "Disallow explicitly unknown function parameters except `cause` and type-predicate subjects; decode unknown input at its I/O boundary instead.",
+        'Disallow explicitly unknown function parameters except `cause` and type-predicate subjects; decode unknown input at its I/O boundary instead.',
     },
     messages: {
       unknownParameter:
-        "Parameter `{{parameter}}` leaves input unparsed. Accept a named domain type; run the expected schema or parser at the I/O boundary before calling this function.",
+        'Parameter `{{parameter}}` leaves input unparsed. Accept a named domain type; run the expected schema or parser at the I/O boundary before calling this function.',
     },
   },
   createOnce(context) {
@@ -44,10 +44,10 @@ export const noUnknownParametersRule = defineRule({
         if (annotation === null || annotation === undefined) continue;
         if (!containsUnknownType(annotation.typeAnnotation)) continue;
         const name = functionParameterBindingName(parameter, context.sourceCode);
-        if (name === "cause" || isTypePredicateSubject(node, name)) continue;
+        if (name === 'cause' || isTypePredicateSubject(node, name)) continue;
         context.report({
           node: annotation.typeAnnotation,
-          messageId: "unknownParameter",
+          messageId: 'unknownParameter',
           data: { parameter: name },
         });
       }

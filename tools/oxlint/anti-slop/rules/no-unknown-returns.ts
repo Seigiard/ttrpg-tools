@@ -1,12 +1,12 @@
-import { defineRule } from "@oxlint/plugins";
+import { defineRule } from '@oxlint/plugins';
 
-import type { ESTree } from "@oxlint/plugins";
+import type { ESTree } from '@oxlint/plugins';
 
 import {
   createTypeAliasEnvironment,
   resolvedTypeMatches,
   type TypeAliasEnvironment,
-} from "../shared/type-alias-resolution.ts";
+} from '../shared/type-alias-resolution.ts';
 
 type FunctionWithReturnType =
   | ESTree.ArrowFunctionExpression
@@ -20,14 +20,14 @@ type FunctionWithReturnType =
 /** Ban function contracts that return unknown instead of a parsed domain type. */
 export const noUnknownReturnsRule = defineRule({
   meta: {
-    type: "problem",
+    type: 'problem',
     docs: {
       description:
-        "Disallow functions whose explicit return contract is unknown or Promise<unknown>.",
+        'Disallow functions whose explicit return contract is unknown or Promise<unknown>.',
     },
     messages: {
       unknownReturn:
-        "This function exposes `unknown` to its caller. Parse the value at its boundary and return a named domain type.",
+        'This function exposes `unknown` to its caller. Parse the value at its boundary and return a named domain type.',
     },
   },
   createOnce(context) {
@@ -36,16 +36,15 @@ export const noUnknownReturnsRule = defineRule({
     const resolvesToUnknown = (type: ESTree.TSType): boolean =>
       environment !== null &&
       resolvedTypeMatches(type, environment, (resolved, matches) => {
-        if (resolved.type === "TSUnknownKeyword") return true;
-        if (resolved.type === "TSParenthesizedType") {
+        if (resolved.type === 'TSUnknownKeyword') return true;
+        if (resolved.type === 'TSParenthesizedType') {
           return matches(resolved.typeAnnotation);
         }
-        if (resolved.type === "TSUnionType") return resolved.types.some(matches);
+        if (resolved.type === 'TSUnionType') return resolved.types.some(matches);
         if (
-          resolved.type !== "TSTypeReference" ||
-          resolved.typeName.type !== "Identifier" ||
-          (resolved.typeName.name !== "Promise" &&
-            resolved.typeName.name !== "PromiseLike")
+          resolved.type !== 'TSTypeReference' ||
+          resolved.typeName.type !== 'Identifier' ||
+          (resolved.typeName.name !== 'Promise' && resolved.typeName.name !== 'PromiseLike')
         ) {
           return false;
         }
@@ -57,15 +56,12 @@ export const noUnknownReturnsRule = defineRule({
       const annotation = node.returnType;
       if (annotation === null || annotation === undefined) return;
       if (!resolvesToUnknown(annotation.typeAnnotation)) return;
-      context.report({ node: annotation.typeAnnotation, messageId: "unknownReturn" });
+      context.report({ node: annotation.typeAnnotation, messageId: 'unknownReturn' });
     };
 
     return {
       Program(node) {
-        environment = createTypeAliasEnvironment(
-          node,
-          context.sourceCode.visitorKeys,
-        );
+        environment = createTypeAliasEnvironment(node, context.sourceCode.visitorKeys);
       },
       ArrowFunctionExpression: checkReturnType,
       FunctionDeclaration: checkReturnType,

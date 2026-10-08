@@ -2,13 +2,9 @@
 
 /* @checksum: 3QCTtOH6rJM5_AGJ58rGpeEaBEfaJz17MSCxWB4X_PU */
 
-export type PaddingType = 'any' | 'never' | 'always'
-export type StatementOption =
-  | StatementMatcher
-  | [StatementMatcher, ...StatementMatcher[]]
-export type StatementMatcher =
-  | StatementType
-  | SelectorOption
+export type PaddingType = 'any' | 'never' | 'always';
+export type StatementOption = StatementMatcher | [StatementMatcher, ...StatementMatcher[]];
+export type StatementMatcher = StatementType | SelectorOption;
 export type StatementType =
   | '*'
   | 'exports'
@@ -65,23 +61,19 @@ export type StatementType =
   | 'multiline-using'
   | 'type'
   | 'singleline-type'
-  | 'multiline-type'
+  | 'multiline-type';
 export type PaddingLineBetweenStatementsSchema0 = {
-  blankLine: PaddingType
-  prev: StatementOption
-  next: StatementOption
-}[]
+  blankLine: PaddingType;
+  prev: StatementOption;
+  next: StatementOption;
+}[];
 
 export interface SelectorOption {
-  selector: string
-  lineMode?: 'any' | 'singleline' | 'multiline'
+  selector: string;
+  lineMode?: 'any' | 'singleline' | 'multiline';
 }
 
-export type PaddingLineBetweenStatementsRuleOptions
-  = PaddingLineBetweenStatementsSchema0
+export type PaddingLineBetweenStatementsRuleOptions = PaddingLineBetweenStatementsSchema0;
 
-export type RuleOptions
-  = PaddingLineBetweenStatementsRuleOptions
-export type MessageIds =
-  | 'unexpectedBlankLine'
-  | 'expectedBlankLine'
+export type RuleOptions = PaddingLineBetweenStatementsRuleOptions;
+export type MessageIds = 'unexpectedBlankLine' | 'expectedBlankLine';
