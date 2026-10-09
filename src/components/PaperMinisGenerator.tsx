@@ -1,6 +1,21 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
 import { useStore } from '@nanostores/react';
+import { ChevronDownIcon } from 'lucide-react';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { createPaperMinisStore, type CalibrationSession } from '@/stores/paper-minis-store';
 import { ARTWORK_ACCEPT, artworkMimeType } from '@/lib/paper-minis/artwork-formats';
@@ -8,11 +23,31 @@ import { isSupportedArtwork } from '@/lib/paper-minis/artwork';
 import type { CalibrationLine } from '@/lib/paper-minis/calibration-session';
 import { entryStatusWarning } from '@/lib/paper-minis/geometry';
 import { buildFilename, buildPrinterScaleTestSheetFilename } from '@/lib/paper-minis/pdf-filenames';
-import { HEIGHT_SLOT_ORDER, slotLabel, slotGeometryLabel, slotName } from '@/lib/paper-minis/sizes';
+import {
+  HEIGHT_SLOT_ORDER,
+  slotLabel,
+  slotGeometryLabel,
+  slotMenuParts,
+  slotName,
+} from '@/lib/paper-minis/sizes';
 import type { HeightCalibration, PreparedArtwork } from '@/lib/paper-minis/types';
+import { pluralRu } from '@/lib/plural';
 
 const field =
   'min-h-11 w-full rounded-lg border border-border bg-surface-elevated px-3 text-text focus-visible:outline-2 focus-visible:outline-primary';
+
+const foldTrigger =
+  'min-h-12 items-center gap-2 py-0 font-sans text-base font-normal hover:no-underline **:data-[slot=accordion-trigger-icon]:ml-0';
+
+const foldValue = 'ml-auto truncate text-sm text-text-muted';
+
+const miniatureForms = { one: 'миниатюра', few: 'миниатюры', many: 'миниатюр' };
+
+const sheetForms = { one: 'лист', few: 'листа', many: 'листов' };
+
+function formatMm(value: number) {
+  return value.toLocaleString('ru-RU');
+}
 
 function buildZipFilename(date = new Date()) {
   const year = date.getFullYear();
@@ -385,6 +420,14 @@ export default function PaperMinisGenerator() {
   const preview = useStore(store.$preview);
   const previewStale = useStore(store.$previewStale);
   const calibration = useStore(store.$calibration);
+
+  const pageLabel = settings.pageSize === 'a4' ? 'A4' : 'Letter';
+
+  const figuresSummary =
+    [settings.normalization && 'обрезка', settings.numberDuplicates && 'нумерация']
+      .filter(Boolean)
+      .join(', ') || '—';
+
   const [previewUrl, setPreviewUrl] = useState<string>();
   const calibrationOpener = useRef<HTMLButtonElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -544,135 +587,152 @@ export default function PaperMinisGenerator() {
       >
         <div className="grid gap-6 xl:block">
           <div className="xl:absolute xl:right-full xl:h-full xl:w-60">
-            <aside className="space-y-6 rounded-lg border border-border bg-surface-elevated p-4 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
-              <div>
-                <h2 className="text-2xl text-text">Настройки</h2>
-                <p className="mt-1 text-sm leading-relaxed text-text-muted">
-                  Общие параметры печати.
-                </p>
-              </div>
-              <label className="block text-sm">
-                Размер бумаги
-                <select
-                  className={field}
-                  value={settings.pageSize}
-                  onChange={(event) => {
-                    const pageSize = event.target.value;
+            <aside className="rounded-lg border border-border bg-surface-elevated p-4 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
+              <h2 className="mb-2 text-xl text-text">Настройки</h2>
+              <Accordion className="border-y border-border">
+                <AccordionItem value="paper">
+                  <AccordionTrigger className={foldTrigger}>
+                    Бумага
+                    <span className={foldValue}>
+                      {pageLabel} · поля {formatMm(settings.marginMm)} мм
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent className="grid grid-cols-[1.4fr_1fr] gap-2 pb-4">
+                    <label className="block text-sm text-text-muted">
+                      Формат
+                      <select
+                        className={`${field} mt-1`}
+                        value={settings.pageSize}
+                        onChange={(event) => {
+                          const pageSize = event.target.value;
 
-                    if (pageSize === 'a4' || pageSize === 'letter') store.settings({ pageSize });
-                  }}
-                >
-                  <option value="a4">A4 (210 × 297 мм)</option>
-                  <option value="letter">Letter (216 × 279 мм)</option>
-                </select>
-              </label>
-              <label className="block text-sm">
-                Поля, мм
-                <input
-                  className={field}
-                  type="number"
-                  min="0"
-                  step="any"
-                  required
-                  value={inputs.margin.text}
-                  aria-invalid={!inputs.margin.valid}
-                  onChange={(event) => store.setMargin(event.target.value)}
-                  onBlur={store.commitMargin}
-                />
-              </label>
-              <div className="space-y-2 border-y border-border py-3">
-                <div>
-                  <h3 className="text-base font-medium text-text">Масштаб принтера</h3>
-                  <p className="mt-1 text-sm leading-relaxed text-text-muted">
-                    {settings.printerMeasurementMm === undefined
-                      ? 'Принтер не измерен: размеры приблизительные.'
-                      : `Линейка измерена: ${settings.printerMeasurementMm} мм.`}
+                          if (pageSize === 'a4' || pageSize === 'letter')
+                            store.settings({ pageSize });
+                        }}
+                      >
+                        <option value="a4" title="210 × 297 мм">
+                          A4
+                        </option>
+                        <option value="letter" title="216 × 279 мм">
+                          Letter
+                        </option>
+                      </select>
+                    </label>
+                    <label className="block text-sm text-text-muted">
+                      Поля, мм
+                      <input
+                        className={`${field} mt-1`}
+                        type="number"
+                        min="0"
+                        step="any"
+                        required
+                        value={inputs.margin.text}
+                        aria-invalid={!inputs.margin.valid}
+                        onChange={(event) => store.setMargin(event.target.value)}
+                        onBlur={store.commitMargin}
+                      />
+                    </label>
+                  </AccordionContent>
+                </AccordionItem>
+                <AccordionItem value="figures">
+                  <AccordionTrigger className={foldTrigger}>
+                    Фигурки
+                    <span className={foldValue}>{figuresSummary}</span>
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-2">
+                    <label className="flex min-h-11 items-center gap-3 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={settings.numberDuplicates}
+                        onChange={(event) =>
+                          store.settings({ numberDuplicates: event.target.checked })
+                        }
+                      />
+                      Нумеровать копии
+                    </label>
+                    <label className="flex min-h-11 items-center gap-3 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={settings.normalization}
+                        onChange={(event) =>
+                          store.settings({ normalization: event.target.checked })
+                        }
+                      />
+                      Обрезать пустые поля
+                    </label>
+                  </AccordionContent>
+                </AccordionItem>
+                <AccordionItem value="scale">
+                  <AccordionTrigger className={foldTrigger}>
+                    Масштаб
+                    <span className={foldValue}>
+                      {settings.printerMeasurementMm === undefined
+                        ? 'по умолчанию'
+                        : `подогнан · ${formatMm(settings.printerMeasurementMm)} мм`}
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent className="space-y-3 pb-4 leading-relaxed">
+                    <p className="text-text-muted">
+                      Если фигурки печатаются чуть меньше или больше нужного:
+                    </p>
+                    <p>
+                      Распечатайте{' '}
+                      <button
+                        type="button"
+                        aria-label="Скачать тестовый лист"
+                        className="rounded-sm font-medium text-primary underline underline-offset-3 focus-visible:outline-2 focus-visible:outline-primary"
+                        onClick={() => void downloadPrinterScaleTestSheet()}
+                      >
+                        тестовый лист
+                      </button>{' '}
+                      и измерьте линейку на нём.
+                    </p>
+                    <div className="grid grid-cols-[auto_minmax(0,6rem)_auto] items-center justify-start gap-2">
+                      <span id="printer-measurement-label">Вышло</span>
+                      <input
+                        className={`${field} text-right`}
+                        type="number"
+                        min="80"
+                        max="100"
+                        step="any"
+                        placeholder="100"
+                        aria-labelledby="printer-measurement-label printer-measurement-unit"
+                        value={inputs.printerMeasurement.text}
+                        aria-invalid={!inputs.printerMeasurement.valid}
+                        onChange={(event) => store.setPrinterMeasurement(event.target.value)}
+                        onBlur={store.commitPrinterMeasurement}
+                      />
+                      <span
+                        id="printer-measurement-unit"
+                        className="whitespace-nowrap text-text-muted"
+                      >
+                        из 100 мм
+                      </span>
+                    </div>
+                    {settings.printerMeasurementMm !== undefined && (
+                      <Button
+                        variant="ghost"
+                        className="min-h-11 w-full"
+                        onClick={() => store.setPrinterMeasurement('')}
+                      >
+                        Сбросить измерение
+                      </Button>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+              <div className="mt-4 space-y-2">
+                {!rows.length && (
+                  <p className="text-sm text-text-muted">
+                    Добавьте изображения для печати миниатюр.
                   </p>
-                </div>
-                <Button
-                  variant="outline"
-                  className="min-h-11 w-full whitespace-normal"
-                  onClick={() => void downloadPrinterScaleTestSheet()}
-                >
-                  Скачать тестовый лист масштаба
-                </Button>
-                <label className="block text-sm">
-                  Длина линейки, мм
-                  <input
-                    className={field}
-                    type="number"
-                    min="80"
-                    max="100"
-                    step="any"
-                    value={inputs.printerMeasurement.text}
-                    aria-invalid={!inputs.printerMeasurement.valid}
-                    onChange={(event) => store.setPrinterMeasurement(event.target.value)}
-                    onBlur={store.commitPrinterMeasurement}
-                  />
-                </label>
-                {settings.printerMeasurementMm !== undefined && (
-                  <Button
-                    variant="ghost"
-                    className="min-h-11 w-full"
-                    onClick={() => store.setPrinterMeasurement('')}
-                  >
-                    Сбросить измерение
-                  </Button>
                 )}
-                <p className="text-sm leading-relaxed text-text-muted">
-                  Измерение привязано к принтеру, настройкам печати и размеру бумаги.
-                </p>
-              </div>
-              {rows.length > 0 && (
-                <label className="block text-sm">
-                  Высота всех фигурок
-                  <select
-                    className={field}
-                    value=""
-                    onChange={(event) => {
-                      const size = HEIGHT_SLOT_ORDER.find((slot) => slot === event.target.value);
-
-                      if (size !== undefined) store.setAllSizes(size);
-                    }}
-                  >
-                    <option value="" disabled>
-                      Выберите…
-                    </option>
-                    <SizeOptions />
-                  </select>
-                </label>
-              )}
-              <div className="space-y-2 border-y border-border py-3">
-                <label className="flex min-h-11 items-center gap-3 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={settings.numberDuplicates}
-                    onChange={(event) => store.settings({ numberDuplicates: event.target.checked })}
-                  />
-                  Нумеровать копии
-                </label>
-                <label className="flex min-h-11 items-center gap-3 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={settings.normalization}
-                    onChange={(event) => store.settings({ normalization: event.target.checked })}
-                  />
-                  Обрезать пустые поля
-                </label>
-              </div>
-              <div className="space-y-3">
-                <h3 className="text-xl text-text">PDF</h3>
-                <p aria-live="polite" className="text-sm">
-                  {rows.length
-                    ? `Миниатюр: ${packed.miniCount} → листов: ${packed.pageCount} (${settings.pageSize === 'a4' ? 'A4' : 'Letter'})`
-                    : 'Добавьте изображения для печати миниатюр.'}
-                </p>
                 {message && (
                   <p role="status" className="text-sm">
                     {message}
                   </p>
                 )}
-                <p role="status" className="text-sm">
+                <p role="status" className="text-sm empty:hidden">
                   {busy
                     ? 'Создаём PDF. Редактирование временно недоступно.'
                     : preparing
@@ -684,31 +744,48 @@ export default function PaperMinisGenerator() {
                     {draftError}
                   </p>
                 )}
-                <div className="space-y-2">
+                <Button
+                  className="h-auto min-h-11 w-full flex-col gap-0.5 py-2"
+                  aria-label={busy ? 'Подготовка PDF…' : 'Скачать PDF'}
+                  aria-describedby={rows.length ? 'pdf-summary' : undefined}
+                  disabled={!canGenerate}
+                  onClick={() => void download()}
+                >
+                  {busy ? 'Подготовка PDF…' : 'Скачать PDF'}
+                  {rows.length > 0 && (
+                    <span
+                      id="pdf-summary"
+                      aria-live="polite"
+                      className="text-xs font-normal whitespace-normal opacity-85"
+                    >
+                      {pluralRu(packed.miniCount, miniatureForms)} ·{' '}
+                      {pluralRu(packed.pageCount, sheetForms)} {pageLabel}
+                    </span>
+                  )}
+                </Button>
+                <p className="flex justify-center gap-1.5 text-sm text-text-muted">
                   <Button
-                    className="min-h-11 w-full"
-                    disabled={!canGenerate}
-                    onClick={() => void download()}
-                  >
-                    {busy ? 'Подготовка PDF…' : 'Скачать PDF'}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="min-h-11 w-full"
-                    disabled={!canGenerate}
-                    onClick={() => void exportZip()}
-                  >
-                    Экспорт в ZIP
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="min-h-11 w-full"
+                    variant="link"
+                    className="h-auto min-h-11 px-1 underline"
+                    aria-label={preview ? 'Обновить предпросмотр' : 'Предпросмотр PDF'}
                     disabled={!canGenerate}
                     onClick={() => void store.refreshPreview()}
                   >
-                    {preview ? 'Обновить предпросмотр' : 'Предпросмотр PDF'}
+                    {preview ? 'Обновить предпросмотр' : 'Предпросмотр'}
                   </Button>
-                </div>
+                  <span aria-hidden="true" className="self-center">
+                    ·
+                  </span>
+                  <Button
+                    variant="link"
+                    className="h-auto min-h-11 px-1 underline"
+                    aria-label="Экспорт в ZIP"
+                    disabled={!canGenerate}
+                    onClick={() => void exportZip()}
+                  >
+                    ZIP
+                  </Button>
+                </p>
               </div>
             </aside>
           </div>
@@ -742,7 +819,42 @@ export default function PaperMinisGenerator() {
             />
 
             <section aria-label="Миниатюры" className="space-y-5">
-              <h2 className="sr-only">Миниатюры</h2>
+              <div
+                className={`flex flex-wrap items-center justify-between gap-2 ${rows.length ? '' : 'sr-only'}`}
+              >
+                <h2 className="text-xl text-text">
+                  Миниатюры
+                  {rows.length > 0 && <span className="text-text-muted"> · {rows.length}</span>}
+                </h2>
+                {rows.length > 1 && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger render={<Button variant="outline" className="min-h-11" />}>
+                      Сменить высоту
+                      <ChevronDownIcon aria-hidden="true" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-64">
+                      <DropdownMenuGroup>
+                        <DropdownMenuLabel>Для всех миниатюр</DropdownMenuLabel>
+                        {HEIGHT_SLOT_ORDER.map((slot) => {
+                          const { title, typical } = slotMenuParts(slot);
+
+                          return (
+                            <DropdownMenuItem
+                              key={slot}
+                              className="min-h-11 flex-col items-start gap-0"
+                              title={slotGeometryLabel(slot)}
+                              onClick={() => store.setAllSizes(slot)}
+                            >
+                              {title}
+                              <span className="text-xs text-text-muted">{typical}</span>
+                            </DropdownMenuItem>
+                          );
+                        })}
+                      </DropdownMenuGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </div>
               {rows.map((row, index) => {
                 const status = packed.entries[index];
                 const statusWarning = status && entryStatusWarning(status);

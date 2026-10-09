@@ -165,6 +165,13 @@ export function slotLabel(size: MiniSize): string {
   return `${slotName(size)} · ${realHeight} · ${typical}`;
 }
 
+// The same facts as slotLabel, split for a two-line menu item.
+export function slotMenuParts(size: HeightSlot) {
+  const { realHeight, typical } = HEIGHT_SLOTS[size];
+
+  return { title: `${slotName(size)} · ${realHeight}`, typical };
+}
+
 // The geometry the slot resolves to, for the select's title. Derived from the
 // table so it cannot drift from what prints.
 export function slotGeometryLabel(size: MiniSize): string {
