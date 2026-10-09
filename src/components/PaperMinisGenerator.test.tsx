@@ -25,6 +25,14 @@ async function addFront(bytes = png) {
   });
 }
 
+function foldText(name: string) {
+  return screen.getByRole('button', { name: new RegExp(`^${name}`) }).textContent;
+}
+
+function openFold(name: string) {
+  fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${name}`) }));
+}
+
 async function addBack(bytes = png) {
   await act(async () => {
     fireEvent.change(
@@ -36,18 +44,19 @@ async function addBack(bytes = png) {
   });
 }
 
-test('printer scale shows approximate sizing until a measurement is entered and can be cleared', () => {
+test('printer scale reads as the default until a measurement is entered and can be cleared', () => {
   // #given
   render(<PaperMinisGenerator />);
+  openFold('Масштаб');
 
   const measurement = screen.getByRole<HTMLInputElement>('spinbutton', {
-    name: 'Длина линейки, мм',
+    name: 'Вышло из 100 мм',
   });
 
   // #when
-  const defaultState = screen.getByText('Принтер не измерен: размеры приблизительные.').textContent;
+  const defaultState = foldText('Масштаб');
   fireEvent.change(measurement, { target: { value: '91' } });
-  const measuredState = screen.getByText('Линейка измерена: 91 мм.').textContent;
+  const measuredState = foldText('Масштаб');
   fireEvent.click(screen.getByRole('button', { name: 'Сбросить измерение' }));
 
   // #then
@@ -55,12 +64,12 @@ test('printer scale shows approximate sizing until a measurement is entered and 
     defaultState,
     measuredState,
     input: measurement.value,
-    restoredState: screen.getByText('Принтер не измерен: размеры приблизительные.').textContent,
+    restoredState: foldText('Масштаб'),
   }).toEqual({
-    defaultState: 'Принтер не измерен: размеры приблизительные.',
-    measuredState: 'Линейка измерена: 91 мм.',
+    defaultState: 'Масштабпо умолчанию',
+    measuredState: 'Масштабподогнан · 91 мм',
     input: '',
-    restoredState: 'Принтер не измерен: размеры приблизительные.',
+    restoredState: 'Масштабпо умолчанию',
   });
 });
 
@@ -68,6 +77,7 @@ test('blur restores an invalid draft and both PDF actions become available again
   // #given
   render(<PaperMinisGenerator />);
   await addFront();
+  openFold('Бумага');
   const margin = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Поля, мм' });
   const count = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Количество копий' });
   fireEvent.change(margin, { target: { value: '5' } });
@@ -292,6 +302,37 @@ test('rendered dwarf and bugbear choices retain distinct heights on the same bas
   });
 });
 
+test('the height menu appears with a second mini and sets every mini to the chosen height', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  const withOne = screen.queryByRole('button', { name: 'Сменить высоту' });
+  await addFront();
+  // #when
+  fireEvent.click(screen.getByRole('button', { name: 'Сменить высоту' }));
+  fireEvent.click(await screen.findByRole('menuitem', { name: /^Огромный/ }));
+  // #then
+  await waitFor(() =>
+    expect({
+      withOne,
+      heights: screen
+        .getAllByRole<HTMLSelectElement>('combobox', { name: 'Высота существа' })
+        .map((select) => select.value),
+    }).toEqual({ withOne: null, heights: ['huge', 'huge'] }),
+  );
+});
+
+test('the PDF button describes its output with Russian plural forms', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  // #when
+  await addFront();
+  // #then
+  const download = screen.getByRole('button', { name: 'Скачать PDF' });
+  const summary = document.getElementById(download.getAttribute('aria-describedby') ?? '');
+  expect(summary?.textContent).toBe('1 миниатюра · 1 лист A4');
+});
+
 test('download action clicks an attached PDF download anchor', async () => {
   // #given
   setSystemTime(new Date(2026, 9, 2, 10, 30));
@@ -338,9 +379,10 @@ test('printer scale test sheet can download before any minis are added', async (
 
   try {
     render(<PaperMinisGenerator />);
+    openFold('Масштаб');
 
     const download = screen.getByRole<HTMLButtonElement>('button', {
-      name: 'Скачать тестовый лист масштаба',
+      name: 'Скачать тестовый лист',
     });
 
     // #when

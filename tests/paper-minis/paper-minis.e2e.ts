@@ -29,6 +29,7 @@ test.beforeEach(async ({ page }) => {
 
 test('prepares a WebP front at its decoded size', async ({ page }) => {
   // #given
+  await page.getByRole('button', { name: /^Фигурки/ }).click();
   await page.getByRole('checkbox', { name: 'Обрезать пустые поля' }).uncheck();
   // #when
   await page
