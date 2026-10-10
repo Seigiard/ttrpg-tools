@@ -59,7 +59,7 @@ const stepButton = 'h-full w-9 rounded-md text-base';
 // The visible icon stays small on the thumbnail; the pseudo-element widens the
 // hit area towards the 44 px touch target.
 const overlayButton =
-  "relative size-7 rounded-none after:absolute after:-inset-2 after:content-[''] [&_svg:not([class*='size-'])]:size-3.5";
+  "relative size-5 rounded-none after:absolute after:-inset-2 after:content-[''] [&_svg:not([class*='size-'])]:size-3";
 
 const copyForms = { one: 'копия', few: 'копии', many: 'копий' };
 
@@ -952,7 +952,7 @@ export default function PaperMinisGenerator() {
                                 size="icon-sm"
                                 className={cn(
                                   overlayButton,
-                                  'border-l border-primary-foreground/35 hover:bg-secondary hover:text-primary-foreground',
+                                  'border-0 border-l border-primary-foreground/35 hover:bg-secondary hover:text-primary-foreground',
                                 )}
                                 aria-label="Сбросить рост"
                                 title="Сбросить рост"
