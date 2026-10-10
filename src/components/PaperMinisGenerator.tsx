@@ -40,7 +40,7 @@ import {
   slotName,
 } from '@/lib/paper-minis/sizes';
 import type { HeightCalibration, PreparedArtwork } from '@/lib/paper-minis/types';
-import { pluralFormRu, pluralRu } from '@/lib/plural';
+import { pluralRu } from '@/lib/plural';
 import { cn } from '@/lib/utils';
 
 const field =
@@ -60,8 +60,6 @@ const stepButton = 'h-full w-9 rounded-md text-base';
 // hit area towards the 44 px touch target.
 const overlayButton =
   "relative size-5 rounded-none after:absolute after:-inset-2 after:content-[''] [&_svg:not([class*='size-'])]:size-3";
-
-const copyForms = { one: 'копия', few: 'копии', many: 'копий' };
 
 const miniatureForms = { one: 'миниатюра', few: 'миниатюры', many: 'миниатюр' };
 
@@ -1048,38 +1046,6 @@ export default function PaperMinisGenerator() {
                             <SizeOptions custom />
                           </select>
                         </span>
-                        <span className={`${rowField} font-semibold`}>
-                          <Button
-                            variant="ghost"
-                            className={stepButton}
-                            aria-label="Меньше копий"
-                            disabled={row.count <= 1}
-                            onClick={() => store.setCount(row.id, String(row.count - 1))}
-                          >
-                            <MinusIcon aria-hidden="true" />
-                          </Button>
-                          <input
-                            className="w-[3ch] bg-transparent text-right tabular-nums [appearance:textfield] focus-visible:outline-2 focus-visible:outline-primary aria-invalid:text-danger [&::-webkit-inner-spin-button]:appearance-none"
-                            type="number"
-                            min="1"
-                            step="1"
-                            required
-                            aria-label="Количество копий"
-                            value={rowInputs.count.text}
-                            aria-invalid={!rowInputs.count.valid}
-                            onChange={(event) => store.setCount(row.id, event.target.value)}
-                            onBlur={() => store.commitCount(row.id)}
-                          />
-                          <span className="pl-1">{pluralFormRu(row.count, copyForms)}</span>
-                          <Button
-                            variant="ghost"
-                            className={stepButton}
-                            aria-label="Больше копий"
-                            onClick={() => store.setCount(row.id, String(row.count + 1))}
-                          >
-                            <PlusIcon aria-hidden="true" />
-                          </Button>
-                        </span>
                         {row.heightSlot === 'custom' &&
                           (['customWidthMm', 'customHeightMm'] as const).map((key, i) => {
                             const dimension = i === 0 ? 'width' : 'height';
@@ -1107,6 +1073,37 @@ export default function PaperMinisGenerator() {
                               </label>
                             );
                           })}
+                        <span className={`${rowField} ml-auto font-semibold`}>
+                          <Button
+                            variant="ghost"
+                            className={stepButton}
+                            aria-label="Меньше копий"
+                            disabled={row.count <= 1}
+                            onClick={() => store.setCount(row.id, String(row.count - 1))}
+                          >
+                            <MinusIcon aria-hidden="true" />
+                          </Button>
+                          <input
+                            className="h-full w-10 bg-transparent text-center tabular-nums [appearance:textfield] focus-visible:outline-2 focus-visible:outline-primary aria-invalid:text-danger [&::-webkit-inner-spin-button]:appearance-none"
+                            type="number"
+                            min="1"
+                            step="1"
+                            required
+                            aria-label="Количество копий"
+                            value={rowInputs.count.text}
+                            aria-invalid={!rowInputs.count.valid}
+                            onChange={(event) => store.setCount(row.id, event.target.value)}
+                            onBlur={() => store.commitCount(row.id)}
+                          />
+                          <Button
+                            variant="ghost"
+                            className={stepButton}
+                            aria-label="Больше копий"
+                            onClick={() => store.setCount(row.id, String(row.count + 1))}
+                          >
+                            <PlusIcon aria-hidden="true" />
+                          </Button>
+                        </span>
                       </div>
 
                       {(statusWarning || warnings.length > 0) && (
