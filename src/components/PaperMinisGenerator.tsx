@@ -918,7 +918,7 @@ export default function PaperMinisGenerator() {
                         >
                           <span
                             className={cn(
-                              'absolute top-1 right-1 inline-flex overflow-hidden rounded-full border',
+                              'absolute -top-1 -right-1 inline-flex overflow-hidden rounded-full border',
                               row.calibration
                                 ? 'border-primary bg-primary text-primary-foreground'
                                 : 'border-border bg-surface-elevated text-text',
@@ -982,7 +982,7 @@ export default function PaperMinisGenerator() {
                               size="icon-sm"
                               className={cn(
                                 overlayButton,
-                                'absolute top-1 right-1 rounded-full border border-border bg-surface-elevated',
+                                'absolute -top-1 -right-1 rounded-full border border-border bg-surface-elevated',
                               )}
                               aria-label="Убрать оборот"
                               title="Убрать оборот"
