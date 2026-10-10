@@ -1,6 +1,14 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
 import { useStore } from '@nanostores/react';
-import { ChevronDownIcon } from 'lucide-react';
+import {
+  ChevronDownIcon,
+  CopyIcon,
+  MinusIcon,
+  PlusIcon,
+  RulerIcon,
+  Trash2Icon,
+  XIcon,
+} from 'lucide-react';
 import {
   Accordion,
   AccordionContent,
@@ -24,6 +32,7 @@ import type { CalibrationLine } from '@/lib/paper-minis/calibration-session';
 import { entryStatusWarning } from '@/lib/paper-minis/geometry';
 import { buildFilename, buildPrinterScaleTestSheetFilename } from '@/lib/paper-minis/pdf-filenames';
 import {
+  CUSTOM_SIZE_NAME,
   HEIGHT_SLOT_ORDER,
   slotLabel,
   slotGeometryLabel,
@@ -32,6 +41,7 @@ import {
 } from '@/lib/paper-minis/sizes';
 import type { HeightCalibration, PreparedArtwork } from '@/lib/paper-minis/types';
 import { pluralRu } from '@/lib/plural';
+import { cn } from '@/lib/utils';
 
 const field =
   'min-h-11 w-full rounded-lg border border-border bg-surface-elevated px-3 text-text focus-visible:outline-2 focus-visible:outline-primary';
@@ -40,6 +50,16 @@ const foldTrigger =
   'min-h-12 items-center gap-2 py-0 font-sans text-base font-normal hover:no-underline **:data-[slot=accordion-trigger-icon]:ml-0';
 
 const foldValue = 'ml-auto truncate text-sm text-text-muted';
+
+const rowField =
+  'inline-flex h-10 items-center rounded-md border border-border bg-surface text-sm text-text';
+
+const stepButton = 'h-full w-9 rounded-md text-base';
+
+// The visible icon stays small on the thumbnail; the pseudo-element widens the
+// hit area towards the 44 px touch target.
+const overlayButton =
+  "relative size-5 rounded-none after:absolute after:-inset-2 after:content-[''] [&_svg:not([class*='size-'])]:size-3";
 
 const miniatureForms = { one: 'миниатюра', few: 'миниатюры', many: 'миниатюр' };
 
@@ -90,11 +110,13 @@ function ArtworkFrame({
   artwork,
   url,
   label,
+  imageClassName,
   children,
 }: {
   artwork: PreparedArtwork;
   url: string;
   label: string;
+  imageClassName?: string;
   children?: ReactNode;
 }) {
   return (
@@ -106,7 +128,7 @@ function ArtworkFrame({
           aspectRatio: `${artwork.width} / ${artwork.height}`,
         }}
       >
-        <img src={url} alt={label} className="block h-full w-full" />
+        <img src={url} alt={label} className={cn('block h-full w-full', imageClassName)} />
         {children}
       </span>
     </span>
@@ -149,34 +171,37 @@ function NamingHint() {
   );
 }
 
+// A thumbnail on the white the mini prints on. Without a file of its own, the
+// back slot shows the front mirrored and faded: that is what the PDF prints.
 function ArtworkSlot({
   artwork,
+  mirrorOf,
   calibration,
   label,
-  displayLabel,
   hint,
   loading,
   onFile,
+  children,
 }: {
   artwork?: PreparedArtwork | null;
+  mirrorOf?: PreparedArtwork | null;
   calibration?: HeightCalibration;
   label: string;
-  displayLabel?: string;
   hint: string;
   loading: boolean;
   onFile: (file: File) => void;
+  children?: ReactNode;
 }) {
-  const url = useArtworkUrl(artwork);
+  const shown = artwork ?? mirrorOf;
+  const mirrored = !artwork && !!mirrorOf;
+  const url = useArtworkUrl(shown);
   const input = useRef<HTMLInputElement>(null);
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-surface-elevated">
-      <div className="border-b border-border px-3 py-2">
-        <p className="truncate text-sm font-medium text-text">{displayLabel ?? label}</p>
-      </div>
+    <div className="relative h-20 w-14 shrink-0 sm:h-26 sm:w-20">
       <Button
         variant="ghost"
-        className="h-40 w-full rounded-none whitespace-normal p-3 focus-visible:ring-inset"
+        className="size-full rounded-sm border-border bg-surface-elevated p-1.5 whitespace-normal hover:bg-surface-elevated focus-visible:ring-inset"
         aria-label={label}
         onClick={() => input.current?.click()}
         onDragOver={(event) => {
@@ -192,15 +217,20 @@ function ArtworkSlot({
           if (file) onFile(file);
         }}
       >
-        {url && artwork ? (
-          <ArtworkFrame artwork={artwork} url={url} label={label}>
+        {url && shown && !loading ? (
+          <ArtworkFrame
+            artwork={shown}
+            url={url}
+            label={mirrored ? '' : label}
+            imageClassName={mirrored ? '-scale-x-100 opacity-35' : undefined}
+          >
             {calibration && (
               <span className="pointer-events-none absolute inset-0">
                 {(['head', 'feet'] as const).map((key) => (
                   <span
                     key={key}
                     data-testid={`calibration-${key}`}
-                    className="absolute left-0 right-0 border-t-2 border-primary bg-surface/70 text-[10px] font-bold text-primary shadow-sm"
+                    className="absolute left-0 right-0 border-t-2 border-primary"
                     style={{ top: `${calibration[key] * 100}%` }}
                   />
                 ))}
@@ -208,11 +238,12 @@ function ArtworkSlot({
             )}
           </ArtworkFrame>
         ) : (
-          <span className="max-w-44 text-sm font-normal leading-relaxed text-text-muted">
+          <span className="text-xs font-normal leading-tight text-text-muted">
             {loading ? 'Загрузка…' : hint}
           </span>
         )}
       </Button>
+      {children}
       <input
         ref={input}
         type="file"
@@ -855,146 +886,178 @@ export default function PaperMinisGenerator() {
                   </DropdownMenu>
                 )}
               </div>
-              {rows.map((row, index) => {
-                const status = packed.entries[index];
-                const statusWarning = status && entryStatusWarning(status);
-                const rowInputs = inputs.rows[row.id];
+              <div className="flex flex-col gap-3">
+                {rows.map((row, index) => {
+                  const status = packed.entries[index];
+                  const statusWarning = status && entryStatusWarning(status);
+                  const rowInputs = inputs.rows[row.id];
+                  const loading = status?.state === 'loading';
 
-                return (
-                  <article
-                    key={row.id}
-                    aria-label={`Миниатюра ${index + 1}`}
-                    className="border-y border-border py-5"
-                  >
-                    <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <h3 className="break-all text-xl text-text">
-                        {row.name || `Миниатюра ${index + 1}`}
-                      </h3>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="ghost"
-                          className="min-h-11"
-                          onClick={() => store.duplicate(row.id)}
-                        >
-                          Дублировать
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          className="min-h-11"
-                          onClick={() => store.remove(row.id)}
-                        >
-                          Удалить
-                        </Button>
-                      </div>
-                    </div>
+                  const warnings = [
+                    status?.state === 'failed' && row.frontError,
+                    row.normalizationWarning,
+                    row.backWarning,
+                  ].filter((warning): warning is string => !!warning);
 
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <ArtworkSlot
-                        artwork={row.artwork}
-                        calibration={row.calibration}
-                        label="Лицевая сторона"
-                        hint="Выбрать лицевую сторону"
-                        loading={status?.state === 'loading'}
-                        onFile={(file) => void store.setImage(row.id, file)}
-                      />
-                      <div className="space-y-2">
+                  return (
+                    <article
+                      key={row.id}
+                      aria-label={`Миниатюра ${index + 1}`}
+                      className="-mx-3 grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-4 gap-y-2.5 rounded-lg p-3 transition-colors duration-120 focus-within:bg-muted/40 hover:bg-muted/40 motion-reduce:transition-none"
+                    >
+                      <div className="row-span-2 flex gap-1.5">
+                        <ArtworkSlot
+                          artwork={row.artwork}
+                          calibration={row.calibration}
+                          label="Лицевая сторона"
+                          hint="Выбрать лицевую сторону"
+                          loading={loading}
+                          onFile={(file) => void store.setImage(row.id, file)}
+                        >
+                          <span
+                            className={cn(
+                              'absolute -top-1 -right-1 inline-flex overflow-hidden rounded-full border',
+                              row.calibration
+                                ? 'border-primary bg-primary text-primary-foreground'
+                                : 'border-border bg-surface-elevated text-text',
+                            )}
+                          >
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              className={cn(
+                                overlayButton,
+                                row.calibration &&
+                                  'hover:bg-secondary hover:text-primary-foreground',
+                              )}
+                              aria-label="Задать рост"
+                              title={
+                                row.calibration
+                                  ? 'Изменить разметку головы и стоп'
+                                  : 'Задать рост: отметить голову и стопы'
+                              }
+                              disabled={!row.artwork || loading}
+                              onClick={(event) => {
+                                calibrationOpener.current = event.currentTarget;
+                                store.openCalibration(row.id);
+                              }}
+                            >
+                              <RulerIcon aria-hidden="true" />
+                            </Button>
+                            {row.calibration && (
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                className={cn(
+                                  overlayButton,
+                                  'border-0 border-l border-primary-foreground/35 hover:bg-secondary hover:text-primary-foreground',
+                                )}
+                                aria-label="Сбросить рост"
+                                title="Сбросить рост"
+                                onClick={() => store.resetCalibration(row.id)}
+                              >
+                                <XIcon aria-hidden="true" />
+                              </Button>
+                            )}
+                          </span>
+                        </ArtworkSlot>
                         <ArtworkSlot
                           artwork={row.backArtwork}
+                          mirrorOf={row.backImage ? undefined : row.artwork}
                           calibration={row.calibration}
                           label={
                             row.backImage
                               ? `Оборот: ${row.backImage.name}`
                               : 'Оборот: отражение лицевой стороны'
                           }
-                          displayLabel="Оборот"
-                          hint="Добавить свой оборот или оставить отражение"
-                          loading={status?.state === 'loading' && !!row.backImage}
+                          hint="Свой оборот"
+                          loading={loading && !!row.backImage}
                           onFile={(file) => void store.setImage(row.id, file, true)}
-                        />
-                        {(row.backImage || row.backWarning) && (
-                          <Button
-                            variant="ghost"
-                            className="min-h-11 w-full"
-                            onClick={() => store.clearBack(row.id)}
-                          >
-                            Убрать оборот
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="mt-4 grid gap-3 rounded-lg bg-muted/50 p-3 sm:grid-cols-2">
-                      <div className="space-y-2 sm:col-span-2">
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            variant="outline"
-                            className="min-h-11"
-                            disabled={!row.artwork || status?.state === 'loading'}
-                            onClick={(event) => {
-                              calibrationOpener.current = event.currentTarget;
-                              store.openCalibration(row.id);
-                            }}
-                          >
-                            Задать рост
-                          </Button>
-                          {row.calibration && (
+                        >
+                          {(row.backImage || row.backWarning) && (
                             <Button
                               variant="ghost"
-                              className="min-h-11"
-                              onClick={() => store.resetCalibration(row.id)}
+                              size="icon-sm"
+                              className={cn(
+                                overlayButton,
+                                'absolute -top-1 -right-1 rounded-full border border-border bg-surface-elevated',
+                              )}
+                              aria-label="Убрать оборот"
+                              title="Убрать оборот"
+                              onClick={() => store.clearBack(row.id)}
                             >
-                              Сбросить рост
+                              <XIcon aria-hidden="true" />
                             </Button>
                           )}
-                        </div>
-                        {row.calibration && (
-                          <p className="text-sm font-medium text-text">Рост задан вручную</p>
-                        )}
+                        </ArtworkSlot>
                       </div>
-                      <label className="block text-sm">
-                        Высота существа
-                        <select
-                          className={field}
-                          value={row.heightSlot}
-                          title={slotGeometryLabel(row.heightSlot)}
-                          onChange={(event) => {
-                            const value = event.target.value;
 
-                            const size =
-                              value === 'custom'
-                                ? value
-                                : HEIGHT_SLOT_ORDER.find((slot) => slot === value);
-
-                            if (size !== undefined) store.setSize(row.id, size);
-                          }}
+                      <div className="flex min-w-0 items-start gap-1">
+                        <h3 className="min-w-0 flex-1 pt-0.5 text-xl leading-tight [overflow-wrap:anywhere] text-text">
+                          {row.name || `Миниатюра ${index + 1}`}
+                        </h3>
+                        {row.calibration && <span className="sr-only">Рост задан вручную</span>}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="-my-2.5 size-11 text-text-muted hover:text-text"
+                          aria-label="Дублировать"
+                          title="Дублировать"
+                          onClick={() => store.duplicate(row.id)}
                         >
-                          <SizeOptions custom />
-                        </select>
-                      </label>
-                      <label className="block text-sm">
-                        Количество копий
-                        <input
-                          className={field}
-                          type="number"
-                          min="1"
-                          step="1"
-                          required
-                          value={rowInputs.count.text}
-                          aria-invalid={!rowInputs.count.valid}
-                          onChange={(event) => store.setCount(row.id, event.target.value)}
-                          onBlur={() => store.commitCount(row.id)}
-                        />
-                      </label>
-                      {row.heightSlot === 'custom' && (
-                        <div className="grid grid-cols-2 gap-2 sm:col-span-2">
-                          {(['customWidthMm', 'customHeightMm'] as const).map((key, i) => {
+                          <CopyIcon aria-hidden="true" className="size-5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="-my-2.5 size-11 text-text-muted hover:text-text"
+                          aria-label="Удалить"
+                          title="Удалить"
+                          onClick={() => store.remove(row.id)}
+                        >
+                          <Trash2Icon aria-hidden="true" className="size-5" />
+                        </Button>
+                      </div>
+
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <span
+                          className={`${rowField} relative gap-1 px-3 font-semibold focus-within:outline-2 focus-within:outline-primary hover:bg-muted`}
+                        >
+                          {row.heightSlot === 'custom'
+                            ? CUSTOM_SIZE_NAME
+                            : slotName(row.heightSlot)}
+                          <ChevronDownIcon aria-hidden="true" className="size-4" />
+                          <select
+                            className="absolute inset-0 cursor-pointer opacity-0"
+                            aria-label="Высота существа"
+                            value={row.heightSlot}
+                            title={slotGeometryLabel(row.heightSlot)}
+                            onChange={(event) => {
+                              const value = event.target.value;
+
+                              const size =
+                                value === 'custom'
+                                  ? value
+                                  : HEIGHT_SLOT_ORDER.find((slot) => slot === value);
+
+                              if (size !== undefined) store.setSize(row.id, size);
+                            }}
+                          >
+                            <SizeOptions custom />
+                          </select>
+                        </span>
+                        {row.heightSlot === 'custom' &&
+                          (['customWidthMm', 'customHeightMm'] as const).map((key, i) => {
                             const dimension = i === 0 ? 'width' : 'height';
 
                             return (
-                              <label key={key} className="text-sm">
+                              <label
+                                key={key}
+                                className="flex items-center gap-2 text-sm text-text-muted"
+                              >
                                 {i === 0 ? 'Основание, мм' : 'Фигурка, мм'}
                                 <input
-                                  className={field}
+                                  className={`${rowField} w-20 px-2 text-text`}
                                   type="number"
                                   step="any"
                                   required
@@ -1010,43 +1073,64 @@ export default function PaperMinisGenerator() {
                               </label>
                             );
                           })}
-                        </div>
-                      )}
-                    </div>
+                        <span className={`${rowField} ml-auto font-semibold`}>
+                          <Button
+                            variant="ghost"
+                            className={stepButton}
+                            aria-label="Меньше копий"
+                            disabled={row.count <= 1}
+                            onClick={() => store.setCount(row.id, String(row.count - 1))}
+                          >
+                            <MinusIcon aria-hidden="true" />
+                          </Button>
+                          <input
+                            className="h-full w-10 bg-transparent text-center tabular-nums [appearance:textfield] focus-visible:outline-2 focus-visible:outline-primary aria-invalid:text-danger [&::-webkit-inner-spin-button]:appearance-none"
+                            type="number"
+                            min="1"
+                            step="1"
+                            required
+                            aria-label="Количество копий"
+                            value={rowInputs.count.text}
+                            aria-invalid={!rowInputs.count.valid}
+                            onChange={(event) => store.setCount(row.id, event.target.value)}
+                            onBlur={() => store.commitCount(row.id)}
+                          />
+                          <Button
+                            variant="ghost"
+                            className={stepButton}
+                            aria-label="Больше копий"
+                            onClick={() => store.setCount(row.id, String(row.count + 1))}
+                          >
+                            <PlusIcon aria-hidden="true" />
+                          </Button>
+                        </span>
+                      </div>
 
-                    <p className="mt-3 text-xs leading-relaxed text-text-muted">
-                      {row.backImage
-                        ? 'В PDF попадёт отдельное изображение оборота.'
-                        : 'Без отдельного файла лицевая сторона будет отражена автоматически.'}
-                    </p>
-                    {statusWarning && (
-                      <p
-                        role="status"
-                        className={`mt-3 border-l-2 pl-3 text-sm ${status.state === 'oversized' ? 'border-danger text-danger' : 'border-warning text-warning'}`}
-                      >
-                        {statusWarning}
-                      </p>
-                    )}
-                    {[
-                      status?.state === 'failed' && row.frontError,
-                      row.normalizationWarning,
-                      row.backWarning,
-                    ].flatMap((warning, i) =>
-                      warning
-                        ? [
+                      {(statusWarning || warnings.length > 0) && (
+                        <div className="col-start-2 space-y-2">
+                          {statusWarning && (
                             <p
-                              key={i}
                               role="status"
-                              className="mt-3 border-l-2 border-warning pl-3 text-sm text-warning"
+                              className={`border-l-2 pl-3 text-sm ${status.state === 'oversized' ? 'border-danger text-danger' : 'border-warning text-warning'}`}
+                            >
+                              {statusWarning}
+                            </p>
+                          )}
+                          {warnings.map((warning) => (
+                            <p
+                              key={warning}
+                              role="status"
+                              className="border-l-2 border-warning pl-3 text-sm text-warning"
                             >
                               {warning}
-                            </p>,
-                          ]
-                        : [],
-                    )}
-                  </article>
-                );
-              })}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
             </section>
           </div>
         </div>
