@@ -21,12 +21,14 @@ async function measureTabLayout(controls: Locator) {
           textLeft = Math.min(textLeft, box.left);
           textRight = Math.max(textRight, box.right);
 
-          if (
-            !lineBoxes.some(
-              (line) =>
-                Math.abs(line.top - box.top) < 0.5 && Math.abs(line.bottom - box.bottom) < 0.5,
-            )
-          ) {
+          const line = lineBoxes.find(
+            (line) => box.top < line.bottom && box.bottom > line.top,
+          );
+
+          if (line) {
+            line.top = Math.min(line.top, box.top);
+            line.bottom = Math.max(line.bottom, box.bottom);
+          } else {
             lineBoxes.push({ bottom: box.bottom, top: box.top });
           }
         }
