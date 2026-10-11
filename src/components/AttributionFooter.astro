@@ -15,11 +15,17 @@ interface Props {
 const { author, source, sourceUrl, license, licenseUrl } = Astro.props;
 ---
 
-<footer class="mt-16 border-t border-border pt-6 pb-12 text-sm text-text-muted">
+<footer class="mbs-16 flex flex-col gap-1 border-bs border-border pbs-6 pbe-12 text-sm text-text-muted">
   <p>
-    Основано на <a href={sourceUrl} class="underline hover:text-primary">{source}</a>
+    Основано на{' '}
+    <a href={sourceUrl} class="underline hover:text-primary">
+      {source}
+    </a>
     {author}. Распространяется на условиях
-    <a href={licenseUrl} class="underline hover:text-primary">{license}</a>.
+    <a href={licenseUrl} class="underline hover:text-primary">
+      {license}
+    </a>
+    .
   </p>
-  <p class="mt-1">Перевод и интерфейс — TTRPG Tools.</p>
+  <p>Перевод и интерфейс — TTRPG Tools.</p>
 </footer>

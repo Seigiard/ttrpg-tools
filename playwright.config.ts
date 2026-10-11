@@ -8,7 +8,7 @@ const baseURL = `http://127.0.0.1:${port}`;
 const previewCommand = `${process.env.CI ? '' : 'bun run build && '}bunx vite preview --host 127.0.0.1 --port ${port} --strictPort`;
 
 export default defineConfig({
-  testDir: './tests/paper-minis',
+  testDir: './tests',
   testMatch: '**/*.e2e.ts',
   forbidOnly: !!process.env.CI,
   fullyParallel: true,

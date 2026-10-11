@@ -73,8 +73,8 @@ export function BlackHackPricesGenerator({ table }: Props) {
   const visibleCategories = table.settlementCategories[settlement];
 
   return (
-    <div className="space-y-8">
-      <div className="space-y-3">
+    <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-3">
         <span className="font-mono text-xs uppercase tracking-wider text-text-muted">
           Тип поселения
         </span>
@@ -124,11 +124,11 @@ function CategorySection({ category, rolls }: CategorySectionProps) {
   const formula = `${count}к${sides}${category.multiplier > 1 ? `×${category.multiplier}` : ''}`;
 
   return (
-    <section data-testid={`category-${category.key}`}>
+    <section className="flex flex-col gap-3" data-testid={`category-${category.key}`}>
       <h3 className="font-mono text-xs uppercase tracking-wider text-text-muted">
         {category.ru} · {formula} монет
       </h3>
-      <div className="mt-3 overflow-x-auto">
+      <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <tbody>
             {category.items.map((item, itemIndex) => (
@@ -154,14 +154,14 @@ interface PriceRowProps {
 
 function PriceRow({ category, item, faces }: PriceRowProps) {
   return (
-    <tr className="border-b border-border last:border-0">
+    <tr className="border-be border-border last:border-0">
       <td className="px-2 py-1.5 text-text">
         {item.ru}
         {item.note ? (
-          <span className="ml-2 font-mono text-xs text-text-muted">{item.note}</span>
+          <span className="ms-2 font-mono text-xs text-text-muted">{item.note}</span>
         ) : null}
       </td>
-      <td className="px-2 py-1.5 text-right font-mono" data-testid="item-price">
+      <td className="px-2 py-1.5 text-end font-mono" data-testid="item-price">
         <Skeleton loading={faces === null}>
           {faces ? itemPrice(faces, category, item) : 0} мон.
         </Skeleton>

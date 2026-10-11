@@ -3,6 +3,13 @@
 @import 'shadcn/tailwind.css';
 
 @custom-variant dark (&:is(.dark *));
+@custom-variant hover {
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      @slot;
+    }
+  }
+}
 
 /*
  * Дизайн-токены TTRPG Tools. Единственный источник правды — docs/DESIGN.md.
@@ -14,22 +21,31 @@
 
 @theme {
   /* Семантические токены TTRPG Tools */
-  --color-primary: #b45309; /* burnt sienna */
-  --color-primary-foreground: #fbf7ef;
-  --color-secondary: #7c2d12; /* dried blood */
-  --color-secondary-foreground: #fbf7ef;
-  --color-success: #15803d;
-  --color-warning: #a16207;
-  --color-warning-text: #7a4b00;
-  --color-warning-surface: #fff6e5;
-  --color-warning-border: #f0d9a8;
-  --color-danger: #b91c1c;
+  --color-primary: oklch(0.555283 0.145505 48.9975); /* burnt sienna */
+  --color-primary-foreground: var(--color-surface);
+  --color-primary-hover: color-mix(in oklch, var(--color-primary), black 12%);
+  --color-primary-subtle: color-mix(in oklch, var(--color-primary) 10%, transparent);
+  --color-secondary: oklch(0.408389 0.116468 38.1715); /* dried blood */
+  --color-secondary-foreground: var(--color-surface);
+  --color-secondary-hover: color-mix(in oklch, var(--color-secondary), black 12%);
+  --color-success: oklch(0.527299 0.137103 150.0693);
+  --color-warning: oklch(0.553781 0.120683 66.4416);
+  --color-warning-text: oklch(0.456365 0.099394 69.1443);
+  --color-warning-surface: oklch(0.975616 0.024358 83.4175);
+  --color-warning-border: oklch(0.892391 0.068524 85.7278);
+  --color-danger: oklch(0.50542 0.190493 27.5181);
+  --color-danger-subtle: color-mix(in oklch, var(--color-danger) 10%, transparent);
+  --color-danger-pressed: color-mix(in oklch, var(--color-danger) 20%, transparent);
 
-  --color-surface: #fbf7ef; /* тёплая бумага */
-  --color-surface-elevated: #ffffff;
-  --color-text: #1c1917;
-  --color-text-muted: #57534e;
-  --color-border: #e7e2d5;
+  --color-surface: oklch(0.977026 0.011414 84.5781); /* тёплая бумага */
+  --color-surface-elevated: oklch(1 0 none);
+  --color-text: oklch(0.216115 0.006126 56.0434);
+  --color-text-muted: oklch(0.444417 0.009597 73.639);
+  --color-border: oklch(0.913158 0.018236 89.3643);
+  --color-overlay: oklch(0 0 none / 0.6);
+  --color-surface-translucent: color-mix(in oklch, var(--color-surface) 70%, transparent);
+  --color-surface-veil: color-mix(in oklch, var(--color-surface) 90%, transparent);
+  --color-skeleton: color-mix(in oklch, var(--color-text-muted) 20%, transparent);
 
   --font-sans: Inter, Roboto, 'Helvetica Neue', 'Arial Nova', 'Nimbus Sans', Arial, sans-serif;
   --font-mono:
@@ -39,6 +55,15 @@
   --radius-sm: 4px;
   --radius-md: 8px;
   --radius-lg: 12px;
+  --text-home-title: clamp(3rem, 1.5rem + 7.5vw, 4.5rem);
+  --text-tool-title: clamp(2rem, 1.642857rem + 1.785714vw, 2.5rem);
+  --spacing-page-gutter: clamp(1rem, 0.642857rem + 1.785714vw, 1.5rem);
+  --spacing-home-block: clamp(3rem, 1rem + 10vw, 5rem);
+  --spacing-home-header: clamp(2.5rem, 1rem + 7.5vw, 4rem);
+  --spacing-section: clamp(2.5rem, 2rem + 2.5vw, 3rem);
+  --spacing-tool-block: clamp(2rem, 1.285714rem + 3.571429vw, 3rem);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --default-transition-timing-function: var(--ease-out);
 }
 
 /* shadcn-совместимые токены — отображаем на нашу палитру.
@@ -50,7 +75,8 @@
   --color-card-foreground: var(--color-text);
   --color-popover: var(--color-surface-elevated);
   --color-popover-foreground: var(--color-text);
-  --color-muted: #f0ead9;
+  --color-muted: oklch(0.937165 0.023468 90.7554);
+  --color-muted-subtle: color-mix(in oklch, var(--color-muted) 50%, transparent);
   --color-muted-foreground: var(--color-text-muted);
   --color-accent: var(--color-primary);
   --color-accent-foreground: var(--color-primary-foreground);
@@ -68,11 +94,23 @@ body {
   font-family: var(--font-sans);
 }
 
+:root {
+  scrollbar-gutter: stable;
+  overflow-wrap: break-word;
+  text-wrap: pretty;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-block-size: 100svh;
+}
+
 h1,
 h2,
 h3 {
   font-family: var(--font-display);
   font-weight: 400;
+  text-wrap: balance;
 }
 
 @layer base {
@@ -82,5 +120,118 @@ h3 {
   *:focus-visible {
     outline: 2px solid var(--color-primary);
     outline-offset: 2px;
+  }
+  :is(button, a, summary, [role='button']) {
+    touch-action: manipulation;
+  }
+  :is(a, summary):active {
+    color: var(--color-secondary);
+  }
+  :is(input, textarea, select) {
+    font-size: max(16px, 1rem);
+  }
+  :is(td, th) {
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+}
+
+@layer components {
+  .content-grid {
+    --content: 48rem;
+    --breakout: var(--content);
+    --gutter: var(--spacing-page-gutter);
+    display: grid;
+    grid-template-columns:
+      [full-width-start] minmax(var(--gutter), 1fr)
+      [breakout-start] minmax(0, calc((var(--breakout) - var(--content)) / 2))
+      [content-start] min(100% - var(--gutter) * 2, var(--content)) [content-end]
+      minmax(0, calc((var(--breakout) - var(--content)) / 2)) [breakout-end]
+      minmax(var(--gutter), 1fr) [full-width-end];
+  }
+
+  .content-grid > *,
+  .content-grid > astro-island > * {
+    grid-column: content;
+    min-inline-size: 0;
+  }
+
+  .content-grid--home {
+    --content: 64rem;
+  }
+
+  .content-grid--wide {
+    --content: 72rem;
+  }
+
+  .tool-heading {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-block-end: 2.5rem;
+  }
+
+  .catalog-section {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: start;
+    gap: 1.5rem;
+    padding-block: var(--spacing-section);
+  }
+
+  .catalog-section > h2 {
+    flex: 1 1 10rem;
+  }
+
+  .catalog-section > :not(h2) {
+    flex: 999 1 0;
+    min-inline-size: 50%;
+  }
+
+  .intrinsic-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  }
+
+  .minis-layout {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+  }
+
+  .minis-settings {
+    flex: 1 1 15rem;
+    min-inline-size: 0;
+  }
+
+  .minis-settings > aside {
+    position: sticky;
+    inset-block-start: 1rem;
+    max-block-size: calc(100dvh - 2rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+
+  .minis-workspace {
+    flex: 999 1 0;
+    min-inline-size: 50%;
+  }
+
+  .artwork-frame {
+    display: grid;
+    place-items: center;
+    block-size: 100%;
+    inline-size: 100%;
+    container-type: size;
+  }
+
+  .artwork-frame > span {
+    position: relative;
+    min-inline-size: 0;
+  }
+
+  .artwork-frame img {
+    flex: none;
   }
 }

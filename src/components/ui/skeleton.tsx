@@ -16,7 +16,7 @@ function Skeleton({
       className={cn(
         'rounded-md',
         loading &&
-          'inline-block animate-pulse cursor-default bg-text-muted/20 text-transparent shrink-0 select-none pointer-events-none [&_*]:invisible',
+          'inline-block motion-safe:animate-pulse cursor-default bg-skeleton text-transparent shrink-0 select-none pointer-events-none [&_*]:invisible',
         className,
       )}
       {...props}

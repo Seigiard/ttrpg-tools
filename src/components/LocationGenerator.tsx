@@ -35,8 +35,8 @@ export function LocationGenerator<Biome extends string>({ table }: Props<Biome>)
   };
 
   return (
-    <div className="space-y-8">
-      <div className="space-y-3">
+    <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-3">
         <span className="font-mono text-xs uppercase tracking-wider text-text-muted">Биом</span>
         <Tabs value={biome} onValueChange={handleBiomeChange}>
           <TabsList>
@@ -94,7 +94,7 @@ function ResultCard<Biome extends string>({
           </span>
         </div>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="flex flex-col gap-6">
         <ResultRow
           label="Ориентир"
           loading={loading}
@@ -143,20 +143,20 @@ function ResultRow({
 }: ResultRowProps) {
   return (
     <div className="flex items-start justify-between gap-4" data-testid={testId}>
-      <div className="flex-1">
-        <div className="flex items-baseline gap-3">
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <span className="font-mono text-xs uppercase tracking-wider text-text-muted">
             {label}
           </span>
-          <span className="font-mono text-xs text-text-muted">
+          <span className="font-mono text-xs text-text-muted tabular-nums">
             <Skeleton loading={loading}>{rollLabel}</Skeleton>
           </span>
         </div>
-        <p className="mt-2 font-display text-2xl">
+        <p className="mbs-2 font-display text-2xl">
           <Skeleton loading={loading}>{ru}</Skeleton>
         </p>
         {question ? (
-          <p className="mt-1 italic text-sm text-text-muted">
+          <p className="mbs-1 italic text-sm text-text-muted">
             <Skeleton loading={loading}>
               <em>{question}</em>
             </Skeleton>
@@ -192,7 +192,7 @@ function ReferenceTables<Biome extends string>({
   const highlightDetail = roll ? roll.detailIndex : null;
 
   return (
-    <div className="grid gap-8 md:grid-cols-2">
+    <div className="intrinsic-grid gap-8">
       <ReferenceList
         title={`Ориентир · ${table.biomeLabels[biome]}`}
         rows={table.landmarks[biome].rows}
