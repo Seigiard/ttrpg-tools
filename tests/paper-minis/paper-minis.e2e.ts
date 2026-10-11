@@ -98,3 +98,31 @@ test('uploads a front and back and downloads a PDF', async ({ page }) => {
     hasBody: bytes.length > 5,
   }).toEqual({ rows: 1, hasBack: true, filename: true, signature: '%PDF-', hasBody: true });
 });
+
+test.describe('height picker on a narrow viewport', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('keeps the trigger and popup options touch-sized inside the viewport', async ({ page }) => {
+    // #given
+    await page
+      .getByLabel('Добавить изображения', { exact: true })
+      .setInputFiles(fixture('trim-6x5-to-4x3.png'));
+    const trigger = page.getByRole('combobox', { name: 'Высота существа' });
+    // #when
+    await trigger.click();
+    const popup = page.getByRole('listbox');
+    const option = popup.getByRole('option', { name: /Крошечный/ });
+    await expect(option).toBeVisible();
+    const [triggerBox, popupBox, optionBox] = await Promise.all([
+      trigger.boundingBox(),
+      popup.boundingBox(),
+      option.boundingBox(),
+    ]);
+    // #then
+    expect({
+      trigger: triggerBox !== null && triggerBox.width >= 44 && triggerBox.height >= 44,
+      popup: popupBox !== null && popupBox.x >= 0 && popupBox.x + popupBox.width <= 390,
+      option: optionBox !== null && optionBox.width >= 44 && optionBox.height >= 44,
+    }).toEqual({ trigger: true, popup: true, option: true });
+  });
+});

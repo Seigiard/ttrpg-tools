@@ -33,6 +33,11 @@ function openFold(name: string) {
   fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${name}`) }));
 }
 
+function chooseSelectOption(trigger: HTMLElement, name: string | RegExp) {
+  fireEvent.click(trigger);
+  fireEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name }));
+}
+
 async function addBack(bytes = png) {
   await act(async () => {
     fireEvent.change(
@@ -92,9 +97,7 @@ test('blur restores an invalid draft and both PDF actions become available again
   fireEvent.blur(count);
   fireEvent.change(margin, { target: { value: '' } });
   fireEvent.blur(margin);
-  fireEvent.change(screen.getByRole('combobox', { name: 'Высота существа' }), {
-    target: { value: 'custom' },
-  });
+  chooseSelectOption(screen.getByRole('combobox', { name: 'Высота существа' }), 'Свой размер');
   const width = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Основание, мм' });
   const height = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Фигурка, мм' });
   fireEvent.change(width, { target: { value: '12.5' } });
@@ -277,29 +280,58 @@ test('the back slot announces the selected file and returns to reflection after 
   ]).toEqual(['Оборот: back.png', 'Оборот: отражение лицевой стороны']);
 });
 
+test('row height picker shows a two-line popup and marks the selected size', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  const trigger = screen.getByRole('combobox', { name: 'Высота существа' });
+  // #when
+  fireEvent.click(trigger);
+
+  const listbox = screen.getByRole('listbox');
+
+  const tiny = within(listbox).getByRole('option', {
+    name: 'Крошечный · 0,6 м фамильяр, бес, ястреб',
+  });
+
+  const medium = within(listbox).getByRole('option', {
+    name: 'Средний · 1,7 м человек, эльф, орк',
+  });
+
+  // #then
+  expect({
+    trigger: trigger.textContent,
+    tiny: {
+      hint: tiny.getAttribute('title'),
+      typical: within(tiny).getByText('фамильяр, бес, ястреб').textContent,
+    },
+    selected: medium.getAttribute('aria-selected'),
+    custom: within(listbox).getByRole('option', { name: 'Свой размер' }).textContent,
+  }).toEqual({
+    trigger: 'Средний · 1,7 м',
+    tiny: {
+      hint: 'Основание 20 мм · высота 12 мм',
+      typical: 'фамильяр, бес, ястреб',
+    },
+    selected: 'true',
+    custom: 'Свой размер',
+  });
+});
+
 test('rendered dwarf and bugbear choices retain distinct heights on the same base', async () => {
   // #given
   render(<PaperMinisGenerator />);
   await addFront();
-  const select = screen.getByRole<HTMLSelectElement>('combobox', { name: 'Высота существа' });
+  const trigger = screen.getByRole('combobox', { name: 'Высота существа' });
   // #when
-  fireEvent.change(select, { target: { value: 'medium-short' } });
-  const dwarfGeometry = select.title;
-  fireEvent.change(select, { target: { value: 'medium-tall' } });
+  chooseSelectOption(trigger, /дварф/);
+  const dwarfGeometry = trigger.title;
+  chooseSelectOption(trigger, /багбир/);
   // #then
-  expect({
-    dwarf: within(select)
-      .getByRole('option', { name: /дварф/ })
-      .getAttribute('value'),
-    bugbear: within(select)
-      .getByRole('option', { name: /багбир/ })
-      .getAttribute('value'),
-    geometry: [dwarfGeometry, select.title],
-  }).toEqual({
-    dwarf: 'medium-short',
-    bugbear: 'medium-tall',
-    geometry: ['Основание 25 мм · высота 27 мм', 'Основание 25 мм · высота 43 мм'],
-  });
+  expect([dwarfGeometry, trigger.title]).toEqual([
+    'Основание 25 мм · высота 27 мм',
+    'Основание 25 мм · высота 43 мм',
+  ]);
 });
 
 test('the height menu appears with a second mini and sets every mini to the chosen height', async () => {
@@ -316,10 +348,20 @@ test('the height menu appears with a second mini and sets every mini to the chos
     expect({
       withOne,
       heights: screen
-        .getAllByRole<HTMLSelectElement>('combobox', { name: 'Высота существа' })
-        .map((select) => select.value),
-    }).toEqual({ withOne: null, heights: ['huge', 'huge'] }),
+        .getAllByRole('combobox', { name: 'Высота существа' })
+        .map((trigger) => trigger.textContent),
+    }).toEqual({ withOne: null, heights: ['Огромный · 6 м', 'Огромный · 6 м'] }),
   );
+});
+
+test('paper format picker updates the paper summary', () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  openFold('Бумага');
+  // #when
+  chooseSelectOption(screen.getByRole('combobox', { name: 'Формат' }), 'Letter');
+  // #then
+  expect(foldText('Бумага')).toBe('БумагаLetter · поля 2 мм');
 });
 
 test('the PDF button describes its output with Russian plural forms', async () => {
@@ -710,9 +752,7 @@ test('an oversized mini uses danger styling in both the row and calibration dial
   // #given
   render(<PaperMinisGenerator />);
   await addFront();
-  fireEvent.change(screen.getByRole('combobox', { name: 'Высота существа' }), {
-    target: { value: 'custom' },
-  });
+  chooseSelectOption(screen.getByRole('combobox', { name: 'Высота существа' }), 'Свой размер');
   fireEvent.change(screen.getByRole('spinbutton', { name: 'Основание, мм' }), {
     target: { value: '300' },
   });

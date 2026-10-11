@@ -2,10 +2,23 @@ import { afterEach, expect, test } from 'bun:test';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import PaperMinisGenerator from './PaperMinisGenerator';
 
+const png = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==',
+  'base64',
+);
+
 afterEach(() => {
   cleanup();
   localStorage.removeItem('pmg-settings');
 });
+
+async function addFront() {
+  await act(async () => {
+    fireEvent.change(screen.getByLabelText('Добавить изображения', { selector: 'input' }), {
+      target: { files: [new File([png], 'figure.png', { type: 'image/png' })] },
+    });
+  });
+}
 
 async function openCalibration(frontHeight = 200) {
   localStorage.setItem('pmg-settings', JSON.stringify({ normalization: false }));
@@ -124,4 +137,57 @@ test('arrow keys prevent scrolling while other keys pass through unchanged', asy
     afterArrow,
     afterTab: head.getAttribute('aria-valuenow'),
   }).toEqual({ arrowHandled: false, tabHandled: true, afterArrow: '0.5', afterTab: '0.5' });
+});
+
+test.each(['Enter', ' ', 'ArrowDown'])('height picker opens with %j', async (key) => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  const trigger = screen.getByRole('combobox', { name: 'Высота существа' });
+  trigger.focus();
+  // #when
+  fireEvent.keyDown(trigger, { key });
+  // #then
+  expect(screen.getByRole('listbox')).toBeInstanceOf(HTMLElement);
+});
+
+test('height picker arrow navigation selects the highlighted option with Enter', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  const trigger = screen.getByRole('combobox', { name: 'Высота существа' });
+  trigger.focus();
+  fireEvent.keyDown(trigger, { key: 'Enter' });
+  const listbox = screen.getByRole('listbox');
+  // #when
+  fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+
+  const highlighted = within(listbox)
+    .getAllByRole('option')
+    .find((option) => option.hasAttribute('data-highlighted'))?.textContent;
+
+  fireEvent.keyDown(trigger, { key: 'Enter' });
+  // #then
+  expect({ highlighted, value: trigger.textContent }).toEqual({
+    highlighted: 'Средний, высокий · 2,1 мбагбир, голиаф',
+    value: 'Средний, высокий · 2,1 м',
+  });
+});
+
+test('height picker closes with Escape and returns focus to its trigger', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  const trigger = screen.getByRole('combobox', { name: 'Высота существа' });
+  trigger.focus();
+  // #when
+  fireEvent.keyDown(trigger, { key: 'Enter' });
+  const popupWasOpen = screen.queryByRole('listbox') !== null;
+  fireEvent.keyDown(trigger, { key: 'Escape' });
+  // #then
+  expect({
+    popupWasOpen,
+    popupClosed: screen.queryByRole('listbox') === null,
+    focusReturned: document.activeElement === trigger,
+  }).toEqual({ popupWasOpen: true, popupClosed: true, focusReturned: true });
 });
