@@ -29,15 +29,11 @@ function DropdownMenuContent({
       placement={align === 'end' ? 'bottom end' : 'bottom start'}
       offset={4}
       className={cn(
-        'isolate z-50 max-w-[calc(100vw-1rem)] min-w-[var(--trigger-width)] overflow-clip rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-border',
+        'isolate z-50 max-w-[calc(100vw-1rem)] min-w-[var(--trigger-width)] overflow-y-auto overscroll-contain rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-border',
         className,
       )}
     >
-      <Menu
-        data-slot="dropdown-menu-content"
-        className="max-h-[var(--visual-viewport-height)] overflow-y-auto overscroll-contain outline-hidden"
-        {...props}
-      >
+      <Menu data-slot="dropdown-menu-content" className="outline-hidden" {...props}>
         {children}
       </Menu>
     </Popover>

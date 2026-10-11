@@ -60,16 +60,9 @@ function SelectContent({ className, children, ...props }: ListBoxProps<string>) 
   return (
     <Popover
       offset={4}
-      className="z-50 max-w-[calc(100vw-1rem)] overflow-clip rounded-lg border border-border bg-surface-elevated text-text shadow-md outline-hidden"
+      className="z-50 max-w-[calc(100vw-1rem)] overflow-y-auto overscroll-contain rounded-lg border border-border bg-surface-elevated text-text shadow-md outline-hidden"
     >
-      <ListBox
-        data-slot="select-content"
-        className={cn(
-          'max-h-[min(20rem,var(--visual-viewport-height))] overflow-y-auto p-1',
-          className,
-        )}
-        {...props}
-      >
+      <ListBox data-slot="select-content" className={cn('p-1', className)} {...props}>
         {children}
       </ListBox>
     </Popover>
