@@ -128,9 +128,7 @@ test('arrowing between price tabs does not change the generator until Enter acti
   await expect(page.locator('astro-island[ssr]')).toHaveCount(0);
   const rural = page.getByRole('tab', { name: 'Сельская местность', exact: true });
   await expect(rural).toHaveAttribute('aria-selected', 'true');
-  await expect(page).toHaveURL(
-    /\/the-black-hack\/prices\/\?s=rural&r=[0-9a-z]{1,7}\.[0-9a-z]+$/,
-  );
+  await expect(page).toHaveURL(/\/the-black-hack\/prices\/\?s=rural&r=[0-9a-z]{1,7}\.[0-9a-z]+$/);
   const urlBeforeFocus = page.url();
   const priceBeforeFocus = await page.getByTestId('item-price').first().textContent();
   await rural.focus();
@@ -147,9 +145,7 @@ test('arrowing between price tabs does not change the generator until Enter acti
     urlUnchanged: page.url() === urlBeforeFocus,
   };
   await page.keyboard.press('Enter');
-  await expect(page).toHaveURL(
-    /\/the-black-hack\/prices\/\?s=town&r=[0-9a-z]{1,7}\.[0-9a-z]+$/,
-  );
+  await expect(page).toHaveURL(/\/the-black-hack\/prices\/\?s=town&r=[0-9a-z]{1,7}\.[0-9a-z]+$/);
   const afterActivation = {
     selected: await page.getByRole('tab', { selected: true }).textContent(),
     categories: await page
