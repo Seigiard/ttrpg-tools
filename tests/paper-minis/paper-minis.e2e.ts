@@ -324,6 +324,34 @@ test('height picker stays touch-sized inside a 390px viewport', async ({ page })
   }).toEqual({ trigger: true, popup: true, option: true });
 });
 
+test('landscape height picker scrolls to a pointer-selectable custom size', async ({ page }) => {
+  // #given
+  await page.setViewportSize({ width: 844, height: 390 });
+  await page
+    .getByLabel('Добавить изображения', { exact: true })
+    .setInputFiles(fixture('trim-6x5-to-4x3.png'));
+  const trigger = page.getByRole('button', { name: 'Высота существа' });
+  await trigger.scrollIntoViewIfNeeded();
+  await trigger.click();
+  const popup = page.getByRole('listbox');
+  const custom = page.getByRole('option', { name: 'Свой размер' });
+  const gesture = await scrollPopupToEnd(page, popup);
+  expect(gesture.reachable).toBe(true);
+  await expect
+    .poll(async () => (await pointerTarget(custom)).reachable, {
+      message: 'The custom-size option must become pointer-reachable after scrolling.',
+    })
+    .toBe(true);
+
+  // #when
+  const customPoint = await pointerTarget(custom);
+
+  // #then
+  expect(customPoint.reachable).toBe(true);
+  await page.mouse.click(customPoint.x, customPoint.y);
+  await expect(trigger).toHaveText('Свой размер');
+});
+
 test('height picker names its selected value and describes its current geometry', async ({
   page,
 }) => {
@@ -392,6 +420,46 @@ test('bulk height menu keeps every choice inside its popover', async ({ page }) 
 
   // #then
   expect(overflowingInlineItems).toEqual([]);
+});
+
+test('landscape bulk height menu scrolls to a pointer-selectable final choice', async ({
+  page,
+}) => {
+  // #given
+  await page.setViewportSize({ width: 844, height: 390 });
+  const artwork = await readFile(fixture('trim-6x5-to-4x3.png'));
+  await page.getByLabel('Добавить изображения', { exact: true }).setInputFiles([
+    { name: 'hero.png', mimeType: 'image/png', buffer: artwork },
+    { name: 'villain.png', mimeType: 'image/png', buffer: artwork },
+  ]);
+  const trigger = page.getByRole('button', { name: 'Сменить высоту' });
+  await trigger.scrollIntoViewIfNeeded();
+  await trigger.click();
+  const popup = page.getByRole('menu');
+  const gargantuan = page.getByRole('menuitem', { name: /^Громадный · 10 м и выше/ });
+  const gesture = await scrollPopupToEnd(page, popup);
+  expect(gesture.reachable).toBe(true);
+  await expect
+    .poll(async () => (await pointerTarget(gargantuan)).reachable, {
+      message: 'The final bulk-height choice must become pointer-reachable after scrolling.',
+    })
+    .toBe(true);
+
+  // #when
+  const gargantuanPoint = await pointerTarget(gargantuan);
+
+  // #then
+  expect(gargantuanPoint.reachable).toBe(true);
+  await page.mouse.click(gargantuanPoint.x, gargantuanPoint.y);
+  await expect
+    .poll(async () =>
+      Promise.all(
+        (await page.getByRole('button', { name: 'Высота существа' }).all()).map((button) =>
+          button.textContent(),
+        ),
+      ),
+    )
+    .toEqual(['Громадный · 10 м и выше', 'Громадный · 10 м и выше']);
 });
 
 for (const scenario of calibrationPointerScenarios) {
@@ -517,6 +585,41 @@ async function dragPointer(
   await page.mouse.down();
   await page.mouse.move(end.x, end.y, { steps: 5 });
   await page.mouse.up();
+}
+
+async function scrollPopupToEnd(page: Page, popup: Locator) {
+  const gesture = await popup.evaluate((element) => {
+    const shell = element.parentElement;
+    if (!shell) throw new Error('The popup shell is missing.');
+    const box = shell.getBoundingClientRect();
+    const left = Math.max(0, box.left);
+    const right = Math.min(window.innerWidth, box.right);
+    const top = Math.max(0, box.top);
+    const bottom = Math.min(window.innerHeight, box.bottom);
+    if (left >= right || top >= bottom)
+      throw new Error('The popup has no visible area for a scroll gesture.');
+    const x = Math.round((left + right) / 2);
+    const y = Math.round((top + bottom) / 2);
+    const target = document.elementFromPoint(x, y);
+
+    return { x, y, reachable: !!target && shell.contains(target) };
+  });
+
+  await page.mouse.move(gesture.x, gesture.y);
+  await page.mouse.wheel(0, 1_000);
+
+  return gesture;
+}
+
+async function pointerTarget(option: Locator) {
+  return option.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    const x = Math.round(box.left + box.width / 2);
+    const y = Math.round(box.top + box.height / 2);
+    const target = document.elementFromPoint(x, y);
+
+    return { x, y, reachable: !!target && element.contains(target) };
+  });
 }
 
 async function calibrationLineYs(artwork: Locator): Promise<[number, number]> {
