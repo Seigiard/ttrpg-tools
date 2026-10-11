@@ -154,18 +154,8 @@ export function slotName(size: HeightSlot): string {
     : CATEGORY_NAMES[category];
 }
 
-// What a dropdown option says. The creature's own height, in metres, is the
-// thing a user recognises — a dwarf against a bugbear is 1.3 m against 2.1 m,
-// where "Medium" says nothing. The millimetres the mini prints at are the
-// consequence, not the choice, so they go in the tooltip below.
-export function slotLabel(size: MiniSize): string {
-  if (size === 'custom') return CUSTOM_SIZE_NAME;
-  const { realHeight, typical } = HEIGHT_SLOTS[size];
-
-  return `${slotName(size)} · ${realHeight} · ${typical}`;
-}
-
-// The same facts as slotLabel, split for a two-line menu item.
+// The menu splits a slot's identity from examples so a reader can scan the
+// distinct height before the longer creature list.
 export function slotMenuParts(size: HeightSlot) {
   const { realHeight, typical } = HEIGHT_SLOTS[size];
 

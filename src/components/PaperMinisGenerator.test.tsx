@@ -25,6 +25,13 @@ async function addFront(bytes = png) {
   });
 }
 
+async function chooseSelectOption(trigger: HTMLElement, name: string | RegExp) {
+  fireEvent.click(trigger);
+  const option = within(await screen.findByRole('listbox')).getByRole('option', { name });
+  fireEvent.click(option);
+  await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
+}
+
 function foldText(name: string) {
   return screen.getByRole('button', { name: new RegExp(`^${name}`) }).textContent;
 }
@@ -92,9 +99,7 @@ test('blur restores an invalid draft and both PDF actions become available again
   fireEvent.blur(count);
   fireEvent.change(margin, { target: { value: '' } });
   fireEvent.blur(margin);
-  fireEvent.change(screen.getByRole('combobox', { name: 'Высота существа' }), {
-    target: { value: 'custom' },
-  });
+  await chooseSelectOption(screen.getByRole('button', { name: /Высота существа/ }), 'Свой размер');
   const width = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Основание, мм' });
   const height = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Фигурка, мм' });
   fireEvent.change(width, { target: { value: '12.5' } });
@@ -281,25 +286,16 @@ test('rendered dwarf and bugbear choices retain distinct heights on the same bas
   // #given
   render(<PaperMinisGenerator />);
   await addFront();
-  const select = screen.getByRole<HTMLSelectElement>('combobox', { name: 'Высота существа' });
+  const trigger = screen.getByRole('button', { name: /Высота существа/ });
   // #when
-  fireEvent.change(select, { target: { value: 'medium-short' } });
-  const dwarfGeometry = select.title;
-  fireEvent.change(select, { target: { value: 'medium-tall' } });
+  await chooseSelectOption(trigger, /дварф/);
+  const dwarfGeometry = trigger.getAttribute('title');
+  await chooseSelectOption(trigger, /багбир/);
   // #then
-  expect({
-    dwarf: within(select)
-      .getByRole('option', { name: /дварф/ })
-      .getAttribute('value'),
-    bugbear: within(select)
-      .getByRole('option', { name: /багбир/ })
-      .getAttribute('value'),
-    geometry: [dwarfGeometry, select.title],
-  }).toEqual({
-    dwarf: 'medium-short',
-    bugbear: 'medium-tall',
-    geometry: ['Основание 25 мм · высота 27 мм', 'Основание 25 мм · высота 43 мм'],
-  });
+  expect([dwarfGeometry, trigger.getAttribute('title')]).toEqual([
+    'Основание 25 мм · высота 27 мм',
+    'Основание 25 мм · высота 43 мм',
+  ]);
 });
 
 test('the height menu appears with a second mini and sets every mini to the chosen height', async () => {
@@ -316,9 +312,9 @@ test('the height menu appears with a second mini and sets every mini to the chos
     expect({
       withOne,
       heights: screen
-        .getAllByRole<HTMLSelectElement>('combobox', { name: 'Высота существа' })
-        .map((select) => select.value),
-    }).toEqual({ withOne: null, heights: ['huge', 'huge'] }),
+        .getAllByRole('button', { name: /Высота существа/ })
+        .map((trigger) => trigger.textContent),
+    }).toEqual({ withOne: null, heights: ['Огромный · 6 м', 'Огромный · 6 м'] }),
   );
 });
 
@@ -729,9 +725,7 @@ test('an oversized mini uses danger styling in both the row and calibration dial
   // #given
   render(<PaperMinisGenerator />);
   await addFront();
-  fireEvent.change(screen.getByRole('combobox', { name: 'Высота существа' }), {
-    target: { value: 'custom' },
-  });
+  await chooseSelectOption(screen.getByRole('button', { name: /Высота существа/ }), 'Свой размер');
   fireEvent.change(screen.getByRole('spinbutton', { name: 'Основание, мм' }), {
     target: { value: '300' },
   });

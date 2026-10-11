@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import {
+  CUSTOM_SIZE_NAME,
   HEIGHT_SLOTS,
   HEIGHT_SLOT_ORDER,
   resolveFigureHeightMm,
   resolveSizeDimensionsMm,
-  slotLabel,
+  slotMenuParts,
   slotName,
 } from './sizes.ts';
 import type { HeightSlot, SizeCategory } from './types.ts';
@@ -93,14 +94,17 @@ t('a halfling prints shorter than a dwarf, and a dwarf shorter than a human', ()
   );
 });
 
-// One example pins the shape of the text itself, which is a contract with the
-// reader rather than with the code. The rules the labels have to obey are the
-// three tests below, which do not read the table back.
-t('an option reads as name, creature height, examples', () => {
+// One example pins the live two-line menu text, which is a contract with the
+// reader rather than with the code. The rules below compare it with unchanged
+// slot data, so a shared label cannot hide a repeated height.
+t('a menu option reads as name and creature height above examples', () => {
   // #when
-  const options = (['medium', 'custom'] as const).map(slotLabel);
+  const medium = slotMenuParts('medium');
   // #then
-  assert.deepEqual(options, ['Средний · 1,7 м · человек, эльф, орк', 'Свой размер']);
+  assert.deepEqual(
+    [medium.title, medium.typical, CUSTOM_SIZE_NAME],
+    ['Средний · 1,7 м', 'человек, эльф, орк', 'Свой размер'],
+  );
 });
 
 t('a slot’s name is its category, told apart from its siblings', () => {
@@ -128,15 +132,15 @@ t('a slot’s name is its category, told apart from its siblings', () => {
 
 // The dropdown is where printableminimaker#24's defect would come back: three Medium slots that
 // read alike are the dwarf and the bugbear again, one step earlier.
-t('no two options read alike, and each carries its own slot’s height', () => {
+t('no two menu titles read alike, and each carries its own slot’s height', () => {
   // #when
-  const options = HEIGHT_SLOT_ORDER.map(slotLabel);
+  const options = HEIGHT_SLOT_ORDER.map(slotMenuParts);
   // #then
   assert.deepEqual(
     {
-      distinct: new Set(options).size,
+      distinct: new Set(options.map((option) => option.title)).size,
       carriesOwnHeight: HEIGHT_SLOT_ORDER.every((slot, i) =>
-        options[i].includes(HEIGHT_SLOTS[slot].realHeight),
+        options[i].title.includes(HEIGHT_SLOTS[slot].realHeight),
       ),
     },
     { distinct: HEIGHT_SLOT_ORDER.length, carriesOwnHeight: true },

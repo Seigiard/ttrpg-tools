@@ -1,24 +1,69 @@
-import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
+import { createContext, useContext, useState, type ReactNode } from 'react';
+import {
+  Dialog as DialogPrimitive,
+  Heading,
+  Modal,
+  ModalOverlay,
+  type DialogProps,
+  type HeadingProps,
+  type ModalOverlayProps,
+} from 'react-aria-components';
 import { cn } from '@/lib/utils';
 
-const Dialog = DialogPrimitive.Root;
-const DialogTitle = DialogPrimitive.Title;
+const DialogContext = createContext<(() => void) | null>(null);
 
-function DialogContent({ className, ...props }: DialogPrimitive.Popup.Props) {
+function Dialog({
+  defaultOpen = false,
+  onOpenChange,
+  children,
+}: {
+  defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  children: ReactNode;
+}) {
+  const [isOpen, setOpen] = useState(defaultOpen);
+  const close = () => {
+    setOpen(false);
+    onOpenChange?.(false);
+  };
+
+  return isOpen ? <DialogContext.Provider value={close}>{children}</DialogContext.Provider> : null;
+}
+
+function DialogContent({
+  className,
+  children,
+  isDismissable = true,
+  ...props
+}: DialogProps & Pick<ModalOverlayProps, 'isDismissable'>) {
+  const close = useContext(DialogContext);
+
   return (
-    <DialogPrimitive.Portal>
-      <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-overlay" />
-      <DialogPrimitive.Viewport className="fixed inset-0 z-50 flex items-center justify-center-safe p-4">
-        <DialogPrimitive.Popup
+    <ModalOverlay
+      isOpen
+      isDismissable={isDismissable}
+      onOpenChange={(open) => {
+        if (!open) close?.();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center-safe bg-overlay p-4"
+    >
+      <Modal>
+        <DialogPrimitive
           className={cn(
             'max-h-[90dvh] w-full max-w-3xl overflow-auto overscroll-contain rounded-xl border border-border bg-surface p-4 shadow-xl [scrollbar-gutter:stable]',
             className,
           )}
           {...props}
-        />
-      </DialogPrimitive.Viewport>
-    </DialogPrimitive.Portal>
+        >
+          {children}
+        </DialogPrimitive>
+      </Modal>
+    </ModalOverlay>
   );
+}
+
+function DialogTitle({ className, slot: _, ...props }: HeadingProps) {
+  return <Heading slot="title" className={className} {...props} />;
 }
 
 export { Dialog, DialogContent, DialogTitle };

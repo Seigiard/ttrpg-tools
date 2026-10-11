@@ -1,4 +1,53 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
+
+async function measureTabLayout(controls: Locator) {
+  return controls.evaluateAll((controls) => {
+    const wrappedLabels: (string | null)[] = [];
+    const overflowingLabels: (string | null)[] = [];
+    const heights = new Set<number>();
+
+    for (const control of controls) {
+      const lineBoxes: { bottom: number; top: number }[] = [];
+      let textLeft = Infinity;
+      let textRight = -Infinity;
+      const textNodes = document.createTreeWalker(control, NodeFilter.SHOW_TEXT);
+      let textNode = textNodes.nextNode();
+
+      while (textNode) {
+        const range = document.createRange();
+        range.selectNodeContents(textNode);
+
+        for (const box of range.getClientRects()) {
+          textLeft = Math.min(textLeft, box.left);
+          textRight = Math.max(textRight, box.right);
+
+          const line = lineBoxes.find(
+            (line) => box.top < line.bottom && box.bottom > line.top,
+          );
+
+          if (line) {
+            line.top = Math.min(line.top, box.top);
+            line.bottom = Math.max(line.bottom, box.bottom);
+          } else {
+            lineBoxes.push({ bottom: box.bottom, top: box.top });
+          }
+        }
+
+        textNode = textNodes.nextNode();
+      }
+
+      const controlBox = control.getBoundingClientRect();
+
+      if (lineBoxes.length !== 1) wrappedLabels.push(control.textContent);
+      if (textLeft < controlBox.left || textRight > controlBox.right) {
+        overflowingLabels.push(control.textContent);
+      }
+      heights.add(controlBox.height);
+    }
+
+    return { wrappedLabels, overflowingLabels, unequalHeights: heights.size !== 1 };
+  });
+}
 
 const routes = [
   '/',
@@ -84,6 +133,92 @@ for (const direction of ['ltr', 'rtl']) {
   });
 }
 
+test('the selected generator tab has the primary fill while unselected tabs stay transparent', async ({
+  page,
+}) => {
+  // #given
+  await page.goto('/mausritter/locations/');
+  await expect(page.locator('astro-island[ssr]')).toHaveCount(0);
+  const selected = page.getByRole('tab', { selected: true });
+  const unselected = page.getByRole('tab', { selected: false }).first();
+
+  // #when
+  await expect
+    .poll(() => selected.evaluate((element) => getComputedStyle(element).backgroundColor))
+    .not.toBe('');
+  const appearance = await Promise.all(
+    [selected, unselected].map((tab) =>
+      tab.evaluate((element) => {
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+
+        if (!context) throw new Error('Canvas 2D context is unavailable');
+
+        context.fillStyle = getComputedStyle(element).backgroundColor;
+        context.fillRect(0, 0, 1, 1);
+
+        return Array.from(context.getImageData(0, 0, 1, 1).data);
+      }),
+    ),
+  );
+
+  // #then
+  expect(appearance).toEqual([
+    [180, 83, 9, 255],
+    [0, 0, 0, 0],
+  ]);
+});
+
+test('arrowing between price tabs does not change the generator until Enter activates it', async ({
+  page,
+}) => {
+  // #given
+  await page.goto('/the-black-hack/prices/');
+  await expect(page.locator('astro-island[ssr]')).toHaveCount(0);
+  const rural = page.getByRole('tab', { name: 'Сельская местность', exact: true });
+  await expect(rural).toHaveAttribute('aria-selected', 'true');
+  await expect(page).toHaveURL(/\/the-black-hack\/prices\/\?s=rural&r=[0-9a-z]{1,7}\.[0-9a-z]+$/);
+  const urlBeforeFocus = page.url();
+  const priceBeforeFocus = await page.getByTestId('item-price').first().textContent();
+  await rural.focus();
+
+  // #when
+  await page.keyboard.press('ArrowRight');
+  const afterArrow = {
+    selected: await page.getByRole('tab', { selected: true }).textContent(),
+    categories: await page
+      .locator('section[data-testid^="category-"]')
+      .evaluateAll((sections) => sections.map((section) => section.getAttribute('data-testid'))),
+    priceUnchanged:
+      (await page.getByTestId('item-price').first().textContent()) === priceBeforeFocus,
+    urlUnchanged: page.url() === urlBeforeFocus,
+  };
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/the-black-hack\/prices\/\?s=town&r=[0-9a-z]{1,7}\.[0-9a-z]+$/);
+  const afterActivation = {
+    selected: await page.getByRole('tab', { selected: true }).textContent(),
+    categories: await page
+      .locator('section[data-testid^="category-"]')
+      .evaluateAll((sections) => sections.map((section) => section.getAttribute('data-testid'))),
+    urlChanged: page.url() !== urlBeforeFocus,
+  };
+
+  // #then
+  expect({ afterArrow, afterActivation }).toEqual({
+    afterArrow: {
+      selected: 'Сельская местность',
+      categories: ['category-common'],
+      priceUnchanged: true,
+      urlUnchanged: true,
+    },
+    afterActivation: {
+      selected: 'Город',
+      categories: ['category-common', 'category-rare'],
+      urlChanged: true,
+    },
+  });
+});
+
 for (const route of ['/mausritter/locations/', '/mausritter/weather/', '/the-black-hack/prices/']) {
   for (const width of [320, 768]) {
     test(`${route} keeps tab labels inside equal-height controls at ${width}px`, async ({
@@ -99,26 +234,7 @@ for (const route of ['/mausritter/locations/', '/mausritter/weather/', '/the-bla
       await expect(tabs.first()).toBeVisible();
 
       // #then
-      const layout = await tabs.evaluateAll((controls) => {
-        const wrappedLabels: (string | null)[] = [];
-        const overflowingLabels: (string | null)[] = [];
-        const heights = new Set<number>();
-
-        for (const control of controls) {
-          const range = document.createRange();
-          range.selectNodeContents(control);
-          const textBox = range.getBoundingClientRect();
-          const controlBox = control.getBoundingClientRect();
-
-          if (range.getClientRects().length !== 1) wrappedLabels.push(control.textContent);
-          if (textBox.left < controlBox.left || textBox.right > controlBox.right) {
-            overflowingLabels.push(control.textContent);
-          }
-          heights.add(controlBox.height);
-        }
-
-        return { wrappedLabels, overflowingLabels, unequalHeights: heights.size !== 1 };
-      });
+      const layout = await measureTabLayout(tabs);
       expect(layout).toEqual({ wrappedLabels: [], overflowingLabels: [], unequalHeights: false });
     });
   }

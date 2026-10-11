@@ -1,10 +1,21 @@
-import { Accordion as AccordionPrimitive } from '@base-ui/react/accordion';
 import { cn } from '@/lib/utils';
 import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
+import {
+  Button,
+  Disclosure,
+  DisclosureGroup,
+  DisclosurePanel,
+  Heading,
+  type ButtonProps,
+  type DisclosureGroupProps,
+  type DisclosurePanelProps,
+  type DisclosureProps,
+} from 'react-aria-components';
+import type { ReactNode } from 'react';
 
-function Accordion({ className, ...props }: AccordionPrimitive.Root.Props) {
+function Accordion({ className, ...props }: DisclosureGroupProps) {
   return (
-    <AccordionPrimitive.Root
+    <DisclosureGroup
       data-slot="accordion"
       className={cn('flex w-full flex-col', className)}
       {...props}
@@ -12,20 +23,30 @@ function Accordion({ className, ...props }: AccordionPrimitive.Root.Props) {
   );
 }
 
-function AccordionItem({ className, ...props }: AccordionPrimitive.Item.Props) {
+function AccordionItem({
+  className,
+  value,
+  ...props
+}: Omit<DisclosureProps, 'id'> & { value: string }) {
   return (
-    <AccordionPrimitive.Item
+    <Disclosure
       data-slot="accordion-item"
-      className={cn('not-last:border-be', className)}
+      id={value}
+      className={cn('group/accordion-item not-last:border-be', className)}
       {...props}
     />
   );
 }
 
-function AccordionTrigger({ className, children, ...props }: AccordionPrimitive.Trigger.Props) {
+function AccordionTrigger({
+  className,
+  children,
+  ...props
+}: Omit<ButtonProps, 'children'> & { children?: ReactNode }) {
   return (
-    <AccordionPrimitive.Header className="flex">
-      <AccordionPrimitive.Trigger
+    <Heading className="flex">
+      <Button
+        slot="trigger"
         data-slot="accordion-trigger"
         className={cn(
           'group/accordion-trigger relative flex min-h-11 flex-1 items-start justify-between gap-2 rounded-lg border border-transparent py-2.5 text-start text-sm font-medium hover:underline active:bg-muted aria-disabled:pointer-events-none aria-disabled:opacity-50 **:data-[slot=accordion-trigger-icon]:ms-auto **:data-[slot=accordion-trigger-icon]:h-[1lh] **:data-[slot=accordion-trigger-icon]:w-[1em] **:data-[slot=accordion-trigger-icon]:text-muted-foreground',
@@ -42,16 +63,16 @@ function AccordionTrigger({ className, children, ...props }: AccordionPrimitive.
           data-slot="accordion-trigger-icon"
           className="pointer-events-none hidden shrink-0 group-aria-expanded/accordion-trigger:inline"
         />
-      </AccordionPrimitive.Trigger>
-    </AccordionPrimitive.Header>
+      </Button>
+    </Heading>
   );
 }
 
-function AccordionContent({ className, children, ...props }: AccordionPrimitive.Panel.Props) {
+function AccordionContent({ className, children, ...props }: DisclosurePanelProps) {
   return (
-    <AccordionPrimitive.Panel
+    <DisclosurePanel
       data-slot="accordion-content"
-      className="overflow-clip text-sm motion-safe:data-open:animate-accordion-down motion-safe:data-closed:animate-accordion-up"
+      className="overflow-clip text-sm motion-safe:group-data-[expanded]/accordion-item:animate-accordion-down"
       {...props}
     >
       <div
@@ -62,7 +83,7 @@ function AccordionContent({ className, children, ...props }: AccordionPrimitive.
       >
         {children}
       </div>
-    </AccordionPrimitive.Panel>
+    </DisclosurePanel>
   );
 }
 
