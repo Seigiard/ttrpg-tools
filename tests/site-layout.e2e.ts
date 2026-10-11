@@ -84,6 +84,77 @@ for (const direction of ['ltr', 'rtl']) {
   });
 }
 
+test('the selected generator tab has the primary fill while unselected tabs stay transparent', async ({
+  page,
+}) => {
+  // #given
+  await page.goto('/mausritter/locations/');
+  await expect(page.locator('astro-island[ssr]')).toHaveCount(0);
+  const selected = page.getByRole('tab', { selected: true });
+  const unselected = page.getByRole('tab', { selected: false }).first();
+
+  // #when
+  await expect
+    .poll(() => selected.evaluate((element) => getComputedStyle(element).backgroundColor))
+    .not.toBe('');
+  const appearance = await Promise.all(
+    [selected, unselected].map((tab) =>
+      tab.evaluate((element) => getComputedStyle(element).backgroundColor),
+    ),
+  );
+
+  // #then
+  expect(appearance).toEqual(['rgb(180, 83, 9)', 'rgba(0, 0, 0, 0)']);
+});
+
+test('arrowing between price tabs does not change the generator until Enter activates it', async ({
+  page,
+}) => {
+  // #given
+  await page.goto('/the-black-hack/prices/');
+  await expect(page.locator('astro-island[ssr]')).toHaveCount(0);
+  const rural = page.getByRole('tab', { name: 'Сельская местность', exact: true });
+  await expect(rural).toHaveAttribute('aria-selected', 'true');
+  const urlBeforeFocus = page.url();
+  const priceBeforeFocus = await page.getByTestId('item-price').first().textContent();
+  await rural.focus();
+
+  // #when
+  await page.keyboard.press('ArrowRight');
+  const afterArrow = {
+    selected: await page.getByRole('tab', { selected: true }).textContent(),
+    categories: await page
+      .locator('section[data-testid^="category-"]')
+      .evaluateAll((sections) => sections.map((section) => section.getAttribute('data-testid'))),
+    priceUnchanged:
+      (await page.getByTestId('item-price').first().textContent()) === priceBeforeFocus,
+    urlUnchanged: page.url() === urlBeforeFocus,
+  };
+  await page.keyboard.press('Enter');
+  const afterActivation = {
+    selected: await page.getByRole('tab', { selected: true }).textContent(),
+    categories: await page
+      .locator('section[data-testid^="category-"]')
+      .evaluateAll((sections) => sections.map((section) => section.getAttribute('data-testid'))),
+    urlChanged: page.url() !== urlBeforeFocus,
+  };
+
+  // #then
+  expect({ afterArrow, afterActivation }).toEqual({
+    afterArrow: {
+      selected: 'Сельская местность',
+      categories: ['category-common'],
+      priceUnchanged: true,
+      urlUnchanged: true,
+    },
+    afterActivation: {
+      selected: 'Город',
+      categories: ['category-common', 'category-rare'],
+      urlChanged: true,
+    },
+  });
+});
+
 for (const route of ['/mausritter/locations/', '/mausritter/weather/', '/the-black-hack/prices/']) {
   for (const width of [320, 768]) {
     test(`${route} keeps tab labels inside equal-height controls at ${width}px`, async ({

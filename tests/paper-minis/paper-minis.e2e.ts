@@ -324,6 +324,76 @@ test('height picker stays touch-sized inside a 390px viewport', async ({ page })
   }).toEqual({ trigger: true, popup: true, option: true });
 });
 
+test('height picker names its selected value and describes its current geometry', async ({
+  page,
+}) => {
+  // #given
+  await page
+    .getByLabel('Добавить изображения', { exact: true })
+    .setInputFiles(fixture('trim-6x5-to-4x3.png'));
+  const trigger = page
+    .getByRole('article', { name: 'Миниатюра 1' })
+    .getByRole('button')
+    .filter({ hasText: /^Средний/ });
+  await expect(trigger).toBeVisible({ timeout: 1_000 });
+
+  // #when
+  const medium = {
+    name: await trigger.ariaSnapshot(),
+    geometry: await trigger.getAttribute('aria-description'),
+  };
+  await trigger.click();
+  await page.getByRole('option', { name: /^Средний, высокий · 2,1 м/ }).click();
+  const tall = {
+    name: await trigger.ariaSnapshot(),
+    geometry: await trigger.getAttribute('aria-description'),
+  };
+
+  // #then
+  expect({ medium, tall }).toEqual({
+    medium: {
+      name: '- button "Средний · 1,7 м Высота существа": Средний · 1,7 м',
+      geometry: 'Основание 25 мм · высота 35 мм',
+    },
+    tall: {
+      name: '- button "Средний, высокий · 2,1 м Высота существа": Средний, высокий · 2,1 м',
+      geometry: 'Основание 25 мм · высота 43 мм',
+    },
+  });
+});
+
+test('bulk height menu keeps every choice inside its popover', async ({ page }) => {
+  // #given
+  const artwork = await readFile(fixture('trim-6x5-to-4x3.png'));
+  await page.getByLabel('Добавить изображения', { exact: true }).setInputFiles([
+    { name: 'hero.png', mimeType: 'image/png', buffer: artwork },
+    { name: 'villain.png', mimeType: 'image/png', buffer: artwork },
+  ]);
+  await page.getByRole('button', { name: 'Сменить высоту' }).click();
+  const menu = page.getByRole('menu');
+  await expect(menu).toBeVisible();
+
+  // #when
+  const overflowingInlineItems = await menu.evaluate((element) => {
+    const shell = element.parentElement;
+    if (!shell) throw new Error('The bulk menu popover is missing.');
+    const shellBox = shell.getBoundingClientRect();
+
+    return Array.from(element.querySelectorAll<HTMLElement>('[role="menuitem"]')).flatMap(
+      (item) => {
+        const itemBox = item.getBoundingClientRect();
+
+        return itemBox.left < shellBox.left || itemBox.right > shellBox.right
+          ? [item.textContent?.trim()]
+          : [];
+      },
+    );
+  });
+
+  // #then
+  expect(overflowingInlineItems).toEqual([]);
+});
+
 for (const scenario of calibrationPointerScenarios) {
   test(`a head-line pointer drag keeps feet fixed for ${scenario.name}`, async ({ page }) => {
     // #given
