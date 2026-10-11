@@ -99,12 +99,25 @@ test('the selected generator tab has the primary fill while unselected tabs stay
     .not.toBe('');
   const appearance = await Promise.all(
     [selected, unselected].map((tab) =>
-      tab.evaluate((element) => getComputedStyle(element).backgroundColor),
+      tab.evaluate((element) => {
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+
+        if (!context) throw new Error('Canvas 2D context is unavailable');
+
+        context.fillStyle = getComputedStyle(element).backgroundColor;
+        context.fillRect(0, 0, 1, 1);
+
+        return Array.from(context.getImageData(0, 0, 1, 1).data);
+      }),
     ),
   );
 
   // #then
-  expect(appearance).toEqual(['rgb(180, 83, 9)', 'rgba(0, 0, 0, 0)']);
+  expect(appearance).toEqual([
+    [180, 83, 9, 255],
+    [0, 0, 0, 0],
+  ]);
 });
 
 test('arrowing between price tabs does not change the generator until Enter activates it', async ({
@@ -115,6 +128,9 @@ test('arrowing between price tabs does not change the generator until Enter acti
   await expect(page.locator('astro-island[ssr]')).toHaveCount(0);
   const rural = page.getByRole('tab', { name: 'Сельская местность', exact: true });
   await expect(rural).toHaveAttribute('aria-selected', 'true');
+  await expect(page).toHaveURL(
+    /\/the-black-hack\/prices\/\?s=rural&r=[0-9a-z]{1,7}\.[0-9a-z]+$/,
+  );
   const urlBeforeFocus = page.url();
   const priceBeforeFocus = await page.getByTestId('item-price').first().textContent();
   await rural.focus();
@@ -131,6 +147,9 @@ test('arrowing between price tabs does not change the generator until Enter acti
     urlUnchanged: page.url() === urlBeforeFocus,
   };
   await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(
+    /\/the-black-hack\/prices\/\?s=town&r=[0-9a-z]{1,7}\.[0-9a-z]+$/,
+  );
   const afterActivation = {
     selected: await page.getByRole('tab', { selected: true }).textContent(),
     categories: await page
