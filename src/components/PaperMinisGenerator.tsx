@@ -42,7 +42,6 @@ import { buildFilename, buildPrinterScaleTestSheetFilename } from '@/lib/paper-m
 import {
   CUSTOM_SIZE_NAME,
   HEIGHT_SLOT_ORDER,
-  slotLabel,
   slotGeometryLabel,
   slotMenuParts,
   slotName,
@@ -162,7 +161,7 @@ function SizeSelectItems({ custom = false }: { custom?: boolean }) {
           </SelectItem>
         );
       })}
-      {custom && <SelectItem value="custom">{slotLabel('custom')}</SelectItem>}
+      {custom && <SelectItem value="custom">{CUSTOM_SIZE_NAME}</SelectItem>}
     </>
   );
 }
@@ -650,7 +649,6 @@ export default function PaperMinisGenerator() {
                   <AccordionContent className="grid grid-cols-[1.4fr_1fr] gap-2 pbe-4">
                     <div className="block text-sm text-text-muted">
                       <Select
-                        aria-label="Формат"
                         value={settings.pageSize}
                         onChange={(pageSize) => {
                           if (pageSize === 'a4' || pageSize === 'letter')
@@ -658,7 +656,7 @@ export default function PaperMinisGenerator() {
                         }}
                       >
                         <Label>Формат</Label>
-                        <SelectTrigger aria-label="Формат" className="mbs-1">
+                        <SelectTrigger className="mbs-1">
                           <SelectValue>{pageLabel}</SelectValue>
                         </SelectTrigger>
                         <SelectContent>
@@ -895,6 +893,7 @@ export default function PaperMinisGenerator() {
                             <DropdownMenuItem
                               key={slot}
                               className={`${selectItemClassName} flex-col items-start gap-0`}
+                              textValue={title}
                               title={slotGeometryLabel(slot)}
                               onAction={() => store.setAllSizes(slot)}
                             >
@@ -1041,7 +1040,6 @@ export default function PaperMinisGenerator() {
                       <div className="flex min-w-0 flex-wrap items-center gap-2">
                         <div className="w-full max-w-56 text-sm">
                           <Select
-                            aria-label="Высота существа"
                             value={row.heightSlot}
                             onChange={(value) => {
                               const size =
@@ -1052,8 +1050,8 @@ export default function PaperMinisGenerator() {
                               if (size !== undefined) store.setSize(row.id, size);
                             }}
                           >
+                            <Label className="sr-only">Высота существа</Label>
                             <SelectTrigger
-                              aria-label="Высота существа"
                               aria-description={slotGeometryLabel(row.heightSlot)}
                               title={slotGeometryLabel(row.heightSlot)}
                             >

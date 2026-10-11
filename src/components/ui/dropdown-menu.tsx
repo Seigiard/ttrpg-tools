@@ -28,9 +28,16 @@ function DropdownMenuContent({
     <Popover
       placement={align === 'end' ? 'bottom end' : 'bottom start'}
       offset={4}
-      className="isolate z-50 max-h-[var(--visual-viewport-height)] w-[var(--trigger-width)] min-w-32 overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-border"
+      className={cn(
+        'isolate z-50 max-w-[calc(100vw-1rem)] min-w-[var(--trigger-width)] overflow-clip rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-border',
+        className,
+      )}
     >
-      <Menu data-slot="dropdown-menu-content" className={cn('outline-none', className)} {...props}>
+      <Menu
+        data-slot="dropdown-menu-content"
+        className="max-h-[var(--visual-viewport-height)] overflow-y-auto overscroll-contain outline-hidden"
+        {...props}
+      >
         {children}
       </Menu>
     </Popover>
@@ -56,7 +63,7 @@ function DropdownMenuItem({ className, title, ...props }: MenuItemProps & { titl
     <MenuItem
       data-slot="dropdown-menu-item"
       className={cn(
-        "group/dropdown-menu-item relative flex min-h-11 cursor-default items-center gap-1.5 rounded-md px-1.5 py-1 text-sm select-none data-[focused]:bg-accent data-[focused]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-[1.2cap]",
+        "group/dropdown-menu-item relative flex min-h-11 cursor-default items-center gap-1.5 rounded-md px-1.5 py-1 text-sm select-none data-[focused]:bg-accent data-[focused]:text-accent-foreground active:bg-muted data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-[1.2cap]",
         className,
       )}
       render={(itemProps) =>

@@ -9,7 +9,7 @@
 - [Astro 6](https://astro.build/) — статика по умолчанию, React islands там где нужен интерактив.
 - React 19 + TypeScript (strict).
 - [Tailwind CSS v4](https://tailwindcss.com/) — токены через `@theme` в `src/styles/global.css`.
-- [shadcn/ui](https://ui.shadcn.com/) с Base UI как primitive layer.
+- [shadcn/ui](https://ui.shadcn.com/) с React Aria Components как primitive layer.
 - [oxlint](https://oxc.rs/docs/guide/usage/linter.html) — линт TS/TSX (Rust, быстро).
 - [oxfmt](https://oxc.rs/docs/guide/usage/formatter.html) — форматтер TS/TSX/CSS (Prettier-совместимый).
 - [Prettier + prettier-plugin-astro](https://github.com/withastro/prettier-plugin-astro) — форматирование `.astro` файлов.

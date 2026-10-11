@@ -33,6 +33,7 @@ function Dialog({
 function DialogContent({
   className,
   children,
+  isDismissable = true,
   ...props
 }: DialogProps & Pick<ModalOverlayProps, 'isDismissable'>) {
   const close = useContext(DialogContext);
@@ -40,7 +41,7 @@ function DialogContent({
   return (
     <ModalOverlay
       isOpen
-      isDismissable
+      isDismissable={isDismissable}
       onOpenChange={(open) => {
         if (!open) close?.();
       }}

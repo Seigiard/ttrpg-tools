@@ -99,7 +99,7 @@ test('blur restores an invalid draft and both PDF actions become available again
   fireEvent.blur(count);
   fireEvent.change(margin, { target: { value: '' } });
   fireEvent.blur(margin);
-  await chooseSelectOption(screen.getByRole('button', { name: 'Высота существа' }), 'Свой размер');
+  await chooseSelectOption(screen.getByRole('button', { name: /Высота существа/ }), 'Свой размер');
   const width = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Основание, мм' });
   const height = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Фигурка, мм' });
   fireEvent.change(width, { target: { value: '12.5' } });
@@ -286,7 +286,7 @@ test('rendered dwarf and bugbear choices retain distinct heights on the same bas
   // #given
   render(<PaperMinisGenerator />);
   await addFront();
-  const trigger = screen.getByRole('button', { name: 'Высота существа' });
+  const trigger = screen.getByRole('button', { name: /Высота существа/ });
   // #when
   await chooseSelectOption(trigger, /дварф/);
   const dwarfGeometry = trigger.getAttribute('title');
@@ -312,7 +312,7 @@ test('the height menu appears with a second mini and sets every mini to the chos
     expect({
       withOne,
       heights: screen
-        .getAllByRole('button', { name: 'Высота существа' })
+        .getAllByRole('button', { name: /Высота существа/ })
         .map((trigger) => trigger.textContent),
     }).toEqual({ withOne: null, heights: ['Огромный · 6 м', 'Огромный · 6 м'] }),
   );
@@ -725,7 +725,7 @@ test('an oversized mini uses danger styling in both the row and calibration dial
   // #given
   render(<PaperMinisGenerator />);
   await addFront();
-  await chooseSelectOption(screen.getByRole('button', { name: 'Высота существа' }), 'Свой размер');
+  await chooseSelectOption(screen.getByRole('button', { name: /Высота существа/ }), 'Свой размер');
   fireEvent.change(screen.getByRole('spinbutton', { name: 'Основание, мм' }), {
     target: { value: '300' },
   });
