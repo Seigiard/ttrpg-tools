@@ -372,7 +372,7 @@ function HeightCalibrationDialog({
                     aria-valuemax={session.ranges[key].max * 100}
                     aria-valuenow={lines[key] * 100}
                     aria-valuetext={`${Number((lines[key] * session.artworkHeight).toFixed(2))} пикселей от верха`}
-                    className={`absolute h-11 w-1/2 min-w-11 -translate-y-1/2 cursor-row-resize text-start text-xs font-bold text-primary active:text-secondary focus-visible:outline-2 focus-visible:outline-primary ${key === 'head' ? 'inset-s-0' : 'inset-e-0'}`}
+                    className={`absolute start-1/2 h-11 w-1/2 min-w-11 -translate-y-1/2 cursor-row-resize text-start text-xs font-bold text-primary active:text-secondary focus-visible:outline-2 focus-visible:outline-primary ${key === 'head' ? 'z-10 -translate-x-full ltr:translate-x-[calc(-100%+1px)] rtl:translate-x-full' : ''}`}
                     style={lineStyle(lines[key])}
                     onKeyDown={(event) => {
                       if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
