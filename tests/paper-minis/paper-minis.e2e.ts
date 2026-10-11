@@ -1,9 +1,53 @@
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
-import { expect, test, type Locator } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 const fixture = (name: string) => fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));
+
+const calibrationPointerScenarios: {
+  name: string;
+  fixture: string;
+  direction: 'ltr' | 'rtl';
+  hasBack: boolean;
+  useArtworkCenter: boolean;
+}[] = [
+  {
+    name: 'narrow LTR front',
+    fixture: 'tall-80x800.png',
+    direction: 'ltr',
+    hasBack: false,
+    useArtworkCenter: true,
+  },
+  {
+    name: 'narrow LTR front and back',
+    fixture: 'tall-80x800.png',
+    direction: 'ltr',
+    hasBack: true,
+    useArtworkCenter: true,
+  },
+  {
+    name: 'narrow RTL front',
+    fixture: 'tall-80x800.png',
+    direction: 'rtl',
+    hasBack: false,
+    useArtworkCenter: true,
+  },
+  {
+    name: 'narrow RTL front and back',
+    fixture: 'tall-80x800.png',
+    direction: 'rtl',
+    hasBack: true,
+    useArtworkCenter: true,
+  },
+  {
+    name: 'ordinary-width control',
+    fixture: 'wide-800x80.png',
+    direction: 'ltr',
+    hasBack: false,
+    useArtworkCenter: false,
+  },
+];
 
 async function inspectImage(image: Locator, points: [number, number][]) {
   return image.evaluate(async (element, samplePoints) => {
@@ -99,6 +143,44 @@ test('uploads a front and back and downloads a PDF', async ({ page }) => {
   }).toEqual({ rows: 1, hasBack: true, filename: true, signature: '%PDF-', hasBody: true });
 });
 
+for (const scenario of calibrationPointerScenarios) {
+  test(`a head-line pointer drag keeps feet fixed for ${scenario.name}`, async ({ page }) => {
+    // #given
+    await page.setViewportSize({ width: 390, height: 390 });
+    await page.evaluate((direction) => {
+      document.documentElement.dir = direction;
+    }, scenario.direction);
+    const artwork = await readFile(fixture(scenario.fixture));
+    await page.getByLabel('Добавить изображения', { exact: true }).setInputFiles(
+      scenario.hasBack
+        ? [
+            { name: 'hero.png', mimeType: 'image/png', buffer: artwork },
+            { name: 'hero-back.png', mimeType: 'image/png', buffer: artwork },
+          ]
+        : { name: 'hero.png', mimeType: 'image/png', buffer: artwork },
+    );
+    await page.getByRole('button', { name: 'Задать рост' }).click();
+    const calibrationArtwork = page.getByTestId('calibration-artworks');
+    const headSlider = page.getByRole('slider', { name: 'Голова' });
+    for (let step = 0; step < 72; step++) await headSlider.press('Shift+ArrowDown');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    const artworkBox = await calibrationArtwork.boundingBox();
+    const headBox = await headSlider.boundingBox();
+    if (!artworkBox || !headBox) throw new Error('The calibration controls are not visible.');
+    const [headY, feetY] = await calibrationLineYs(calibrationArtwork);
+    const targetY = Math.round(artworkBox.y + artworkBox.height * 0.7);
+    const dragX = scenario.useArtworkCenter
+      ? Math.round(artworkBox.x + artworkBox.width / 2)
+      : Math.round(headBox.x + headBox.width / 2);
+
+    // #when
+    await dragPointer(page, { x: dragX, y: headY }, { x: dragX, y: targetY });
+
+    // #then
+    expect(await calibrationLineYs(calibrationArtwork)).toEqual([targetY, feetY]);
+  });
+}
+
 for (const width of [320, 1440]) {
   test(`calibration markers stay aligned with both images at ${width}px and reset removes them`, async ({
     page,
@@ -152,4 +234,27 @@ async function markerPositions(slot: Locator) {
       Number(((line.getBoundingClientRect().top - imageBox.top) / imageBox.height).toFixed(2)),
     );
   });
+}
+
+async function dragPointer(
+  page: Page,
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+) {
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(end.x, end.y, { steps: 5 });
+  await page.mouse.up();
+}
+
+async function calibrationLineYs(artwork: Locator): Promise<[number, number]> {
+  const lines = await artwork
+    .locator(':scope > [aria-hidden="true"]')
+    .evaluateAll((elements) =>
+      elements.map((element) => Math.round(element.getBoundingClientRect().top)),
+    );
+
+  if (lines.length !== 2) throw new Error('The calibration lines are incomplete.');
+
+  return [lines[0]!, lines[1]!];
 }
