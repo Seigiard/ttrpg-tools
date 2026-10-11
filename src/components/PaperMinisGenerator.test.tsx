@@ -33,9 +33,15 @@ function openFold(name: string) {
   fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${name}`) }));
 }
 
-function chooseSelectOption(trigger: HTMLElement, name: string | RegExp) {
-  fireEvent.click(trigger);
-  fireEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name }));
+async function chooseSelectOption(trigger: HTMLElement, name: string | RegExp) {
+  fireEvent.mouseDown(trigger, { button: 0 });
+  const option = within(await screen.findByRole('listbox')).getByRole('option', { name });
+  fireEvent.pointerDown(option, { pointerType: 'mouse', button: 0 });
+  fireEvent.mouseDown(option, { button: 0 });
+  fireEvent.pointerUp(option, { pointerType: 'mouse', button: 0 });
+  fireEvent.mouseUp(option, { button: 0 });
+  fireEvent.click(option, { button: 0 });
+  await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
 }
 
 async function addBack(bytes = png) {
@@ -97,7 +103,10 @@ test('blur restores an invalid draft and both PDF actions become available again
   fireEvent.blur(count);
   fireEvent.change(margin, { target: { value: '' } });
   fireEvent.blur(margin);
-  chooseSelectOption(screen.getByRole('combobox', { name: 'Высота существа' }), 'Свой размер');
+  await chooseSelectOption(
+    screen.getByRole('combobox', { name: 'Высота существа' }),
+    'Свой размер',
+  );
   const width = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Основание, мм' });
   const height = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Фигурка, мм' });
   fireEvent.change(width, { target: { value: '12.5' } });
@@ -286,9 +295,9 @@ test('row height picker shows a two-line popup and marks the selected size', asy
   await addFront();
   const trigger = screen.getByRole('combobox', { name: 'Высота существа' });
   // #when
-  fireEvent.click(trigger);
+  fireEvent.mouseDown(trigger, { button: 0 });
 
-  const listbox = screen.getByRole('listbox');
+  const listbox = await screen.findByRole('listbox');
 
   const tiny = within(listbox).getByRole('option', {
     name: 'Крошечный · 0,6 м фамильяр, бес, ястреб',
@@ -306,6 +315,8 @@ test('row height picker shows a two-line popup and marks the selected size', asy
       typical: within(tiny).getByText('фамильяр, бес, ястреб').textContent,
     },
     selected: medium.getAttribute('aria-selected'),
+    selectedIndicator: medium.querySelectorAll('svg').length,
+    unselectedIndicator: tiny.querySelectorAll('svg').length,
     custom: within(listbox).getByRole('option', { name: 'Свой размер' }).textContent,
   }).toEqual({
     trigger: 'Средний · 1,7 м',
@@ -314,6 +325,8 @@ test('row height picker shows a two-line popup and marks the selected size', asy
       typical: 'фамильяр, бес, ястреб',
     },
     selected: 'true',
+    selectedIndicator: 1,
+    unselectedIndicator: 0,
     custom: 'Свой размер',
   });
 });
@@ -324,9 +337,9 @@ test('rendered dwarf and bugbear choices retain distinct heights on the same bas
   await addFront();
   const trigger = screen.getByRole('combobox', { name: 'Высота существа' });
   // #when
-  chooseSelectOption(trigger, /дварф/);
+  await chooseSelectOption(trigger, /дварф/);
   const dwarfGeometry = trigger.title;
-  chooseSelectOption(trigger, /багбир/);
+  await chooseSelectOption(trigger, /багбир/);
   // #then
   expect([dwarfGeometry, trigger.title]).toEqual([
     'Основание 25 мм · высота 27 мм',
@@ -354,12 +367,12 @@ test('the height menu appears with a second mini and sets every mini to the chos
   );
 });
 
-test('paper format picker updates the paper summary', () => {
+test('paper format picker updates the paper summary', async () => {
   // #given
   render(<PaperMinisGenerator />);
   openFold('Бумага');
   // #when
-  chooseSelectOption(screen.getByRole('combobox', { name: 'Формат' }), 'Letter');
+  await chooseSelectOption(screen.getByRole('combobox', { name: 'Формат' }), 'Letter');
   // #then
   expect(foldText('Бумага')).toBe('БумагаLetter · поля 2 мм');
 });
@@ -752,7 +765,10 @@ test('an oversized mini uses danger styling in both the row and calibration dial
   // #given
   render(<PaperMinisGenerator />);
   await addFront();
-  chooseSelectOption(screen.getByRole('combobox', { name: 'Высота существа' }), 'Свой размер');
+  await chooseSelectOption(
+    screen.getByRole('combobox', { name: 'Высота существа' }),
+    'Свой размер',
+  );
   fireEvent.change(screen.getByRole('spinbutton', { name: 'Основание, мм' }), {
     target: { value: '300' },
   });

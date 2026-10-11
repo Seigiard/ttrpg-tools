@@ -99,6 +99,82 @@ test('uploads a front and back and downloads a PDF', async ({ page }) => {
   }).toEqual({ rows: 1, hasBack: true, filename: true, signature: '%PDF-', hasBody: true });
 });
 
+for (const key of ['Enter', 'Space', 'ArrowDown']) {
+  test(`height picker opens with ${key}`, async ({ page }) => {
+    // #given
+    await page
+      .getByLabel('Добавить изображения', { exact: true })
+      .setInputFiles(fixture('trim-6x5-to-4x3.png'));
+    const trigger = page.getByRole('combobox', { name: 'Высота существа' });
+    await trigger.focus();
+    // #when
+    await trigger.press(key);
+    // #then
+    await expect(page.getByRole('listbox')).toBeVisible();
+  });
+}
+
+test('height picker arrow navigation selects the next option and returns focus', async ({
+  page,
+}) => {
+  // #given
+  await page
+    .getByLabel('Добавить изображения', { exact: true })
+    .setInputFiles(fixture('trim-6x5-to-4x3.png'));
+  const trigger = page.getByRole('combobox', { name: 'Высота существа' });
+  await trigger.focus();
+  await trigger.press('Enter');
+  await expect(page.getByRole('listbox')).toBeVisible();
+  // #when
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  // #then
+  await expect(trigger).toHaveText('Средний, высокий · 2,1 м');
+  await expect(page.getByRole('listbox')).toBeHidden();
+  await expect(trigger).toBeFocused();
+});
+
+test('height picker Escape closes the popup and returns focus', async ({ page }) => {
+  // #given
+  await page
+    .getByLabel('Добавить изображения', { exact: true })
+    .setInputFiles(fixture('trim-6x5-to-4x3.png'));
+  const trigger = page.getByRole('combobox', { name: 'Высота существа' });
+  await trigger.focus();
+  await trigger.press('Enter');
+  const popup = page.getByRole('listbox');
+  await expect(popup).toBeVisible();
+  // #when
+  await page.keyboard.press('Escape');
+  // #then
+  await expect(popup).toBeHidden();
+  await expect(trigger).toBeFocused();
+});
+
+test('height picker typeahead moves from the focused option and selects its match', async ({
+  page,
+}) => {
+  // #given
+  await page
+    .getByLabel('Добавить изображения', { exact: true })
+    .setInputFiles(fixture('trim-6x5-to-4x3.png'));
+  const trigger = page.getByRole('combobox', { name: 'Высота существа' });
+  await trigger.focus();
+  await trigger.press('Enter');
+  await expect(page.getByRole('listbox')).toBeVisible();
+  const tiny = page.getByRole('option', { name: /^Крошечный/ });
+  // #when
+  await page.evaluate(() => {
+    document.activeElement?.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'к', bubbles: true }),
+    );
+  });
+  await expect(tiny).toBeFocused();
+  await page.keyboard.press('Enter');
+  // #then
+  await expect(trigger).toHaveText('Крошечный · 0,6 м');
+});
+
 test.describe('height picker on a narrow viewport', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
