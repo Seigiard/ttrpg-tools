@@ -730,14 +730,14 @@ export default function PaperMinisGenerator() {
                     </p>
                     <p>
                       Распечатайте{' '}
-                      <button
-                        type="button"
+                      <Button
+                        variant="link"
                         aria-label="Скачать тестовый лист"
-                        className="rounded-sm font-medium text-primary underline underline-offset-3 focus-visible:outline-2 focus-visible:outline-primary"
+                        className="h-auto min-h-11 px-1 underline underline-offset-3"
                         onClick={() => void downloadPrinterScaleTestSheet()}
                       >
                         тестовый лист
-                      </button>{' '}
+                      </Button>{' '}
                       и измерьте линейку на нём.
                     </p>
                     <div className="grid grid-cols-[auto_minmax(0,6rem)_auto] items-center justify-start gap-2">
