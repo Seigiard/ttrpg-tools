@@ -98,3 +98,58 @@ test('uploads a front and back and downloads a PDF', async ({ page }) => {
     hasBody: bytes.length > 5,
   }).toEqual({ rows: 1, hasBack: true, filename: true, signature: '%PDF-', hasBody: true });
 });
+
+for (const width of [320, 1440]) {
+  test(`calibration markers stay aligned with both images at ${width}px and reset removes them`, async ({
+    page,
+  }) => {
+    // #given
+    await page.setViewportSize({ width, height: 900 });
+    const artwork = await readFile(fixture('trim-6x5-to-4x3.png'));
+    await page.getByLabel('Добавить изображения', { exact: true }).setInputFiles([
+      { name: 'hero.png', mimeType: 'image/png', buffer: artwork },
+      { name: 'hero-back.png', mimeType: 'image/png', buffer: artwork },
+    ]);
+    const front = page.getByRole('button', { name: 'Лицевая сторона', exact: true });
+    const back = page.getByRole('button', { name: 'Оборот: hero-back.png', exact: true });
+    await expect(page.getByRole('button', { name: 'Задать рост' })).toBeEnabled();
+    const before = await Promise.all([markerPositions(front), markerPositions(back)]);
+
+    // #when
+    await page.getByRole('button', { name: 'Задать рост' }).click();
+    await page.getByRole('slider', { name: 'Голова' }).press('ArrowDown');
+    await page.getByRole('button', { name: 'Применить', exact: true }).click();
+    const calibrated = await Promise.all([markerPositions(front), markerPositions(back)]);
+    await page.getByRole('button', { name: 'Сбросить рост' }).click();
+
+    // #then
+    expect({
+      before,
+      calibrated,
+      reset: await Promise.all([markerPositions(front), markerPositions(back)]),
+    }).toEqual({
+      before: [null, null],
+      calibrated: [
+        [0.33, 1],
+        [0.33, 1],
+      ],
+      reset: [null, null],
+    });
+  });
+}
+
+async function markerPositions(slot: Locator) {
+  return slot.evaluate((element) => {
+    const image = element.querySelector('img');
+    const head = element.querySelector('[data-testid="calibration-head"]');
+    const feet = element.querySelector('[data-testid="calibration-feet"]');
+
+    if (!head && !feet) return null;
+    if (!image || !head || !feet) throw new Error('The calibration preview is incomplete.');
+    const imageBox = image.getBoundingClientRect();
+
+    return [head, feet].map((line) =>
+      Number(((line.getBoundingClientRect().top - imageBox.top) / imageBox.height).toFixed(2)),
+    );
+  });
+}

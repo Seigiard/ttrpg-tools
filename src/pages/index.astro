@@ -3,19 +3,19 @@ import Layout from '../layouts/Layout.astro';
 ---
 
 <Layout title="TTRPG Tools">
-  <main class="mx-auto max-w-5xl px-6 py-12 sm:py-20">
-    <header class="border-b border-border pb-10 sm:pb-16">
-      <h1 class="max-w-3xl text-5xl leading-none text-text sm:text-7xl">TTRPG Tools</h1>
-      <p class="mt-6 max-w-xl text-lg leading-relaxed text-text-muted">
-        Инструменты мастера для настольных ролёвок. Откройте нужный раздел и бросайте прямо
-        за столом.
+  <main class="content-grid content-grid--home py-home-block">
+    <header class="flex flex-col gap-6 border-be border-border pbe-home-header">
+      <h1 class="max-w-3xl text-home-title leading-none text-text">TTRPG Tools</h1>
+      <p class="max-w-xl text-lg leading-relaxed text-text-muted">
+        Инструменты мастера для настольных ролёвок. Откройте нужный раздел и бросайте прямо за
+        столом.
       </p>
     </header>
 
     <div class="divide-y divide-border">
-      <section class="grid gap-6 py-10 sm:grid-cols-[10rem_1fr] sm:py-12">
+      <section class="catalog-section">
         <h2 class="text-2xl text-text">Mausritter</h2>
-        <ul class="space-y-7">
+        <ul class="flex flex-col gap-7">
           <li class="group">
             <div>
               <a
@@ -24,7 +24,7 @@ import Layout from '../layouts/Layout.astro';
               >
                 Локации
               </a>
-              <p class="mt-2 text-sm leading-relaxed text-text-muted">
+              <p class="mbs-2 text-sm leading-relaxed text-text-muted">
                 Генератор деталей гекса по таблицам.
               </p>
             </div>
@@ -37,7 +37,7 @@ import Layout from '../layouts/Layout.astro';
               >
                 Погода
               </a>
-              <p class="mt-2 text-sm leading-relaxed text-text-muted">
+              <p class="mbs-2 text-sm leading-relaxed text-text-muted">
                 Генератор погоды по сезонам.
               </p>
             </div>
@@ -50,7 +50,7 @@ import Layout from '../layouts/Layout.astro';
               >
                 Встречи
               </a>
-              <p class="mt-2 text-sm leading-relaxed text-text-muted">
+              <p class="mbs-2 text-sm leading-relaxed text-text-muted">
                 Проверка столкновений и реакция существ.
               </p>
             </div>
@@ -58,7 +58,7 @@ import Layout from '../layouts/Layout.astro';
         </ul>
       </section>
 
-      <section class="grid gap-6 py-10 sm:grid-cols-[10rem_1fr] sm:py-12">
+      <section class="catalog-section">
         <h2 class="text-2xl text-text">The Black Hack</h2>
         <div class="group">
           <div>
@@ -68,14 +68,14 @@ import Layout from '../layouts/Layout.astro';
             >
               Цены
             </a>
-            <p class="mt-2 max-w-2xl text-sm leading-relaxed text-text-muted">
+            <p class="mbs-2 max-w-2xl text-sm leading-relaxed text-text-muted">
               Цены снаряжения по редкости, фиксируются ссылкой на время пребывания в поселении.
             </p>
           </div>
         </div>
       </section>
 
-      <section class="grid gap-6 py-10 sm:grid-cols-[10rem_1fr] sm:py-12">
+      <section class="catalog-section">
         <h2 class="text-2xl text-text">Подготовка</h2>
         <div class="group">
           <div>
@@ -85,7 +85,7 @@ import Layout from '../layouts/Layout.astro';
             >
               Бумажные миниатюры
             </a>
-            <p class="mt-2 max-w-2xl text-sm leading-relaxed text-text-muted">
+            <p class="mbs-2 max-w-2xl text-sm leading-relaxed text-text-muted">
               Изображения в PDF для печати: размеры, оборот и складные основания.
             </p>
           </div>

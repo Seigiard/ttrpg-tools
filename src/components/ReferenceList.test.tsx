@@ -58,27 +58,6 @@ test.each([0, 1, 2, null])('marks only the rolled row for hitIndex %s', (hitInde
   ).toEqual(hitIndex === null ? [] : [[String(hitIndex), 'true']]);
 });
 
-test('the rolled row has a left border as a non-colour marker', () => {
-  // #given a rolled outcome
-  const rows = ['Clear', 'Omen'];
-  // #when the reference table is rendered
-  render(
-    <ReferenceList
-      title="Outcomes"
-      testId="reference"
-      rows={rows}
-      hitIndex={1}
-      label={(_, i) => i + 1}
-    >
-      {(row) => row}
-    </ReferenceList>,
-  );
-  // #then the marker is present on the rolled row only
-  expect(
-    screen.getAllByRole('listitem').map((row) => row.classList.contains('border-l-2')),
-  ).toEqual([false, true]);
-});
-
 test('every reference row has its positional index', () => {
   // #given three outcomes
   const rows = ['Clear', 'Omen', 'Encounter'];

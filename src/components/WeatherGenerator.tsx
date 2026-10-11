@@ -34,8 +34,8 @@ export function WeatherGenerator({ table }: Props) {
   };
 
   return (
-    <div className="space-y-8">
-      <div className="space-y-3">
+    <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-3">
         <span className="font-mono text-xs uppercase tracking-wider text-text-muted">Сезон</span>
         <Tabs value={season} onValueChange={handleSeasonChange}>
           <TabsList>
@@ -82,12 +82,16 @@ function ResultCard({ table, season, roll }: ResultCardProps) {
         </div>
       </CardHeader>
       <CardContent>
-        <div data-testid="result-weather" data-harsh={cell?.harsh ? 'true' : undefined}>
+        <div
+          className="flex flex-col gap-3"
+          data-testid="result-weather"
+          data-harsh={cell?.harsh ? 'true' : undefined}
+        >
           <p className="font-display text-3xl">
             <Skeleton loading={loading}>{cell ? cell.ru : 'Погода'}</Skeleton>
           </p>
           {cell?.harsh ? (
-            <p className="mt-3 text-sm text-warning">
+            <p className="text-sm text-warning">
               Не подходит для путешествия. За каждую вахту в пути каждая мышь проходит спасбросок
               силы или получает карточку состояния «Изнурён».
             </p>
@@ -108,22 +112,22 @@ function ReferenceTable({ table, season, roll }: ReferenceTableProps) {
   const hitRow = roll ? roll.rowIndex : null;
 
   return (
-    <section data-testid="reference-weather">
+    <section className="flex flex-col gap-3" data-testid="reference-weather">
       <h3 className="font-mono text-xs uppercase tracking-wider text-text-muted">
         Таблица погоды · 2d6
       </h3>
-      <div className="mt-3 overflow-x-auto">
+      <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b border-border">
-              <th className="px-2 py-2 text-left font-mono text-xs font-medium uppercase tracking-wider text-text-muted">
+            <tr className="border-be border-border">
+              <th className="px-2 py-2 text-start font-mono text-xs font-medium uppercase tracking-wider text-text-muted">
                 2d6
               </th>
               {table.seasons.map((s) => (
                 <th
                   key={s}
                   data-season={s}
-                  className={`px-2 py-2 text-left font-mono text-xs font-medium uppercase tracking-wider ${
+                  className={`px-2 py-2 text-start font-mono text-xs font-medium uppercase tracking-wider ${
                     s === season ? 'text-primary' : 'text-text-muted'
                   }`}
                 >
@@ -141,7 +145,7 @@ function ReferenceTable({ table, season, roll }: ReferenceTableProps) {
                 <tr
                   key={rangeLabel}
                   data-row-index={i}
-                  className="border-b border-border last:border-0"
+                  className="border-be border-border last:border-0"
                 >
                   <td className="px-2 py-1.5 font-mono text-xs text-text-muted">{rangeLabel}</td>
                   {table.seasons.map((s) => {
@@ -166,7 +170,7 @@ function ReferenceTable({ table, season, roll }: ReferenceTableProps) {
           </tbody>
         </table>
       </div>
-      <p className="mt-3 text-xs text-text-muted">
+      <p className="text-xs text-text-muted">
         <span className="font-semibold text-text">Жирным</span> — погода, не подходящая для
         путешествия.
       </p>

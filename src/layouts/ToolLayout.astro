@@ -6,33 +6,34 @@ interface Props {
   title: string;
   /** Короткое описание под заголовком. */
   description?: string;
+  wide?: boolean;
 }
 
-const { title, description } = Astro.props;
+const { title, description, wide = false } = Astro.props;
 ---
 
 <Layout title={`${title} · TTRPG Tools`}>
-  <header class="border-b border-border">
-    <div class="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
-      <a
-        href="/"
-        class="font-mono text-xs uppercase tracking-wider text-text-muted hover:text-primary"
-      >
-        ← TTRPG Tools
-      </a>
-    </div>
+  <header
+    class:list={['content-grid border-be border-border py-4', { 'content-grid--wide': wide }]}
+  >
+    <a
+      href="/"
+      class="inline-flex min-h-11 w-fit items-center font-mono text-xs uppercase tracking-wider text-text-muted hover:text-primary"
+    >
+      ← TTRPG Tools
+    </a>
   </header>
 
-  <main class="relative mx-auto max-w-3xl px-6 py-12">
-    <div class="mb-10">
-      <h1 class="font-display text-4xl text-text">{title}</h1>
-      {description ? <p class="mt-2 text-text-muted">{description}</p> : null}
+  <main class:list={['content-grid py-tool-block', { 'content-grid--wide': wide }]}>
+    <div class="tool-heading">
+      <h1 class="font-display text-tool-title text-text">{title}</h1>
+      {description ? <p class="max-w-3xl text-text-muted">{description}</p> : null}
     </div>
 
     <slot />
   </main>
 
-  <div class="mx-auto max-w-3xl px-6">
+  <div class:list={['content-grid', { 'content-grid--wide': wide }]}>
     <slot name="footer" />
   </div>
 </Layout>

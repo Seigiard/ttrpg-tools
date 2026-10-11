@@ -37,9 +37,9 @@ const field =
   'min-h-11 w-full rounded-lg border border-border bg-surface-elevated px-3 text-text focus-visible:outline-2 focus-visible:outline-primary';
 
 const foldTrigger =
-  'min-h-12 items-center gap-2 py-0 font-sans text-base font-normal hover:no-underline **:data-[slot=accordion-trigger-icon]:ml-0';
+  'min-h-12 items-center gap-2 py-0 font-sans text-base font-normal hover:no-underline **:data-[slot=accordion-trigger-icon]:ms-0';
 
-const foldValue = 'ml-auto truncate text-sm text-text-muted';
+const foldValue = 'ms-auto truncate text-sm text-text-muted';
 
 const miniatureForms = { one: 'миниатюра', few: 'миниатюры', many: 'миниатюр' };
 
@@ -81,7 +81,7 @@ function useArtworkUrl(artwork?: PreparedArtwork | null) {
 }
 
 function lineStyle(value: number) {
-  return { top: `${value * 100}%` };
+  return { insetBlockStart: `${value * 100}%` };
 }
 
 // The overlay and image share an exact aspect-ratio box inside the available
@@ -98,11 +98,11 @@ function ArtworkFrame({
   children?: ReactNode;
 }) {
   return (
-    <span className="relative block h-full w-full [container-type:size]">
+    <span className="artwork-frame">
       <span
-        className="absolute left-1/2 top-1/2 block -translate-x-1/2 -translate-y-1/2"
+        className="block"
         style={{
-          width: `min(100cqw, ${(100 * artwork.width) / artwork.height}cqh)`,
+          inlineSize: `min(100cqi, ${(100 * artwork.width) / artwork.height}cqb)`,
           aspectRatio: `${artwork.width} / ${artwork.height}`,
         }}
       >
@@ -133,11 +133,11 @@ function NamingHint() {
         В конце имени файла: <code className="font-mono text-text">имя-back</code> — оборот,{' '}
         <code className="font-mono text-text">имя-large</code> — размер.
       </p>
-      <details className="mt-1">
+      <details className="mbs-1">
         <summary className="cursor-pointer rounded-sm hover:text-text focus-visible:outline-2 focus-visible:outline-primary">
           Размеры в имени файла
         </summary>
-        <ul className="mt-2 space-y-1">
+        <ul className="mbs-2 flex flex-col gap-1">
           {HEIGHT_SLOT_ORDER.map((slot) => (
             <li key={slot}>
               <code className="font-mono text-text">{slot}</code> — {slotName(slot)}
@@ -170,8 +170,8 @@ function ArtworkSlot({
   const input = useRef<HTMLInputElement>(null);
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-surface-elevated">
-      <div className="border-b border-border px-3 py-2">
+    <div className="overflow-clip rounded-lg border border-border bg-surface-elevated">
+      <div className="border-be border-border px-3 py-2">
         <p className="truncate text-sm font-medium text-text">{displayLabel ?? label}</p>
       </div>
       <Button
@@ -200,8 +200,8 @@ function ArtworkSlot({
                   <span
                     key={key}
                     data-testid={`calibration-${key}`}
-                    className="absolute left-0 right-0 border-t-2 border-primary bg-surface/70 text-[10px] font-bold text-primary shadow-sm"
-                    style={{ top: `${calibration[key] * 100}%` }}
+                    className="absolute inset-s-0 inset-e-0 border-bs-2 border-primary bg-surface-translucent text-[10px] font-bold text-primary shadow-sm"
+                    style={lineStyle(calibration[key])}
                   />
                 ))}
               </span>
@@ -250,13 +250,13 @@ function CalibrationArtwork({
     (backArtwork && backUrl ? backArtwork.width / backArtwork.height : 0);
 
   return (
-    <span className="relative block h-full w-full [container-type:size]">
+    <span className="artwork-frame">
       <span
         ref={artworkRef}
         data-testid="calibration-artworks"
-        className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2"
+        className="flex"
         style={{
-          width: `min(100cqw, ${totalAspect * 100}cqh)`,
+          inlineSize: `min(100cqi, ${totalAspect * 100}cqb)`,
           aspectRatio: `${totalAspect} / 1`,
         }}
       >
@@ -307,15 +307,18 @@ function HeightCalibrationDialog({
       }}
     >
       <DialogContent finalFocus={returnFocus}>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div>
+        <div className="flex flex-wrap items-start gap-2">
+          <div className="min-w-0 flex-[1_1_20rem]">
             <DialogTitle className="text-2xl text-text">Задать рост</DialogTitle>
             <p className="text-sm text-text-muted">
               {session.rowLabel}: перетащите линии головы и стоп или используйте ↑/↓ — 1 пиксель, с
               Shift — 10.
             </p>
           </div>
-          <p className="text-sm font-medium text-text" aria-live="polite">
+          <p
+            className="flex-[1_1_10rem] text-sm font-medium text-text tabular-nums"
+            aria-live="polite"
+          >
             Рост {Math.round(session.slotHeightMm)} мм · напечатается{' '}
             {Math.round(session.printedHeightMm)} мм
           </p>
@@ -323,14 +326,14 @@ function HeightCalibrationDialog({
         {session.warning && (
           <p
             role="status"
-            className={`mt-3 border-l-2 pl-3 text-sm ${session.warningTone === 'danger' ? 'border-danger text-danger' : 'border-warning text-warning'}`}
+            className={`mbs-3 border-s-2 ps-3 text-sm ${session.warningTone === 'danger' ? 'border-danger text-danger' : 'border-warning text-warning'}`}
           >
             {session.warning}
           </p>
         )}
         <div
           data-testid="height-calibration-artwork"
-          className="relative mt-4 h-[min(65vh,640px)] touch-none rounded-lg border border-border bg-surface-elevated p-6"
+          className="relative mbs-4 h-[min(65dvh,40rem)] touch-none rounded-lg border border-border bg-surface-elevated p-6"
           onPointerMove={(event) => {
             if (dragging.current) setLineFromClientY(dragging.current, event.clientY);
           }}
@@ -357,7 +360,7 @@ function HeightCalibrationDialog({
                 <Fragment key={key}>
                   <span
                     aria-hidden="true"
-                    className="pointer-events-none absolute inset-x-0 border-t-2 border-primary"
+                    className="pointer-events-none absolute inset-x-0 border-bs-2 border-primary"
                     style={lineStyle(lines[key])}
                   />
                   <button
@@ -369,7 +372,7 @@ function HeightCalibrationDialog({
                     aria-valuemax={session.ranges[key].max * 100}
                     aria-valuenow={lines[key] * 100}
                     aria-valuetext={`${Number((lines[key] * session.artworkHeight).toFixed(2))} пикселей от верха`}
-                    className={`absolute left-1/2 h-11 w-1/2 min-w-11 -translate-y-1/2 cursor-row-resize text-left text-xs font-bold text-primary focus-visible:outline-2 focus-visible:outline-primary ${key === 'head' ? '-translate-x-full' : ''}`}
+                    className={`absolute h-11 w-1/2 min-w-11 -translate-y-1/2 cursor-row-resize text-start text-xs font-bold text-primary active:text-secondary focus-visible:outline-2 focus-visible:outline-primary ${key === 'head' ? 'inset-s-0' : 'inset-e-0'}`}
                     style={lineStyle(lines[key])}
                     onKeyDown={(event) => {
                       if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
@@ -384,7 +387,7 @@ function HeightCalibrationDialog({
                       setLineFromClientY(key, event.clientY);
                     }}
                   >
-                    <span className="relative ml-2 rounded bg-surface/90 px-1">
+                    <span className="relative ms-2 rounded bg-surface-veil px-1">
                       {key === 'head' ? 'Голова' : 'Ступни'}
                     </span>
                   </button>
@@ -393,7 +396,7 @@ function HeightCalibrationDialog({
             </CalibrationArtwork>
           )}
         </div>
-        <div className="mt-4 flex justify-end gap-2">
+        <div className="mbs-4 flex justify-end gap-2">
           <Button variant="ghost" className="min-h-11" onClick={onCancel}>
             Отмена
           </Button>
@@ -578,17 +581,17 @@ export default function PaperMinisGenerator() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="flex flex-col gap-8">
       <fieldset
         aria-label="Редактор миниатюр"
         aria-busy={busy}
         disabled={busy}
         className="min-w-0 disabled:opacity-60"
       >
-        <div className="grid gap-6 xl:block">
-          <div className="xl:absolute xl:right-full xl:h-full xl:w-60">
-            <aside className="rounded-lg border border-border bg-surface-elevated p-4 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
-              <h2 className="mb-2 text-xl text-text">Настройки</h2>
+        <div className="minis-layout">
+          <div className="minis-settings">
+            <aside className="rounded-lg border border-border bg-surface-elevated p-4">
+              <h2 className="mbe-2 text-xl text-text">Настройки</h2>
               <Accordion className="border-y border-border">
                 <AccordionItem value="paper">
                   <AccordionTrigger className={foldTrigger}>
@@ -597,11 +600,11 @@ export default function PaperMinisGenerator() {
                       {pageLabel} · поля {formatMm(settings.marginMm)} мм
                     </span>
                   </AccordionTrigger>
-                  <AccordionContent className="grid grid-cols-[1.4fr_1fr] gap-2 pb-4">
+                  <AccordionContent className="grid grid-cols-[1.4fr_1fr] gap-2 pbe-4">
                     <label className="block text-sm text-text-muted">
                       Формат
                       <select
-                        className={`${field} mt-1`}
+                        className={`${field} mbs-1`}
                         value={settings.pageSize}
                         onChange={(event) => {
                           const pageSize = event.target.value;
@@ -621,7 +624,7 @@ export default function PaperMinisGenerator() {
                     <label className="block text-sm text-text-muted">
                       Поля, мм
                       <input
-                        className={`${field} mt-1`}
+                        className={`${field} mbs-1`}
                         type="number"
                         min="0"
                         step="any"
@@ -639,7 +642,7 @@ export default function PaperMinisGenerator() {
                     Фигурки
                     <span className={foldValue}>{figuresSummary}</span>
                   </AccordionTrigger>
-                  <AccordionContent className="pb-2">
+                  <AccordionContent className="pbe-2">
                     <label className="flex min-h-11 items-center gap-3 text-sm">
                       <input
                         type="checkbox"
@@ -671,7 +674,7 @@ export default function PaperMinisGenerator() {
                         : `подогнан · ${formatMm(settings.printerMeasurementMm)} мм`}
                     </span>
                   </AccordionTrigger>
-                  <AccordionContent className="space-y-3 pb-4 leading-relaxed">
+                  <AccordionContent className="flex flex-col gap-3 pbe-4 leading-relaxed">
                     <p className="text-text-muted">
                       Если фигурки печатаются чуть меньше или больше нужного:
                     </p>
@@ -690,7 +693,7 @@ export default function PaperMinisGenerator() {
                     <div className="grid grid-cols-[auto_minmax(0,6rem)_auto] items-center justify-start gap-2">
                       <span id="printer-measurement-label">Вышло</span>
                       <input
-                        className={`${field} text-right`}
+                        className={`${field} text-end`}
                         type="number"
                         min="80"
                         max="100"
@@ -721,7 +724,7 @@ export default function PaperMinisGenerator() {
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>
-              <div className="mt-4 space-y-2">
+              <div className="mbs-4 flex flex-col gap-2">
                 {!rows.length && (
                   <p className="text-sm text-text-muted">
                     Добавьте изображения для печати миниатюр.
@@ -790,8 +793,8 @@ export default function PaperMinisGenerator() {
             </aside>
           </div>
 
-          <div className="min-w-0 space-y-6">
-            <div className="space-y-2">
+          <div className="minis-workspace flex flex-col gap-6">
+            <div className="flex flex-col gap-2">
               <Button
                 variant="outline"
                 className="h-auto min-h-28 w-full flex-col whitespace-normal border-dashed p-6"
@@ -818,7 +821,7 @@ export default function PaperMinisGenerator() {
               }}
             />
 
-            <section aria-label="Миниатюры" className="space-y-5">
+            <section aria-label="Миниатюры" className="flex flex-col gap-5">
               <div
                 className={`flex flex-wrap items-center justify-between gap-2 ${rows.length ? '' : 'sr-only'}`}
               >
@@ -866,8 +869,8 @@ export default function PaperMinisGenerator() {
                     aria-label={`Миниатюра ${index + 1}`}
                     className="border-y border-border py-5"
                   >
-                    <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <h3 className="break-all text-xl text-text">
+                    <div className="mbe-4 flex flex-wrap items-center gap-2">
+                      <h3 className="min-w-0 flex-[1_1_16rem] text-xl text-text">
                         {row.name || `Миниатюра ${index + 1}`}
                       </h3>
                       <div className="flex gap-2">
@@ -888,7 +891,7 @@ export default function PaperMinisGenerator() {
                       </div>
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="intrinsic-grid gap-3">
                       <ArtworkSlot
                         artwork={row.artwork}
                         calibration={row.calibration}
@@ -897,7 +900,7 @@ export default function PaperMinisGenerator() {
                         loading={status?.state === 'loading'}
                         onFile={(file) => void store.setImage(row.id, file)}
                       />
-                      <div className="space-y-2">
+                      <div className="flex flex-col gap-2">
                         <ArtworkSlot
                           artwork={row.backArtwork}
                           calibration={row.calibration}
@@ -923,8 +926,8 @@ export default function PaperMinisGenerator() {
                       </div>
                     </div>
 
-                    <div className="mt-4 grid gap-3 rounded-lg bg-muted/50 p-3 sm:grid-cols-2">
-                      <div className="space-y-2 sm:col-span-2">
+                    <div className="mbs-4 intrinsic-grid gap-3 rounded-lg bg-muted-subtle p-3">
+                      <div className="flex flex-col gap-2 [grid-column:1/-1]">
                         <div className="flex flex-wrap gap-2">
                           <Button
                             variant="outline"
@@ -986,7 +989,7 @@ export default function PaperMinisGenerator() {
                         />
                       </label>
                       {row.heightSlot === 'custom' && (
-                        <div className="grid grid-cols-2 gap-2 sm:col-span-2">
+                        <div className="intrinsic-grid gap-2 [grid-column:1/-1]">
                           {(['customWidthMm', 'customHeightMm'] as const).map((key, i) => {
                             const dimension = i === 0 ? 'width' : 'height';
 
@@ -1014,7 +1017,7 @@ export default function PaperMinisGenerator() {
                       )}
                     </div>
 
-                    <p className="mt-3 text-xs leading-relaxed text-text-muted">
+                    <p className="mbs-3 text-xs leading-relaxed text-text-muted">
                       {row.backImage
                         ? 'В PDF попадёт отдельное изображение оборота.'
                         : 'Без отдельного файла лицевая сторона будет отражена автоматически.'}
@@ -1022,7 +1025,7 @@ export default function PaperMinisGenerator() {
                     {statusWarning && (
                       <p
                         role="status"
-                        className={`mt-3 border-l-2 pl-3 text-sm ${status.state === 'oversized' ? 'border-danger text-danger' : 'border-warning text-warning'}`}
+                        className={`mbs-3 border-s-2 ps-3 text-sm ${status.state === 'oversized' ? 'border-danger text-danger' : 'border-warning text-warning'}`}
                       >
                         {statusWarning}
                       </p>
@@ -1037,7 +1040,7 @@ export default function PaperMinisGenerator() {
                             <p
                               key={i}
                               role="status"
-                              className="mt-3 border-l-2 border-warning pl-3 text-sm text-warning"
+                              className="mbs-3 border-s-2 border-warning ps-3 text-sm text-warning"
                             >
                               {warning}
                             </p>,
@@ -1052,8 +1055,8 @@ export default function PaperMinisGenerator() {
         </div>
       </fieldset>
 
-      <aside className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 border-t border-border pt-6 text-sm text-text-muted">
-        <div className="space-y-2">
+      <aside className="intrinsic-grid gap-x-4 gap-y-2 border-bs border-border pbs-6 text-sm text-text-muted">
+        <div className="flex flex-col gap-2">
           <p>
             <b>Изображения обрабатываются в браузере</b> и не отправляются на сервер. Сохраняются
             только настройки печати.
@@ -1067,7 +1070,7 @@ export default function PaperMinisGenerator() {
             отогните оба язычка наружу и приклейте их к полоске основания.
           </p>
         </div>
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           <p>
             Высота задаёт размер фигурки на бумаге. Очень широкие изображения уменьшаются целиком.
             Основание зависит от категории размера; у самых крупных фигурок оно более плоское, чтобы
@@ -1084,7 +1087,7 @@ export default function PaperMinisGenerator() {
         </div>
       </aside>
       {preview && previewUrl && (
-        <section aria-label="Предпросмотр PDF" className="space-y-2">
+        <section aria-label="Предпросмотр PDF" className="flex flex-col gap-2">
           {previewStale && (
             <p role="status" className="text-sm text-warning">
               Настройки или изображения изменились. Обновите предпросмотр.
@@ -1093,7 +1096,7 @@ export default function PaperMinisGenerator() {
           <iframe
             title="Предпросмотр PDF"
             src={previewUrl}
-            className="h-[65vh] w-full rounded-lg border border-border"
+            className="h-[65dvh] w-full rounded-lg border border-border"
           />
           <a href={previewUrl} target="_blank" rel="noreferrer" className="text-primary underline">
             Открыть PDF в новой вкладке
@@ -1101,7 +1104,7 @@ export default function PaperMinisGenerator() {
         </section>
       )}
       {dragging && (
-        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center border-4 border-primary bg-surface/90 text-2xl text-primary">
+        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center border-4 border-primary bg-surface-veil text-2xl text-primary">
           Отпустите файлы, чтобы добавить миниатюры
         </div>
       )}

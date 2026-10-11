@@ -657,7 +657,7 @@ test('height calibration stays disabled until the selected back artwork is ready
 
 const overlay = (slot: HTMLElement) =>
   ['head', 'feet'].map(
-    (key) => within(slot).queryByTestId(`calibration-${key}`)?.style.top ?? null,
+    (key) => within(slot).queryByTestId(`calibration-${key}`)?.style.insetBlockStart ?? null,
   );
 
 test('shared calibration draws the same thumbnail lines on both sides and reset removes them', async () => {

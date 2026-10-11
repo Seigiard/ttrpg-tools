@@ -33,7 +33,7 @@ export function EncounterGenerator({ table }: Props) {
   }, [store]);
 
   return (
-    <div className="space-y-12">
+    <div className="flex flex-col gap-12">
       <CheckSection table={table} roll={check} onRoll={store.rollCheck} />
       <ReactionSection table={table} roll={reaction} onRoll={store.rollReaction} />
     </div>
@@ -52,7 +52,7 @@ function CheckSection({ table, roll, onRoll }: SectionProps) {
   const loading = !row;
 
   return (
-    <section className="space-y-6">
+    <section className="flex flex-col gap-6">
       <h2 className="font-display text-2xl text-text">Проверка столкновения</h2>
       <Button size="lg" onClick={onRoll} data-testid="check-roll-button">
         Проверить (d6)
@@ -70,13 +70,17 @@ function CheckSection({ table, roll, onRoll }: SectionProps) {
           </div>
         </CardHeader>
         <CardContent>
-          <div data-testid="check-result" data-outcome={row?.outcome}>
+          <div
+            className="flex flex-col gap-2"
+            data-testid="check-result"
+            data-outcome={row?.outcome}
+          >
             <p
               className={`font-display text-3xl ${row ? outcomeTone[row.outcome] : 'text-text-muted'}`}
             >
               <Skeleton loading={loading}>{row ? row.ru : 'Проверка'}</Skeleton>
             </p>
-            <p className="mt-2 text-sm text-text-muted">
+            <p className="text-sm text-text-muted">
               <Skeleton loading={loading}>
                 {row ? row.hint : 'Бросаем кубик столкновения этой зоны…'}
               </Skeleton>
@@ -108,7 +112,7 @@ function ReactionSection({ table, roll, onRoll }: SectionProps) {
   const loading = !row;
 
   return (
-    <section className="space-y-6">
+    <section className="flex flex-col gap-6">
       <h2 className="font-display text-2xl text-text">Реакция</h2>
       <Button size="lg" onClick={onRoll} data-testid="reaction-roll-button">
         Бросить реакцию (2d6)
@@ -126,11 +130,11 @@ function ReactionSection({ table, roll, onRoll }: SectionProps) {
           </div>
         </CardHeader>
         <CardContent>
-          <div data-testid="reaction-result">
+          <div className="flex flex-col gap-1" data-testid="reaction-result">
             <p className="font-display text-3xl">
               <Skeleton loading={loading}>{row ? row.ru : 'Реакция'}</Skeleton>
             </p>
-            <p className="mt-1 text-sm italic text-text-muted">
+            <p className="text-sm italic text-text-muted">
               <Skeleton loading={loading}>
                 <em>{row ? row.question : 'Как существо относится к мышам?'}</em>
               </Skeleton>
