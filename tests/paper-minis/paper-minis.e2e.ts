@@ -143,6 +143,187 @@ test('uploads a front and back and downloads a PDF', async ({ page }) => {
   }).toEqual({ rows: 1, hasBack: true, filename: true, signature: '%PDF-', hasBody: true });
 });
 
+test('height pickers share two-line choices, geometry, and the selected indicator', async ({
+  page,
+}) => {
+  // #given
+  const artwork = await readFile(fixture('trim-6x5-to-4x3.png'));
+  await page.getByLabel('Добавить изображения', { exact: true }).setInputFiles([
+    { name: 'hero.png', mimeType: 'image/png', buffer: artwork },
+    { name: 'villain.png', mimeType: 'image/png', buffer: artwork },
+  ]);
+  const trigger = page.getByRole('button', { name: 'Высота существа' }).first();
+  await expect(trigger).toBeVisible({ timeout: 1_000 });
+
+  // #when
+  await trigger.click();
+  const listbox = page.getByRole('listbox');
+  const tiny = listbox.getByRole('option', {
+    name: 'Крошечный · 0,6 м фамильяр, бес, ястреб',
+  });
+  const medium = listbox.getByRole('option', {
+    name: 'Средний · 1,7 м человек, эльф, орк',
+  });
+  await expect(tiny).toBeVisible();
+  const tinyTitle = tiny.getByText('Крошечный · 0,6 м', { exact: true });
+  const tinyTypical = tiny.getByText('фамильяр, бес, ястреб', { exact: true });
+  const [titleBox, typicalBox] = await Promise.all([
+    tinyTitle.boundingBox(),
+    tinyTypical.boundingBox(),
+  ]);
+  const rowPresentation = {
+    lines: (await tiny.innerText()).split('\n').filter(Boolean),
+    geometry: await tiny.getAttribute('title'),
+    description: await tiny.getAttribute('aria-description'),
+    selected: await medium.getAttribute('aria-selected'),
+    selectedIndicator: await medium.locator('svg').isVisible(),
+    unselectedIndicators: await tiny.locator('svg').count(),
+  };
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Сменить высоту' }).click();
+  const bulkTiny = page.getByRole('menuitem', { name: /^Крошечный · 0,6 м/ });
+  await expect(bulkTiny).toBeVisible();
+
+  // #then
+  expect({
+    trigger: (await trigger.textContent())?.trim(),
+    rowPresentation,
+    twoLines:
+      titleBox !== null && typicalBox !== null && typicalBox.y >= titleBox.y + titleBox.height,
+    bulkLines: (await bulkTiny.innerText()).split('\n').filter(Boolean),
+    bulkGeometry: await bulkTiny.getAttribute('title'),
+  }).toEqual({
+    trigger: 'Средний · 1,7 м',
+    rowPresentation: {
+      lines: ['Крошечный · 0,6 м', 'фамильяр, бес, ястреб'],
+      geometry: 'Основание 20 мм · высота 12 мм',
+      description: 'Основание 20 мм · высота 12 мм',
+      selected: 'true',
+      selectedIndicator: true,
+      unselectedIndicators: 0,
+    },
+    twoLines: true,
+    bulkLines: ['Крошечный · 0,6 м', 'фамильяр, бес, ястреб'],
+    bulkGeometry: 'Основание 20 мм · высота 12 мм',
+  });
+});
+
+test('row height and custom choices leave the other mini unchanged', async ({ page }) => {
+  // #given
+  const artwork = await readFile(fixture('trim-6x5-to-4x3.png'));
+  await page.getByLabel('Добавить изображения', { exact: true }).setInputFiles([
+    { name: 'hero.png', mimeType: 'image/png', buffer: artwork },
+    { name: 'villain.png', mimeType: 'image/png', buffer: artwork },
+  ]);
+  const first = page.getByRole('article', { name: 'Миниатюра 1' });
+  const second = page.getByRole('article', { name: 'Миниатюра 2' });
+  const firstTrigger = first.getByRole('button', { name: 'Высота существа' });
+  const secondTrigger = second.getByRole('button', { name: 'Высота существа' });
+  await expect(firstTrigger).toBeVisible({ timeout: 1_000 });
+
+  // #when
+  await firstTrigger.click();
+  await page.getByRole('option', { name: /^Маленький · 0,95 м/ }).click();
+  await expect(firstTrigger).toHaveText('Маленький · 0,95 м');
+  const afterHeight = await Promise.all([firstTrigger.textContent(), secondTrigger.textContent()]);
+  await firstTrigger.click();
+  await page.getByRole('option', { name: 'Свой размер' }).click();
+  await expect(firstTrigger).toHaveText('Свой размер');
+  await first.getByRole('spinbutton', { name: 'Основание, мм' }).fill('30');
+  await first.getByRole('spinbutton', { name: 'Фигурка, мм' }).fill('50');
+
+  // #then
+  expect({
+    afterHeight: afterHeight.map((value) => value?.trim()),
+    afterCustom: [
+      (await firstTrigger.textContent())?.trim(),
+      (await secondTrigger.textContent())?.trim(),
+    ],
+    customDimensions: [
+      await first.getByRole('spinbutton', { name: 'Основание, мм' }).inputValue(),
+      await first.getByRole('spinbutton', { name: 'Фигурка, мм' }).inputValue(),
+    ],
+    otherRowCustomFields: await second
+      .getByRole('spinbutton', { name: /^(Основание|Фигурка), мм$/ })
+      .count(),
+  }).toEqual({
+    afterHeight: ['Маленький · 0,95 м', 'Средний · 1,7 м'],
+    afterCustom: ['Свой размер', 'Средний · 1,7 м'],
+    customDimensions: ['30', '50'],
+    otherRowCustomFields: 0,
+  });
+});
+
+test('paper picker changes the folded summary to Letter', async ({ page }) => {
+  // #given
+  const paperFold = page.getByRole('button', { name: /^Бумага/ });
+  await paperFold.click();
+  const trigger = page.getByRole('button', { name: 'Формат' });
+  await expect(trigger).toBeVisible();
+
+  // #when
+  await trigger.click();
+  await page.getByRole('option', { name: 'Letter' }).click();
+  await expect(trigger).toHaveText('Letter');
+
+  // #then
+  expect({
+    selected: (await trigger.textContent())?.trim(),
+    summary: await paperFold.textContent(),
+  }).toEqual({ selected: 'Letter', summary: 'БумагаLetter · поля 2 мм' });
+});
+
+test('height picker selects with the keyboard and Escape restores trigger focus', async ({
+  page,
+}) => {
+  // #given
+  await page
+    .getByLabel('Добавить изображения', { exact: true })
+    .setInputFiles(fixture('trim-6x5-to-4x3.png'));
+  const trigger = page.getByRole('button', { name: 'Высота существа' });
+  await expect(trigger).toBeVisible({ timeout: 1_000 });
+  await trigger.focus();
+  await trigger.press('Enter');
+  await expect(page.getByRole('listbox')).toBeVisible();
+  // #when
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await trigger.press('Enter');
+  const popup = page.getByRole('listbox');
+  await expect(popup).toBeVisible();
+  await page.keyboard.press('Escape');
+  // #then
+  await expect(trigger).toHaveText('Средний, высокий · 2,1 м');
+  await expect(popup).toBeHidden();
+  await expect(trigger).toBeFocused();
+});
+
+test('height picker stays touch-sized inside a 390px viewport', async ({ page }) => {
+  // #given
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page
+    .getByLabel('Добавить изображения', { exact: true })
+    .setInputFiles(fixture('trim-6x5-to-4x3.png'));
+  const trigger = page.getByRole('button', { name: 'Высота существа' });
+  await expect(trigger).toBeVisible({ timeout: 1_000 });
+  // #when
+  await trigger.click();
+  const popup = page.getByRole('listbox');
+  const option = popup.getByRole('option', { name: /^Крошечный/ });
+  await expect(option).toBeVisible();
+  const [triggerBox, popupBox, optionBox] = await Promise.all([
+    trigger.boundingBox(),
+    popup.boundingBox(),
+    option.boundingBox(),
+  ]);
+  // #then
+  expect({
+    trigger: triggerBox !== null && triggerBox.width >= 44 && triggerBox.height >= 44,
+    popup: popupBox !== null && popupBox.x >= 0 && popupBox.x + popupBox.width <= 390,
+    option: optionBox !== null && optionBox.width >= 44 && optionBox.height >= 44,
+  }).toEqual({ trigger: true, popup: true, option: true });
+});
+
 for (const scenario of calibrationPointerScenarios) {
   test(`a head-line pointer drag keeps feet fixed for ${scenario.name}`, async ({ page }) => {
     // #given
