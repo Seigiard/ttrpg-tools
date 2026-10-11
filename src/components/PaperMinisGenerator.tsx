@@ -17,6 +17,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  selectItemClassName,
+} from '@/components/ui/select';
 import { createPaperMinisStore, type CalibrationSession } from '@/stores/paper-minis-store';
 import { ARTWORK_ACCEPT, artworkMimeType } from '@/lib/paper-minis/artwork-formats';
 import { isSupportedArtwork } from '@/lib/paper-minis/artwork';
@@ -113,15 +121,26 @@ function ArtworkFrame({
   );
 }
 
-function SizeOptions({ custom = false }: { custom?: boolean }) {
+function SizeSelectItems({ custom = false }: { custom?: boolean }) {
   return (
     <>
-      {HEIGHT_SLOT_ORDER.map((slot) => (
-        <option key={slot} value={slot} title={slotGeometryLabel(slot)}>
-          {slotLabel(slot)}
-        </option>
-      ))}
-      {custom && <option value="custom">{slotLabel('custom')}</option>}
+      {HEIGHT_SLOT_ORDER.map((slot) => {
+        const { title, typical } = slotMenuParts(slot);
+
+        return (
+          <SelectItem
+            key={slot}
+            value={slot}
+            label={title}
+            title={slotGeometryLabel(slot)}
+            aria-description={slotGeometryLabel(slot)}
+          >
+            <span className="block">{title}</span>
+            <span className="block text-xs text-text-muted">{typical}</span>
+          </SelectItem>
+        );
+      })}
+      {custom && <SelectItem value="custom">{slotLabel('custom')}</SelectItem>}
     </>
   );
 }
@@ -598,26 +617,32 @@ export default function PaperMinisGenerator() {
                     </span>
                   </AccordionTrigger>
                   <AccordionContent className="grid grid-cols-[1.4fr_1fr] gap-2 pb-4">
-                    <label className="block text-sm text-text-muted">
-                      Формат
-                      <select
-                        className={`${field} mt-1`}
+                    <div className="block text-sm text-text-muted">
+                      <label htmlFor="paper-format-trigger">Формат</label>
+                      <Select
                         value={settings.pageSize}
-                        onChange={(event) => {
-                          const pageSize = event.target.value;
-
+                        onValueChange={(pageSize) => {
                           if (pageSize === 'a4' || pageSize === 'letter')
                             store.settings({ pageSize });
                         }}
                       >
-                        <option value="a4" title="210 × 297 мм">
-                          A4
-                        </option>
-                        <option value="letter" title="216 × 279 мм">
-                          Letter
-                        </option>
-                      </select>
-                    </label>
+                        <SelectTrigger
+                          id="paper-format-trigger"
+                          aria-label="Формат"
+                          className="mt-1"
+                        >
+                          <SelectValue>{pageLabel}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="a4" title="210 × 297 мм">
+                            A4
+                          </SelectItem>
+                          <SelectItem value="letter" title="216 × 279 мм">
+                            Letter
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <label className="block text-sm text-text-muted">
                       Поля, мм
                       <input
@@ -841,7 +866,7 @@ export default function PaperMinisGenerator() {
                           return (
                             <DropdownMenuItem
                               key={slot}
-                              className="min-h-11 flex-col items-start gap-0"
+                              className={`${selectItemClassName} flex-col items-start gap-0`}
                               title={slotGeometryLabel(slot)}
                               onClick={() => store.setAllSizes(slot)}
                             >
@@ -951,15 +976,11 @@ export default function PaperMinisGenerator() {
                           <p className="text-sm font-medium text-text">Рост задан вручную</p>
                         )}
                       </div>
-                      <label className="block text-sm">
-                        Высота существа
-                        <select
-                          className={field}
+                      <div className="block text-sm">
+                        <label htmlFor={`height-slot-${row.id}`}>Высота существа</label>
+                        <Select
                           value={row.heightSlot}
-                          title={slotGeometryLabel(row.heightSlot)}
-                          onChange={(event) => {
-                            const value = event.target.value;
-
+                          onValueChange={(value) => {
                             const size =
                               value === 'custom'
                                 ? value
@@ -968,9 +989,23 @@ export default function PaperMinisGenerator() {
                             if (size !== undefined) store.setSize(row.id, size);
                           }}
                         >
-                          <SizeOptions custom />
-                        </select>
-                      </label>
+                          <SelectTrigger
+                            id={`height-slot-${row.id}`}
+                            aria-label="Высота существа"
+                            aria-description={slotGeometryLabel(row.heightSlot)}
+                            title={slotGeometryLabel(row.heightSlot)}
+                          >
+                            <SelectValue>
+                              {row.heightSlot === 'custom'
+                                ? slotLabel(row.heightSlot)
+                                : slotMenuParts(row.heightSlot).title}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SizeSelectItems custom />
+                          </SelectContent>
+                        </Select>
+                      </div>
                       <label className="block text-sm">
                         Количество копий
                         <input
