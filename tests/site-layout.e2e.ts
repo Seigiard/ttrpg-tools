@@ -1,4 +1,51 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
+
+async function measureTabLayout(controls: Locator) {
+  return controls.evaluateAll((controls) => {
+    const wrappedLabels: (string | null)[] = [];
+    const overflowingLabels: (string | null)[] = [];
+    const heights = new Set<number>();
+
+    for (const control of controls) {
+      const lineBoxes: { bottom: number; top: number }[] = [];
+      let textLeft = Infinity;
+      let textRight = -Infinity;
+      const textNodes = document.createTreeWalker(control, NodeFilter.SHOW_TEXT);
+      let textNode = textNodes.nextNode();
+
+      while (textNode) {
+        const range = document.createRange();
+        range.selectNodeContents(textNode);
+
+        for (const box of range.getClientRects()) {
+          textLeft = Math.min(textLeft, box.left);
+          textRight = Math.max(textRight, box.right);
+
+          if (
+            !lineBoxes.some(
+              (line) =>
+                Math.abs(line.top - box.top) < 0.5 && Math.abs(line.bottom - box.bottom) < 0.5,
+            )
+          ) {
+            lineBoxes.push({ bottom: box.bottom, top: box.top });
+          }
+        }
+
+        textNode = textNodes.nextNode();
+      }
+
+      const controlBox = control.getBoundingClientRect();
+
+      if (lineBoxes.length !== 1) wrappedLabels.push(control.textContent);
+      if (textLeft < controlBox.left || textRight > controlBox.right) {
+        overflowingLabels.push(control.textContent);
+      }
+      heights.add(controlBox.height);
+    }
+
+    return { wrappedLabels, overflowingLabels, unequalHeights: heights.size !== 1 };
+  });
+}
 
 const routes = [
   '/',
@@ -185,26 +232,7 @@ for (const route of ['/mausritter/locations/', '/mausritter/weather/', '/the-bla
       await expect(tabs.first()).toBeVisible();
 
       // #then
-      const layout = await tabs.evaluateAll((controls) => {
-        const wrappedLabels: (string | null)[] = [];
-        const overflowingLabels: (string | null)[] = [];
-        const heights = new Set<number>();
-
-        for (const control of controls) {
-          const range = document.createRange();
-          range.selectNodeContents(control);
-          const textBox = range.getBoundingClientRect();
-          const controlBox = control.getBoundingClientRect();
-
-          if (range.getClientRects().length !== 1) wrappedLabels.push(control.textContent);
-          if (textBox.left < controlBox.left || textBox.right > controlBox.right) {
-            overflowingLabels.push(control.textContent);
-          }
-          heights.add(controlBox.height);
-        }
-
-        return { wrappedLabels, overflowingLabels, unequalHeights: heights.size !== 1 };
-      });
+      const layout = await measureTabLayout(tabs);
       expect(layout).toEqual({ wrappedLabels: [], overflowingLabels: [], unequalHeights: false });
     });
   }
