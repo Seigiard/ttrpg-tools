@@ -59,7 +59,7 @@ const stepButton = 'h-full w-9 rounded-md text-base';
 // The visible icon stays small on the thumbnail; the pseudo-element widens the
 // hit area towards the 44 px touch target.
 const overlayButton =
-  "relative size-5 rounded-none after:absolute after:-inset-2 after:content-[''] [&_svg:not([class*='size-'])]:size-3";
+  "relative size-5 min-h-6 min-w-6 rounded-none after:absolute after:-inset-2 after:content-[''] [&_svg:not([class*='size-'])]:size-3";
 
 const miniatureForms = { one: 'миниатюра', few: 'миниатюры', many: 'миниатюр' };
 
