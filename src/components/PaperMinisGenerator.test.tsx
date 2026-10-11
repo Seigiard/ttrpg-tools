@@ -333,6 +333,25 @@ test('the PDF button describes its output with Russian plural forms', async () =
   expect(summary?.textContent).toBe('1 миниатюра · 1 лист A4');
 });
 
+test('copy stepper changes how many minis the PDF prints and stops at one', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  const fewer = screen.getByRole<HTMLButtonElement>('button', { name: 'Меньше копий' });
+  const disabledAtOne = fewer.disabled;
+  // #when
+  fireEvent.click(screen.getByRole('button', { name: 'Больше копий' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Больше копий' }));
+  fireEvent.click(fewer);
+  // #then
+  const download = screen.getByRole('button', { name: 'Скачать PDF' });
+  const summary = document.getElementById(download.getAttribute('aria-describedby') ?? '');
+  expect({ disabledAtOne, summary: summary?.textContent }).toEqual({
+    disabledAtOne: true,
+    summary: '2 миниатюры · 1 лист A4',
+  });
+});
+
 test('download action clicks an attached PDF download anchor', async () => {
   // #given
   setSystemTime(new Date(2026, 9, 2, 10, 30));
