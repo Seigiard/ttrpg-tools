@@ -163,21 +163,42 @@ for (const scenario of calibrationPointerScenarios) {
     const calibrationArtwork = page.getByTestId('calibration-artworks');
     const headSlider = page.getByRole('slider', { name: 'Голова' });
     for (let step = 0; step < 72; step++) await headSlider.press('Shift+ArrowDown');
-    await page.evaluate(() => window.scrollTo(0, 0));
+    await headSlider.scrollIntoViewIfNeeded();
     const artworkBox = await calibrationArtwork.boundingBox();
     const headBox = await headSlider.boundingBox();
     if (!artworkBox || !headBox) throw new Error('The calibration controls are not visible.');
     const [headY, feetY] = await calibrationLineYs(calibrationArtwork);
     const targetY = Math.round(artworkBox.y + artworkBox.height * 0.7);
+    const viewport = page.viewportSize();
+    if (
+      !viewport ||
+      headY < 0 ||
+      targetY < 0 ||
+      headY >= viewport.height ||
+      targetY >= viewport.height
+    )
+      throw new Error('The pointer drag coordinates are outside the viewport.');
     const dragX = scenario.useArtworkCenter
       ? Math.round(artworkBox.x + artworkBox.width / 2)
       : Math.round(headBox.x + headBox.width / 2);
+    await page.evaluate(() => {
+      document.documentElement.dataset.pointerReceiver = '';
+      document.querySelectorAll<HTMLElement>('[role="slider"]').forEach((slider) => {
+        slider.addEventListener('pointerdown', () => {
+          document.documentElement.dataset.pointerReceiver =
+            slider.getAttribute('aria-label') ?? '';
+        });
+      });
+    });
 
     // #when
     await dragPointer(page, { x: dragX, y: headY }, { x: dragX, y: targetY });
 
     // #then
-    expect(await calibrationLineYs(calibrationArtwork)).toEqual([targetY, feetY]);
+    expect({
+      receiver: await page.locator('html').getAttribute('data-pointer-receiver'),
+      lines: await calibrationLineYs(calibrationArtwork),
+    }).toEqual({ receiver: 'Голова', lines: [targetY, feetY] });
   });
 }
 
