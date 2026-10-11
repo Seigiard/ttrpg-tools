@@ -1,5 +1,6 @@
-import { Button as ButtonPrimitive } from '@base-ui/react/button';
+import type { DragEventHandler, ReactNode } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
+import { Button as ButtonPrimitive, type ButtonProps } from 'react-aria-components';
 
 import { cn } from '@/lib/utils';
 
@@ -43,14 +44,32 @@ function Button({
   className,
   variant = 'default',
   size = 'default',
+  disabled,
+  title,
+  onDragOver,
+  onDrop,
+  children,
   ...props
-}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+}: Omit<ButtonProps, 'children' | 'isDisabled'> &
+  VariantProps<typeof buttonVariants> & {
+    children?: ReactNode;
+    disabled?: boolean;
+    title?: string;
+    onDragOver?: DragEventHandler<HTMLButtonElement>;
+    onDrop?: DragEventHandler<HTMLButtonElement>;
+  }) {
   return (
     <ButtonPrimitive
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
+      isDisabled={disabled}
+      render={(buttonProps) => (
+        <button {...buttonProps} title={title} onDragOver={onDragOver} onDrop={onDrop} />
+      )}
       {...props}
-    />
+    >
+      {children}
+    </ButtonPrimitive>
   );
 }
 

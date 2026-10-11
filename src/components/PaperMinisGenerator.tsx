@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
 import { useStore } from '@nanostores/react';
+import { Label } from 'react-aria-components';
 import {
   ChevronDownIcon,
   CopyIcon,
@@ -17,7 +18,6 @@ import {
 } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import {
-  DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
@@ -25,6 +25,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  selectItemClassName,
+} from '@/components/ui/select';
 import { createPaperMinisStore, type CalibrationSession } from '@/stores/paper-minis-store';
 import { ARTWORK_ACCEPT, artworkMimeType } from '@/lib/paper-minis/artwork-formats';
 import { isSupportedArtwork } from '@/lib/paper-minis/artwork';
@@ -135,15 +143,26 @@ function ArtworkFrame({
   );
 }
 
-function SizeOptions({ custom = false }: { custom?: boolean }) {
+function SizeSelectItems({ custom = false }: { custom?: boolean }) {
   return (
     <>
-      {HEIGHT_SLOT_ORDER.map((slot) => (
-        <option key={slot} value={slot} title={slotGeometryLabel(slot)}>
-          {slotLabel(slot)}
-        </option>
-      ))}
-      {custom && <option value="custom">{slotLabel('custom')}</option>}
+      {HEIGHT_SLOT_ORDER.map((slot) => {
+        const { title, typical } = slotMenuParts(slot);
+
+        return (
+          <SelectItem
+            key={slot}
+            value={slot}
+            textValue={title}
+            title={slotGeometryLabel(slot)}
+            aria-description={slotGeometryLabel(slot)}
+          >
+            <span className="block">{title}</span>
+            <span className="block text-xs text-text-muted">{typical}</span>
+          </SelectItem>
+        );
+      })}
+      {custom && <SelectItem value="custom">{slotLabel('custom')}</SelectItem>}
     </>
   );
 }
@@ -307,14 +326,12 @@ function HeightCalibrationDialog({
   onMoveLine,
   onApply,
   onCancel,
-  returnFocus,
 }: {
   session: CalibrationSession;
   onSetLine: (line: CalibrationLine, fraction: number) => void;
   onMoveLine: (line: CalibrationLine, pixels: number) => void;
   onApply: () => void;
   onCancel: () => void;
-  returnFocus: React.RefObject<HTMLButtonElement | null>;
 }) {
   const { artwork, backArtwork, lines } = session;
   const frontUrl = useArtworkUrl(artwork);
@@ -337,7 +354,7 @@ function HeightCalibrationDialog({
         if (!open) onCancel();
       }}
     >
-      <DialogContent finalFocus={returnFocus}>
+      <DialogContent>
         <div className="flex flex-wrap items-start gap-2">
           <div className="min-w-0 flex-[1_1_20rem]">
             <DialogTitle className="text-2xl text-text">Задать рост</DialogTitle>
@@ -463,7 +480,6 @@ export default function PaperMinisGenerator() {
       .join(', ') || '—';
 
   const [previewUrl, setPreviewUrl] = useState<string>();
-  const calibrationOpener = useRef<HTMLButtonElement>(null);
   const [dragging, setDragging] = useState(false);
   const files = useRef<HTMLInputElement>(null);
 
@@ -632,26 +648,29 @@ export default function PaperMinisGenerator() {
                     </span>
                   </AccordionTrigger>
                   <AccordionContent className="grid grid-cols-[1.4fr_1fr] gap-2 pbe-4">
-                    <label className="block text-sm text-text-muted">
-                      Формат
-                      <select
-                        className={`${field} mbs-1`}
+                    <div className="block text-sm text-text-muted">
+                      <Select
+                        aria-label="Формат"
                         value={settings.pageSize}
-                        onChange={(event) => {
-                          const pageSize = event.target.value;
-
+                        onChange={(pageSize) => {
                           if (pageSize === 'a4' || pageSize === 'letter')
                             store.settings({ pageSize });
                         }}
                       >
-                        <option value="a4" title="210 × 297 мм">
-                          A4
-                        </option>
-                        <option value="letter" title="216 × 279 мм">
-                          Letter
-                        </option>
-                      </select>
-                    </label>
+                        <Label>Формат</Label>
+                        <SelectTrigger aria-label="Формат" className="mbs-1">
+                          <SelectValue>{pageLabel}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="a4" title="210 × 297 мм">
+                            A4
+                          </SelectItem>
+                          <SelectItem value="letter" title="216 × 279 мм">
+                            Letter
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <label className="block text-sm text-text-muted">
                       Поля, мм
                       <input
@@ -861,11 +880,11 @@ export default function PaperMinisGenerator() {
                   {rows.length > 0 && <span className="text-text-muted"> · {rows.length}</span>}
                 </h2>
                 {rows.length > 1 && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger render={<Button variant="outline" className="min-h-11" />}>
+                  <DropdownMenuTrigger>
+                    <Button variant="outline" className="min-h-11">
                       Сменить высоту
                       <ChevronDownIcon aria-hidden="true" />
-                    </DropdownMenuTrigger>
+                    </Button>
                     <DropdownMenuContent align="end" className="w-64">
                       <DropdownMenuGroup>
                         <DropdownMenuLabel>Для всех миниатюр</DropdownMenuLabel>
@@ -875,9 +894,9 @@ export default function PaperMinisGenerator() {
                           return (
                             <DropdownMenuItem
                               key={slot}
-                              className="min-h-11 flex-col items-start gap-0"
+                              className={`${selectItemClassName} flex-col items-start gap-0`}
                               title={slotGeometryLabel(slot)}
-                              onClick={() => store.setAllSizes(slot)}
+                              onAction={() => store.setAllSizes(slot)}
                             >
                               {title}
                               <span className="text-xs text-text-muted">{typical}</span>
@@ -886,7 +905,7 @@ export default function PaperMinisGenerator() {
                         })}
                       </DropdownMenuGroup>
                     </DropdownMenuContent>
-                  </DropdownMenu>
+                  </DropdownMenuTrigger>
                 )}
               </div>
               <div className="flex flex-col gap-3">
@@ -940,10 +959,7 @@ export default function PaperMinisGenerator() {
                                   : 'Задать рост: отметить голову и стопы'
                               }
                               disabled={!row.artwork || loading}
-                              onClick={(event) => {
-                                calibrationOpener.current = event.currentTarget;
-                                store.openCalibration(row.id);
-                              }}
+                              onClick={() => store.openCalibration(row.id)}
                             >
                               <RulerIcon aria-hidden="true" />
                             </Button>
@@ -1023,21 +1039,11 @@ export default function PaperMinisGenerator() {
                       </div>
 
                       <div className="flex min-w-0 flex-wrap items-center gap-2">
-                        <span
-                          className={`${rowField} relative gap-1 px-3 font-semibold focus-within:outline-2 focus-within:outline-primary hover:bg-muted`}
-                        >
-                          {row.heightSlot === 'custom'
-                            ? CUSTOM_SIZE_NAME
-                            : slotName(row.heightSlot)}
-                          <ChevronDownIcon aria-hidden="true" className="size-4" />
-                          <select
-                            className="absolute inset-0 cursor-pointer opacity-0"
+                        <div className="w-full max-w-56 text-sm">
+                          <Select
                             aria-label="Высота существа"
                             value={row.heightSlot}
-                            title={slotGeometryLabel(row.heightSlot)}
-                            onChange={(event) => {
-                              const value = event.target.value;
-
+                            onChange={(value) => {
                               const size =
                                 value === 'custom'
                                   ? value
@@ -1046,9 +1052,22 @@ export default function PaperMinisGenerator() {
                               if (size !== undefined) store.setSize(row.id, size);
                             }}
                           >
-                            <SizeOptions custom />
-                          </select>
-                        </span>
+                            <SelectTrigger
+                              aria-label="Высота существа"
+                              aria-description={slotGeometryLabel(row.heightSlot)}
+                              title={slotGeometryLabel(row.heightSlot)}
+                            >
+                              <SelectValue>
+                                {row.heightSlot === 'custom'
+                                  ? CUSTOM_SIZE_NAME
+                                  : slotMenuParts(row.heightSlot).title}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SizeSelectItems custom />
+                            </SelectContent>
+                          </Select>
+                        </div>
                         {row.heightSlot === 'custom' &&
                           (['customWidthMm', 'customHeightMm'] as const).map((key, i) => {
                             const dimension = i === 0 ? 'width' : 'height';
@@ -1194,7 +1213,6 @@ export default function PaperMinisGenerator() {
       )}
       {calibration && (
         <HeightCalibrationDialog
-          returnFocus={calibrationOpener}
           session={calibration}
           onSetLine={store.setCalibrationLine}
           onMoveLine={store.moveCalibrationLine}
