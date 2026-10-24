@@ -2087,7 +2087,7 @@ describe('base style settings', () => {
     // #given  old saved settings omit the field, while a future value is not valid for this version
     const missing = setup();
     missing.loadSettings();
-    localStorage.setItem('pmg-settings', JSON.stringify({ baseStyle: 'foamboard' }));
+    localStorage.setItem('pmg-settings', JSON.stringify({ baseStyle: 'cardboard' }));
     const unknown = setup();
     unknown.loadSettings();
 

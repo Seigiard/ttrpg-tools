@@ -1437,6 +1437,49 @@ describe('foamboard base style', () => {
     },
   );
 
+  t('reflects the Back image box of a rotated foamboard mini across the page centre', async () => {
+    // #given  a 10:1 custom mini is too wide upright but fits when the packer turns it clockwise
+    const oversizedUpright: Entry = {
+      ...entry,
+      heightSlot: 'custom',
+      customWidthMm: 20,
+      customHeightMm: 140,
+      artwork: { ...artwork, width: 10, height: 1 },
+    };
+
+    // #when
+    const sheet = await read(
+      await generatePDF([oversizedUpright], { ...foamboardOptions, marginMm: 2 }),
+      false,
+    );
+
+    const front = sheet.drawings.find((drawing) => drawing.page === 0 && drawing.role === 'image')!;
+    const back = sheet.drawings.find((drawing) => drawing.page === 1 && drawing.role === 'image')!;
+    const pageWidth = sheet.pageSizes[0]!.width;
+
+    // #then  stacking Front and Back aligns the turned Face through the board
+    assert.deepEqual(
+      {
+        frontAxes: front.axes,
+        backBox: [
+          asMm(back.box.left),
+          asMm(back.box.bottom),
+          asMm(back.box.right),
+          asMm(back.box.top),
+        ],
+      },
+      {
+        frontAxes: [0, -1, 1, 0],
+        backBox: [
+          asMm(pageWidth - front.box.right),
+          asMm(front.box.bottom),
+          asMm(pageWidth - front.box.left),
+          asMm(front.box.top),
+        ],
+      },
+    );
+  });
+
   t(
     'puts the duplicate badge on the Back Tongue and draws cut marks only on the Front',
     async () => {
