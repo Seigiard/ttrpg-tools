@@ -136,25 +136,26 @@ export async function generatePDF(
 
       if (rotated) {
         // Turn the whole local drawing clockwise about the footprint's top-left.
-        // A Back sheet reflects that complete drawing across the page centre.
+        // A Back sheet turns it counter-clockwise so the Tongue moves to the
+        // reflected side without mirroring supplied artwork or badge text.
         const transform = backSheet
           ? concatTransformationMatrix(
               0,
-              -1,
+              1,
               -1,
               0,
               mm(xMm + mini.totalHeightMm),
-              mm(layoutTopMm - yMm),
+              mm(layoutTopMm - yMm - mini.totalWidthMm),
             )
           : concatTransformationMatrix(0, -1, 1, 0, mm(xMm), mm(layoutTopMm - yMm));
 
         pdfPage.pushOperators(pushGraphicsState(), transform);
-        drawMini(pdfPage, mini, images, 0, mini.totalHeightMm, font, backSheet, true);
+        drawMini(pdfPage, mini, images, 0, mini.totalHeightMm, font, backSheet);
         pdfPage.pushOperators(popGraphicsState());
         continue;
       }
 
-      drawMini(pdfPage, mini, images, xMm, layoutTopMm - yMm, font, backSheet, false);
+      drawMini(pdfPage, mini, images, xMm, layoutTopMm - yMm, font, backSheet);
     }
 
     if (pageIndex === 0) drawScaleBar(pdfPage, scaledPageHmm, noteFont);
@@ -224,10 +225,9 @@ function drawMini(
   yTopMm: number,
   font: PDFFont,
   backSheet: boolean,
-  rotated: boolean,
 ) {
   if (mini.baseStyle === 'foamboard') {
-    drawFoamboardMini(pdfPage, mini, images, xMm, yTopMm, font, backSheet, rotated);
+    drawFoamboardMini(pdfPage, mini, images, xMm, yTopMm, font, backSheet);
 
     return;
   }
@@ -326,7 +326,6 @@ function drawFoamboardMini(
   yTopMm: number,
   font: PDFFont,
   backSheet: boolean,
-  rotated: boolean,
 ) {
   const yBottomMm = yTopMm - mini.totalHeightMm;
   const x = mm(xMm);
@@ -349,7 +348,7 @@ function drawFoamboardMini(
 
   pdfPage.pushOperators(pushGraphicsState());
 
-  if (backSheet && !images.back && !rotated) {
+  if (backSheet && !images.back) {
     pdfPage.pushOperators(
       concatTransformationMatrix(
         -1,
