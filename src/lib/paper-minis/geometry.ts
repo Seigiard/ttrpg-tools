@@ -36,7 +36,7 @@ export const FLAT_TONGUE_DEPTH_MM = 6;
 
 export const FLAT_TONGUE_INSET_MM = 2;
 
-export type BaseStyle = 'tent' | 'flat';
+export type BaseStyle = 'tent' | 'flat' | 'foamboard';
 
 export type PackOptions = {
   pageSize: PageSizeKey;
@@ -102,7 +102,24 @@ export type FlatMiniLevels = {
   cutMarks: FlatCutMarks;
 };
 
-export type MiniLevels = TentMiniLevels | FlatMiniLevels;
+type FoamboardCutMarks = {
+  cornersMm: [number, number];
+  edgeTicksMm: [];
+};
+
+export type FoamboardMiniLevels = {
+  floorStripTopMm?: never;
+  frontTabTopMm?: never;
+  frontTongueTopMm: number;
+  frontFaceTopMm: number;
+  foldMm?: never;
+  backFaceBottomMm?: never;
+  backFaceTopMm?: never;
+  topMm: number;
+  cutMarks: FoamboardCutMarks;
+};
+
+export type MiniLevels = TentMiniLevels | FlatMiniLevels | FoamboardMiniLevels;
 
 // A single copy of an entry, with its resolved geometry. entryIndex maps back
 // to the source entry so the PDF drawer can attribute each mini to its row.
@@ -142,7 +159,14 @@ export type FlatPackedMini = PackedMiniCommon & {
   tongueOffsetXMm: number;
 };
 
-export type PackedMini = TentPackedMini | FlatPackedMini;
+export type FoamboardPackedMini = PackedMiniCommon & {
+  baseStyle: 'foamboard';
+  levels: FoamboardMiniLevels; // vertical levels measured from the mini's bottom edge
+  tongueWidthMm: number;
+  tongueOffsetXMm: number;
+};
+
+export type PackedMini = TentPackedMini | FlatPackedMini | FoamboardPackedMini;
 
 // The front's three image fields again, for the back artwork.
 export type BackFace = { imageWidthMm: number; imageHeightMm: number; imageOffsetXMm: number };
@@ -272,10 +296,20 @@ function fitMiniFaces(
   const { widthMm: usableWidthMm, heightMm: usableHeightMm } = fullPageAreaMm(opts);
   const marginMm = opts.marginMm ?? DEFAULT_FIGURE_MARGIN_MM;
 
-  const supportHeightMm =
-    (opts.baseStyle ?? 'tent') === 'flat' ? FLAT_TONGUE_DEPTH_MM * 2 : resolveTabHeightMm(e) * 4;
+  const baseStyle = opts.baseStyle ?? 'tent';
 
-  const imageSpaceMm = (usableHeightMm - marginMm * 2 - supportHeightMm) / 2;
+  const supportHeightMm =
+    baseStyle === 'flat'
+      ? FLAT_TONGUE_DEPTH_MM * 2
+      : baseStyle === 'foamboard'
+        ? FLAT_TONGUE_DEPTH_MM
+        : resolveTabHeightMm(e) * 4;
+
+  const imageSpaceMm =
+    baseStyle === 'foamboard'
+      ? usableHeightMm - marginMm * 2 - supportHeightMm
+      : (usableHeightMm - marginMm * 2 - supportHeightMm) / 2;
+
   const calibrated = calibrationGap(e.calibration);
 
   // Page fitting belongs to the whole calibrated mini. Do not promise a page
@@ -372,7 +406,7 @@ export function resolveMini(
   const { baseWidthMm } = resolveSizeDimensionsMm(e);
   const baseStyle = opts.baseStyle ?? 'tent';
   const marginMm = opts.marginMm ?? DEFAULT_FIGURE_MARGIN_MM;
-  const tabHMm = baseStyle === 'flat' ? FLAT_TONGUE_DEPTH_MM : resolveTabHeightMm(e);
+  const tabHMm = baseStyle === 'tent' ? resolveTabHeightMm(e) : FLAT_TONGUE_DEPTH_MM;
 
   const { front, back: rawBackFit } = fitMiniFaces(
     { ...e, naturalWidth: e.naturalWidth, naturalHeight: e.naturalHeight },
@@ -402,7 +436,48 @@ export function resolveMini(
   const limits = [...new Set([...front.limits, ...(rawBackFit?.limits ?? [])])];
   const copies: PackedMini[] = [];
 
-  if (baseStyle === 'flat') {
+  if (baseStyle === 'foamboard') {
+    const frontTongueTopMm = FLAT_TONGUE_DEPTH_MM;
+    const frontFaceTopMm = frontTongueTopMm + marginMm + faceHeightMm;
+    const topMm = frontFaceTopMm + marginMm;
+    const tongueWidthMm = baseWidthMm - FLAT_TONGUE_INSET_MM * 2;
+    const tongueOffsetXMm = baseOffsetXMm + FLAT_TONGUE_INSET_MM;
+
+    const levels: FoamboardMiniLevels = {
+      frontTongueTopMm,
+      frontFaceTopMm,
+      topMm,
+      cutMarks: { cornersMm: [0, topMm], edgeTicksMm: [] },
+    };
+
+    const backBadgeOffsetXMm = tongueOffsetXMm - (back?.imageOffsetXMm ?? imageOffsetXMm);
+
+    for (let i = 0; i < e.count; i++) {
+      copies.push({
+        entryIndex,
+        copyIndex: i,
+        baseStyle,
+        heightSlot: e.heightSlot,
+        baseWidthMm,
+        totalWidthMm,
+        baseOffsetXMm,
+        tabHeightMm: tabHMm,
+        marginMm,
+        imageWidthMm,
+        imageHeightMm,
+        imageOffsetXMm,
+        faceHeightMm,
+        ...(back && { back }),
+        levels,
+        tongueWidthMm,
+        tongueOffsetXMm,
+        backBadgeOffsetXMm,
+        fitLimits: [...limits],
+        totalHeightMm: levels.topMm,
+        label: opts.numberDuplicates ? String(i + 1) : undefined,
+      });
+    }
+  } else if (baseStyle === 'flat') {
     const frontTongueTopMm = FLAT_TONGUE_DEPTH_MM;
     const frontFaceTopMm = frontTongueTopMm + faceHeightMm;
     const foldMm = frontFaceTopMm + marginMm;

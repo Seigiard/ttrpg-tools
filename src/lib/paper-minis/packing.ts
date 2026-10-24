@@ -2,6 +2,7 @@ import type { Entry, PackingEntry } from './types';
 import {
   type EntryStatus,
   type FlatPackedMini,
+  type FoamboardPackedMini,
   type PackOptions,
   type PackedMini,
   type ResolvedMini,
@@ -96,6 +97,10 @@ export function packEntries(
   entries: Entry[],
   opts: PackOptions & { baseStyle: 'flat' },
 ): PackResult<FlatPackedMini>;
+export function packEntries(
+  entries: Entry[],
+  opts: PackOptions & { baseStyle: 'foamboard' },
+): PackResult<FoamboardPackedMini>;
 export function packEntries(entries: Entry[], opts: PackOptions): PackResult;
 export function packEntries(entries: Entry[], opts: PackOptions): PackResult {
   return packResolvedEntries(
@@ -113,6 +118,10 @@ export function packMinis(
   entries: PackingEntry[],
   opts: PackOptions & { baseStyle: 'flat' },
 ): PackResult<FlatPackedMini>;
+export function packMinis(
+  entries: PackingEntry[],
+  opts: PackOptions & { baseStyle: 'foamboard' },
+): PackResult<FoamboardPackedMini>;
 export function packMinis(entries: PackingEntry[], opts: PackOptions): PackResult;
 export function packMinis(entries: PackingEntry[], opts: PackOptions): PackResult {
   return packResolvedEntries(
@@ -125,7 +134,20 @@ function packResolvedEntries(entries: ResolvedEntry[], opts: PackOptions): PackR
   const resolved = entries.flatMap(({ mini }) => (mini ? [mini] : []));
   const { widthMm, heightMm: firstPageHeightMm } = usableAreaMm(opts);
   const { heightMm: laterPageHeightMm } = fullPageAreaMm(opts);
-  const pages = packGuillotine(resolved, widthMm, firstPageHeightMm, laterPageHeightMm);
+  const frontPages = packGuillotine(resolved, widthMm, firstPageHeightMm, laterPageHeightMm);
+
+  const pages =
+    opts.baseStyle === 'foamboard'
+      ? frontPages.flatMap((frontPage) => [
+          frontPage,
+          {
+            placements: frontPage.placements.map((placement) => ({
+              ...placement,
+              xMm: widthMm - placement.xMm - footprintMm(placement.mini, placement.rotated).widthMm,
+            })),
+          },
+        ])
+      : frontPages;
 
   return {
     pages,

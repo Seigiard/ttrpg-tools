@@ -12,7 +12,7 @@ The Tongue is centred, base width minus 4 mm wide and 6 mm deep for every size. 
 
 ## Foamboard sheets
 
-A Back sheet is the horizontal mirror of its Front sheet: the same placements reflected across the page centre, so every back lands behind its front through the board. The back artwork itself is not mirrored. A mini without back artwork prints its front mirrored left to right on the Back sheet. Both sheets carry Registration marks in the four corners. Back pieces extend their background 1.5 mm past the cut line, so a small printer offset leaves no white edge. Cut marks print on Front sheets only, because the player cuts from the front. The PDF interleaves the sheets: front 1, back 1, front 2, and so on, and the first Back sheet reserves the scale bar band, mirrored, so the two layouts match.
+A Back sheet is the horizontal mirror of its Front sheet: the same placements reflected across the page centre, so every back lands behind its front through the board. The back artwork itself is not mirrored. A mini without back artwork prints its front mirrored left to right on the Back sheet. Both sheets carry Registration marks in the four corners. The default figure margin keeps artwork off the cut line, so a small printer offset moves the art inside white paper. Cut marks print on Front sheets only, because the player cuts from the front. The PDF interleaves the sheets: front 1, back 1, front 2, and so on, and the first Back sheet reserves the scale bar band, mirrored, so the two layouts match.
 
 ## Considered options
 

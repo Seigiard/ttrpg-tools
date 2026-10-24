@@ -174,7 +174,7 @@ const settingsSchema = z.object({
   ),
   numberDuplicates: z.catch(z.optional(z.boolean()), undefined),
   normalization: z.catch(z.optional(z.boolean()), undefined),
-  baseStyle: z.catch(z.optional(z.enum(['tent', 'flat'])), undefined),
+  baseStyle: z.catch(z.optional(z.enum(['tent', 'flat', 'foamboard'])), undefined),
 });
 
 function parseNumericInput(text: string, accepts: (value: number) => boolean) {
