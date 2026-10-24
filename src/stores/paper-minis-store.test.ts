@@ -357,8 +357,7 @@ describe('foamboard base style', () => {
     localStorage.setItem('pmg-settings', JSON.stringify({ baseStyle: 'foamboard' }));
 
     // #when
-    // SAFETY: `foamboard` is the new runtime option under test; its public union has not widened yet.
-    direct.settings({ baseStyle: 'foamboard' as never });
+    direct.settings({ baseStyle: 'foamboard' });
     loaded.loadSettings();
     // SAFETY: `cardboard` exercises the schema's runtime fallback for an unknown value.
     unknown.settings({ baseStyle: 'cardboard' as never });

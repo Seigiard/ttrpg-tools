@@ -384,8 +384,7 @@ describe('foamboard base style', () => {
           count: 2,
         },
       ],
-      // SAFETY: `foamboard` is the new runtime option under test; its public union has not widened yet.
-      { pageSize: 'a4', numberDuplicates: false, baseStyle: 'foamboard' as never, marginMm: 0 },
+      { pageSize: 'a4', numberDuplicates: false, baseStyle: 'foamboard', marginMm: 0 },
     );
 
     const pageWidthMm = fullPageAreaMm({ pageSize: 'a4' }).widthMm;

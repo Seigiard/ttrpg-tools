@@ -1273,7 +1273,7 @@ describe('flat base style', () => {
       },
       {
         orientation: 'upright',
-        tongue: [21, 4],
+        tongue: [21, 9],
         levels: [6, 41, 43, 45, 80, 86],
         totalHeightMm: 86,
       },
@@ -1309,21 +1309,13 @@ describe('flat base style', () => {
 describe('foamboard base style', () => {
   t('resolves each Medium face as one Face and one centred Tongue', () => {
     // #given  a Medium has a 25 mm base and a 35 mm square Face
-    // SAFETY: `foamboard` is the new runtime option under test; its public union has not widened yet.
     const foamboardOptions = {
       ...sheetOpts,
-      baseStyle: 'foamboard' as never,
+      baseStyle: 'foamboard' as const,
       marginMm: 0,
     };
 
-    const unresolvedMini: unknown = resolveMini(entry({}), 0, foamboardOptions)!.copies[0];
-
-    // SAFETY: The assertion below validates this required foamboard piece shape at the public resolver seam.
-    const mini = unresolvedMini as {
-      baseStyle: string;
-      tongueWidthMm: number;
-      totalHeightMm: number;
-    };
+    const mini = resolveMini(entry({}), 0, foamboardOptions)!.copies[0];
 
     // #when
     const piece = [mini.baseStyle, mini.tongueWidthMm, mini.totalHeightMm];
@@ -1332,29 +1324,44 @@ describe('foamboard base style', () => {
     assert.deepEqual(piece, ['foamboard', 21, 41]);
   });
 
-  t('uses one Face and Tongue at the page-height cap', () => {
-    // #given  calibrated 140 mm art, with no margin to leave only the single Tongue on A4
-    const tall = entry({
-      heightSlot: 'custom',
-      customWidthMm: 10,
-      customHeightMm: 140,
-      naturalWidth: 50,
-      naturalHeight: 100,
-      calibration: { head: 0.25, feet: 0.75 },
+  for (const [marginMm, expectedFaceHeightMm] of [
+    [0.6, 263.07],
+    [1.1, 262.07],
+    [1.6, 261.07],
+    [2.1, 260.07],
+  ]) {
+    t(`fits a calibrated 140 mm Face at the A4 page cap with ${marginMm} mm margins`, () => {
+      // #given  A4 at 91% holds one Face, two margins and one 6 mm Tongue
+      const tall = entry({
+        heightSlot: 'custom',
+        customWidthMm: 10,
+        customHeightMm: 140,
+        naturalWidth: 50,
+        naturalHeight: 100,
+        calibration: { head: 0.25, feet: 0.75 },
+      });
+
+      // #when
+      const resolved = resolveMini(tall, 0, {
+        ...sheetOpts,
+        baseStyle: 'foamboard',
+        marginMm,
+        printerScale: 0.91,
+      })!;
+
+      const mini = resolved.copies[0];
+
+      // #then  270.27 mm = Face + two margins + one 6 mm Tongue
+      assert.deepEqual(
+        [
+          resolved.orientation,
+          mini.imageHeightMm,
+          mini.levels.topMm,
+          mini.totalHeightMm,
+          mini.fitLimits,
+        ],
+        ['upright', expectedFaceHeightMm, 270.27, 270.27, ['page']],
+      );
     });
-
-    // #when
-    // SAFETY: `foamboard` is the new runtime option under test; its public union has not widened yet.
-    const mini = resolveMini(tall, 0, {
-      ...sheetOpts,
-      baseStyle: 'foamboard' as never,
-      marginMm: 0,
-    })!.copies[0];
-
-    // #then  the 270.27 mm scaled A4 height holds a 264.27 mm Face plus its 6 mm Tongue
-    assert.deepEqual(
-      [mini.imageHeightMm, mini.totalHeightMm, mini.fitLimits],
-      [264.27, 270.27, ['page']],
-    );
-  });
+  }
 });
