@@ -234,8 +234,11 @@ for (const route of ['/mausritter/locations/', '/mausritter/weather/', '/the-bla
       await expect(tabs.first()).toBeVisible();
 
       // #then
-      const layout = await measureTabLayout(tabs);
-      expect(layout).toEqual({ wrappedLabels: [], overflowingLabels: [], unequalHeights: false });
+      // React Aria replaces the hydrated tabs with new nodes after the island loses `ssr`,
+      // so a single measurement can catch the detached nodes; poll until the settled tabs answer.
+      await expect
+        .poll(() => measureTabLayout(tabs))
+        .toEqual({ wrappedLabels: [], overflowingLabels: [], unequalHeights: false });
     });
   }
 }
