@@ -1,27 +1,29 @@
 import type { Entry, PackingEntry } from './types';
 import {
   type EntryStatus,
+  type FlatPackedMini,
   type PackOptions,
   type PackedMini,
   type ResolvedMini,
+  type TentPackedMini,
   footprintMm,
   fullPageAreaMm,
   usableAreaMm,
   resolveMini,
 } from './geometry.ts';
 
-export type Placement = {
-  mini: PackedMini;
+export type Placement<M extends PackedMini = PackedMini> = {
+  mini: M;
   // Millimetres from the top-left of this page's packable area.
   xMm: number;
   yMm: number;
   rotated: boolean;
 };
 
-export type PackedPage = { placements: Placement[] };
+export type PackedPage<M extends PackedMini = PackedMini> = { placements: Placement<M>[] };
 
-export type PackResult = {
-  pages: PackedPage[];
+export type PackResult<M extends PackedMini = PackedMini> = {
+  pages: PackedPage<M>[];
   pageCount: number;
   miniCount: number; // minis actually placed (what will print)
   entries: EntryStatus[]; // indexed like the input entries
@@ -86,6 +88,15 @@ export function resolveEntry(entry: Entry, entryIndex: number, opts: PackOptions
 }
 
 // Project prepared artwork into packing geometry without changing entry indices.
+export function packEntries(
+  entries: Entry[],
+  opts: PackOptions & { baseStyle?: 'tent' },
+): PackResult<TentPackedMini>;
+export function packEntries(
+  entries: Entry[],
+  opts: PackOptions & { baseStyle: 'flat' },
+): PackResult<FlatPackedMini>;
+export function packEntries(entries: Entry[], opts: PackOptions): PackResult;
 export function packEntries(entries: Entry[], opts: PackOptions): PackResult {
   return packResolvedEntries(
     entries.map((entry, entryIndex) => resolveEntry(entry, entryIndex, opts)),
@@ -94,6 +105,15 @@ export function packEntries(entries: Entry[], opts: PackOptions): PackResult {
 }
 
 // Resolve every entry's geometry once, then lay the minis out in strips.
+export function packMinis(
+  entries: PackingEntry[],
+  opts: PackOptions & { baseStyle?: 'tent' },
+): PackResult<TentPackedMini>;
+export function packMinis(
+  entries: PackingEntry[],
+  opts: PackOptions & { baseStyle: 'flat' },
+): PackResult<FlatPackedMini>;
+export function packMinis(entries: PackingEntry[], opts: PackOptions): PackResult;
 export function packMinis(entries: PackingEntry[], opts: PackOptions): PackResult {
   return packResolvedEntries(
     entries.map((entry, entryIndex) => resolvePackingEntry(entry, entryIndex, opts)),

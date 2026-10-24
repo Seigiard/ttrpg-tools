@@ -19,6 +19,7 @@ import type { PackResult } from './packing.ts';
 import {
   CUT_MARK_ARM_MM,
   CUT_MARK_STROKE_MM,
+  FLAT_TONGUE_DEPTH_MM,
   PAGE_SIZES_MM,
   SCALE_BAR_BAND_MM,
   printerScale,
@@ -213,7 +214,10 @@ function drawMini(
   // Bottom-up: floor strip (two tabs deep), front tab, front face, margin,
   // fold, margin, back face, back tab. The figures stand straight on their
   // tabs, so a figure shorter than its face leaves paper by the fold instead.
-  const frontBottom = yBottom + mm(mini.levels.frontTabTopMm);
+  const frontTopMm =
+    mini.baseStyle === 'flat' ? mini.levels.frontTongueTopMm : mini.levels.frontTabTopMm;
+
+  const frontBottom = yBottom + mm(frontTopMm);
 
   pdfPage.drawImage(images.front, {
     x: x + offX,
@@ -263,13 +267,21 @@ function drawMini(
   if (mini.label) {
     pdfPage.pushOperators(pushGraphicsState());
     pdfPage.pushOperators(concatTransformationMatrix(-1, 0, 0, -1, x + backOffX + backW, backTop));
+
+    const badgeWidthMm = mini.baseStyle === 'flat' ? mini.tongueWidthMm : mini.baseWidthMm;
+
+    const badgeOffsetXMm =
+      mini.baseStyle === 'flat'
+        ? mini.baseOffsetXMm + (mini.baseWidthMm - badgeWidthMm) / 2 - back.imageOffsetXMm
+        : mini.backBadgeOffsetXMm;
+
     drawLabelBadge(
       pdfPage,
       mini.label,
       font,
-      mini.baseWidthMm,
-      mini.tabHeightMm,
-      mm(mini.backBadgeOffsetXMm),
+      badgeWidthMm,
+      mini.baseStyle === 'flat' ? FLAT_TONGUE_DEPTH_MM : mini.tabHeightMm,
+      mm(badgeOffsetXMm),
       0,
     );
     pdfPage.pushOperators(popGraphicsState());
@@ -289,7 +301,9 @@ function drawCutMarks(pdfPage: PDFPage, mini: PackedMini, x: number, yBottom: nu
   const arm = mm(CUT_MARK_ARM_MM);
   const left = x;
   const right = x + mm(mini.totalWidthMm);
-  const [bottom, top] = mini.levels.cutMarks.cornersMm.map((level) => yBottom + mm(level));
+  const corners = mini.levels.cutMarks.cornersMm.map((level) => yBottom + mm(level));
+  const bottom = corners[0];
+  const top = corners[corners.length - 1];
   const ticks = mini.levels.cutMarks.edgeTicksMm.map((level) => yBottom + mm(level));
 
   const ops = [
@@ -311,6 +325,23 @@ function drawCutMarks(pdfPage: PDFPage, mini: PackedMini, x: number, yBottom: nu
     for (const y of ticks) {
       segment(edge, y, edge + inward, y);
       segment(edge, y - arm, edge, y + arm);
+    }
+  }
+
+  if (mini.baseStyle === 'flat') {
+    const tongueLeft = x + mm(mini.baseOffsetXMm + (mini.baseWidthMm - mini.tongueWidthMm) / 2);
+    const tongueRight = tongueLeft + mm(mini.tongueWidthMm);
+    const lowerShoulder = yBottom + mm(mini.levels.frontTongueTopMm);
+    const upperShoulder = yBottom + mm(mini.levels.backFaceTopMm);
+
+    for (const [shoulder, direction] of [
+      [tongueLeft, 1],
+      [tongueRight, -1],
+    ] as const) {
+      segment(shoulder, lowerShoulder, shoulder + direction * arm, lowerShoulder);
+      segment(shoulder, lowerShoulder, shoulder, lowerShoulder + arm);
+      segment(shoulder, upperShoulder, shoulder + direction * arm, upperShoulder);
+      segment(shoulder, upperShoulder, shoulder, upperShoulder - arm);
     }
   }
 
