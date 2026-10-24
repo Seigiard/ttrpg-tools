@@ -571,7 +571,13 @@ const localSegments = (marks: Drawing) =>
 const shoulderSegments = (marks: Drawing, xs: readonly number[], ys: readonly number[]) =>
   localSegments(marks)
     .filter(([start, end]) => [start, end].some(([x, y]) => xs.includes(x) && ys.includes(y)))
-    .toSorted((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+    .toSorted(
+      ([leftStart, leftEnd], [rightStart, rightEnd]) =>
+        leftStart[0] - rightStart[0] ||
+        leftStart[1] - rightStart[1] ||
+        leftEnd[0] - rightEnd[0] ||
+        leftEnd[1] - rightEnd[1],
+    );
 
 t('a Tiny prints its number once, upright from behind, on the back tab', async () => {
   // #given
