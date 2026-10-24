@@ -1,0 +1,852 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paper minis · раунд 5</title>
+<style>
+:root {
+  --primary: oklch(0.555283 0.145505 48.9975);
+  --primary-hover: color-mix(in oklch, var(--primary), black 12%);
+  --primary-subtle: color-mix(in oklch, var(--primary) 10%, transparent);
+  --secondary: oklch(0.408389 0.116468 38.1715);
+  --warning: oklch(0.456365 0.099394 69.1443);
+  --surface: oklch(0.977026 0.011414 84.5781);
+  --elevated: oklch(1 0 none);
+  --text: oklch(0.216115 0.006126 56.0434);
+  --muted: oklch(0.444417 0.009597 73.639);
+  --border: oklch(0.913158 0.018236 89.3643);
+  --muted-bg: oklch(0.937165 0.023468 90.7554);
+  --veil: color-mix(in oklch, var(--surface) 92%, transparent);
+  --sans: Inter, Roboto, 'Helvetica Neue', 'Arial Nova', 'Nimbus Sans', Arial, sans-serif;
+  --mono: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+  --display: 'Iowan Old Style', 'Palatino Linotype', 'URW Palladio L', P052, serif;
+  --gutter: clamp(1rem, 0.64rem + 1.79vw, 1.5rem);
+  --ease: cubic-bezier(0.23, 1, 0.32, 1);
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--surface); color: var(--text); font-family: var(--sans); }
+body { min-height: 100svh; font-size: 16px; line-height: 1.5; overflow-wrap: break-word; }
+h1, h2, h3 { font-family: var(--display); font-weight: 400; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+code { font-family: var(--mono); font-size: .9em; }
+[hidden] { display: none !important; }
+
+.wrap { width: min(100% - var(--gutter) * 2, 72rem); margin-inline: auto; }
+.top { border-bottom: 1px solid var(--border); padding-block: 1rem; }
+.home { display: inline-flex; min-height: 44px; align-items: center; font: 500 .75rem var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); text-decoration: none; }
+main.wrap { padding-block: clamp(2rem, 1.29rem + 3.57vw, 3rem); display: flex; flex-direction: column; gap: 1.5rem; }
+.heading { display: flex; flex-direction: column; gap: .5rem; margin-bottom: 1rem; }
+.heading h1 { font-size: clamp(2rem, 1.64rem + 1.79vw, 2.5rem); line-height: 1.1; }
+.heading p { color: var(--muted); max-width: 48rem; }
+
+/* shared controls */
+.field { min-height: 44px; width: 100%; border: 1px solid var(--border); border-radius: 8px; background: var(--elevated); padding: 0 .75rem; }
+select.field { appearance: none; padding-right: 2rem; background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
+.lbl { display: flex; flex-direction: column; gap: .25rem; font-size: .875rem; color: var(--muted); }
+.check { display: flex; align-items: center; gap: .75rem; min-height: 44px; font-size: .875rem; }
+.check input { width: 1rem; height: 1rem; accent-color: var(--primary); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 44px; padding: .5rem 1rem; border-radius: 12px; border: 1px solid transparent; background: var(--primary); color: var(--surface); font-weight: 500; cursor: pointer; white-space: nowrap; }
+.btn:hover { background: var(--primary-hover); }
+.btn:disabled { opacity: .5; cursor: not-allowed; background: var(--primary); }
+.btn--pdf { flex-direction: column; gap: 0; line-height: 1.25; padding-block: .4rem; }
+.btn--pdf small { font-size: .75rem; font-weight: 400; opacity: .85; white-space: normal; }
+.btn--ghost { background: transparent; color: var(--text); border-color: var(--border); }
+.btn--ghost:hover { background: var(--muted-bg); }
+.link { background: none; border: 0; padding: 0 .25rem; min-height: 44px; color: var(--text); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; font-size: .875rem; }
+.note .link, .cal .link { min-height: 0; }
+.link:disabled { color: var(--muted); cursor: not-allowed; }
+.links { display: flex; gap: .25rem; align-items: center; color: var(--muted); font-size: .875rem; }
+.note { font-size: .875rem; color: var(--muted); }
+.measure { display: grid; grid-template-columns: auto minmax(0, 5.5rem) auto; gap: .5rem; align-items: center; font-size: .875rem; }
+.measure input { text-align: end; }
+
+/* upload + list (shared by every design) */
+.drop { width: 100%; min-height: 7rem; border: 1px dashed var(--border); border-radius: 12px; background: transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .25rem; padding: 1.5rem; cursor: pointer; }
+.drop:hover { background: var(--muted-bg); }
+.drop span:last-child { font-size: .875rem; color: var(--muted); }
+.hint { font-size: .875rem; color: var(--muted); line-height: 1.6; margin-top: .5rem; }
+.hint code { color: var(--text); }
+.list-head { display: flex; justify-content: space-between; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.list-head h2 { font-size: 1.25rem; }
+.list-head h2 span { color: var(--muted); }
+.rows { display: flex; flex-direction: column; gap: .75rem; margin-top: 1.25rem; }
+.row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .625rem 1rem; padding: .75rem; margin-inline: -.75rem; border-radius: 12px; align-items: start; }
+.row:hover { background: color-mix(in oklch, var(--muted-bg) 40%, transparent); }
+.thumbs { grid-row: span 2; display: flex; gap: 6px; }
+.thumb { width: 80px; height: 104px; border: 1px solid var(--border); border-radius: 4px; background: var(--elevated); display: grid; place-items: center; padding: 6px; }
+.thumb svg { width: 100%; height: 100%; }
+.thumb--back svg { transform: scaleX(-1); opacity: .35; }
+.row-title { display: flex; align-items: start; gap: .25rem; margin-right: -.5rem; }
+@media (max-width: 640px) { .thumb { width: 56px; height: 80px; } .row { margin-inline: -.5rem; padding: .5rem; } }
+.row-title h3 { flex: 1; font-size: 1.25rem; line-height: 1.2; padding-top: 2px; }
+.icon { width: 44px; height: 44px; margin-block: -10px; display: grid; place-items: center; border: 0; background: none; color: var(--muted); border-radius: 8px; cursor: pointer; }
+.icon:hover { color: var(--text); background: var(--muted-bg); }
+.icon svg { width: 20px; height: 20px; }
+.row-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.row-controls select { max-width: 14rem; min-height: 40px; font-size: .875rem; }
+.stepper { margin-left: auto; display: inline-flex; height: 40px; align-items: center; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-weight: 600; font-size: .875rem; }
+.stepper button { width: 36px; height: 100%; border: 0; background: none; cursor: pointer; border-radius: 8px; }
+.stepper span { width: 2.5rem; text-align: center; font-variant-numeric: tabular-nums; }
+.empty-note { font-size: .875rem; color: var(--muted); }
+.facts { border-top: 1px solid var(--border); padding-top: 1.5rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: .5rem 1rem; font-size: .875rem; color: var(--muted); }
+.facts p + p { margin-top: .5rem; }
+html[data-state="empty"] .has-rows { display: none !important; }
+html[data-state="full"] .no-rows { display: none !important; }
+
+
+/* ---------- board: round 3 · как сказано ---------- */
+.board { background: var(--elevated); border: 1px solid var(--border); border-radius: 12px; display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(14rem, 16rem); grid-template-areas: "net fields side" "net foot side"; position: relative; z-index: 5; }
+.board > * { min-width: 0; }
+.a-net { grid-area: net; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1.25rem; border-right: 1px solid var(--border); }
+.a-fields { grid-area: fields; padding: 1.25rem; display: grid; grid-template-columns: minmax(6rem, 1fr) minmax(5rem, 1fr) minmax(10rem, 2fr); gap: .75rem; align-content: center; position: relative; }
+.a-foot { grid-area: foot; padding: .5rem 1.25rem; border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; align-items: center; gap: 0 1.5rem; font-size: .875rem; }
+.a-side { grid-area: side; padding: 1.25rem; border-left: 1px solid var(--border); border-radius: 0 12px 12px 0; background: color-mix(in oklch, var(--muted-bg) 35%, var(--elevated)); display: flex; flex-direction: column; justify-content: center; gap: .25rem; }
+.a-side .total { text-wrap: balance; font-family: var(--display); font-size: 1.25rem; line-height: 1.25; margin-bottom: .5rem; }
+.a-side .btn--pdf { min-height: 52px; }
+.cap { font: 500 .75rem var(--mono); color: var(--muted); text-align: center; margin-top: .25rem; }
+.net svg { display: block; width: 180px; height: 196px; }
+.net text { font: 6.5px var(--sans); fill: var(--muted); }
+.net .face { fill: #fff; stroke: var(--text); stroke-width: .6; }
+.net .tab { fill: var(--muted-bg); stroke: var(--text); stroke-width: .6; }
+.net .fold { stroke: var(--primary); stroke-width: .8; stroke-dasharray: 2 1.5; }
+.net .ghost { fill: var(--surface); stroke: var(--muted); stroke-width: .5; stroke-dasharray: 1.5 1.5; }
+.net .badge { fill: var(--primary); }
+.net .badge-t { font: 600 6px var(--sans); fill: #fff; }
+@media (max-width: 860px) {
+  .board { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "net fields" "foot foot" "side side"; }
+  .a-fields { grid-template-columns: 1fr 1fr; }
+  .a-fields .wide { grid-column: 1 / -1; }
+  .a-side { border-left: 0; border-top: 1px solid var(--border); border-radius: 0 0 12px 12px; }
+  .a-net { border-right: 0; }
+}
+@media (max-width: 560px) {
+  .board { grid-template-columns: 1fr; grid-template-areas: "net" "fields" "foot" "side"; }
+  .a-net { padding-bottom: 0; }
+}
+
+
+/* ---------- scale, five ways to tuck it away ---------- */
+.scale-panel { display: flex; flex-direction: column; gap: .75rem; font-size: .875rem; line-height: 1.5; }
+.scale-panel .measure { grid-template-columns: auto 5.5rem auto; }
+.scale-panel .reset { align-self: flex-start; }
+.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--primary); margin-right: .375rem; vertical-align: middle; }
+.quiet { background: none; border: 0; padding: 0 .5rem; min-height: 44px; border-radius: 8px; color: var(--muted); cursor: pointer; font-size: .875rem; display: inline-flex; align-items: center; gap: .25rem; }
+.quiet:hover { color: var(--text); background: var(--muted-bg); }
+.quiet.on { color: var(--secondary); }
+.quiet svg { width: 16px; height: 16px; }
+
+/* 1 · всплывашка из подвала */
+.pop-wrap { position: relative; margin-left: auto; }
+.pop-wrap > summary { list-style: none; }
+.pop-wrap > summary::-webkit-details-marker { display: none; }
+.pop { position: absolute; z-index: 40; top: calc(100% + 6px); right: 0; width: min(21rem, calc(100vw - 2rem)); padding: 1rem; background: var(--elevated); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 16px 32px -16px rgb(60 40 20 / .35); }
+.pop-wrap[open] > summary { color: var(--text); background: var(--muted-bg); }
+
+
+/* 2 · раскрывашка в подвале */
+.fold-row { flex-basis: 100%; }
+.fold-row > summary { list-style: none; display: inline-flex; }
+.fold-row > summary::-webkit-details-marker { display: none; }
+.fold-row > summary .chev { transition: transform 160ms var(--ease); }
+.fold-row[open] > summary .chev { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .fold-row > summary .chev { transition: none; } }
+.fold-row .scale-panel { padding: .25rem 0 .75rem 1.5rem; flex-direction: row; flex-wrap: wrap; align-items: center; gap: .5rem 1.5rem; }
+.fold-row .scale-panel p { max-width: 26rem; }
+[data-design="fold"] .a-foot .checks-only { display: contents; }
+
+/* 3 · у кнопки */
+.side-pop { position: relative; }
+.side-pop .pop { right: 0; top: calc(100% + 4px); }
+.side-pop > summary { list-style: none; }
+.side-pop > summary::-webkit-details-marker { display: none; }
+
+/* 4 · уголок + диалог */
+.corner { position: absolute; top: .375rem; right: .375rem; }
+.a-fields:has(.corner) { padding-top: 2.25rem; }
+dialog.scale-dlg { border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; width: min(30rem, calc(100vw - 2rem)); background: var(--elevated); color: var(--text); box-shadow: 0 24px 48px -16px rgb(60 40 20 / .45); }
+dialog.scale-dlg::backdrop { background: oklch(0 0 none / .45); }
+dialog.scale-dlg h2 { font-size: 1.5rem; margin-bottom: .25rem; }
+dialog.scale-dlg ol { margin: 1rem 0; padding-left: 1.25rem; display: flex; flex-direction: column; gap: .75rem; }
+dialog.scale-dlg li::marker { font-family: var(--display); font-weight: 600; color: var(--primary); }
+dialog.scale-dlg .acts { display: flex; justify-content: flex-end; gap: .5rem; flex-wrap: wrap; }
+
+/* 5 · правка на месте */
+.inplace { margin-left: auto; display: inline-flex; align-items: center; flex-wrap: wrap; gap: .25rem .5rem; color: var(--muted); }
+.inplace .measure { grid-template-columns: auto 4.5rem auto; }
+.inplace .measure input { min-height: 36px; }
+@media (max-width: 560px) { .inplace { margin-left: 0; } }
+
+/* sticky line, settled in round 1 */
+.mini { position: fixed; z-index: 30; top: 0; left: 0; right: 0; transform: translateY(-110%); transition: transform 220ms var(--ease); background: var(--veil); backdrop-filter: blur(6px); border-bottom: 1px solid var(--border); }
+.mini.on { transform: none; }
+@media (prefers-reduced-motion: reduce) { .mini { transition: none; } }
+.mini .wrap { display: flex; align-items: center; gap: .75rem; min-height: 60px; padding-block: .375rem; }
+.mini .line { flex: 1; min-width: 0; font-size: .875rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini .line b { font-family: var(--display); font-weight: 400; font-size: 1.0625rem; margin-right: .5rem; }
+@media (max-width: 720px) { .mini .line b { display: none; } }
+@media (max-width: 560px) { .board .a-foot, .board .a-side { position: relative; } .board .pop-wrap, .board .side-pop { position: static; margin-left: 0; } .board .pop-wrap .pop, .board .side-pop .pop { left: .75rem; right: .75rem; width: auto; } .board .side-pop .pop { top: auto; bottom: 4.5rem; } }
+.legend { display: flex; gap: .75rem; font-size: .75rem; color: var(--muted); margin-top: .25rem; }
+.legend i { display: inline-block; width: 18px; vertical-align: middle; border-top: 1px solid var(--text); margin-right: .25rem; }
+.legend i.dash { border-top: 1px dashed var(--primary); }
+.net svg.small { width: auto; height: auto; }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 76px); gap: .375rem; }
+.steps li { display: flex; flex-direction: column; align-items: center; gap: .25rem; }
+.steps .frame { display: block; width: 76px; height: 96px; background: var(--surface); border-radius: 6px; }
+.steps .frame svg { width: 76px !important; height: 96px !important; }
+.steps .step-cap { font-size: .6875rem; line-height: 1.25; text-align: center; color: var(--muted); }
+.steps .step-cap b { color: var(--primary); font-family: var(--display); font-size: .875rem; }
+[data-design="steps"] .a-net { padding-inline: .75rem; }
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap"><a class="home" href="#">← TTRPG Tools</a></div></header>
+
+<main class="wrap">
+  <div class="heading">
+    <h1>Бумажные миниатюры</h1>
+    <p>Загрузите изображения, выберите высоту и получите PDF с раскладкой складных миниатюр для печати.</p>
+  </div>
+
+  <div class="board" id="board" aria-label="Настройки">
+    <div class="a-net net">
+      <div data-draw="net"></div>
+      <p class="cap" data-t="netCap"></p>
+      <p class="legend" data-for-design="print"><span><i></i>рез</span><span><i class="dash"></i>сгиб</span><span>⌐ метки реза</span></p>
+    </div>
+    <div class="a-fields">
+      <button class="quiet corner" type="button" data-for-design="corner" data-open-dlg data-t="cornerLabel"></button>
+      <label class="lbl">Формат<select class="field" data-k="page"><option value="a4">A4</option><option value="letter">Letter</option></select></label>
+      <label class="lbl">Поля, мм<input class="field" type="number" min="0" step="any" data-k="margin"></label>
+      <label class="lbl wide">Стиль основы<select class="field" data-k="base"><option value="tent">Складная</option><option value="flat">Плоская</option><option value="foamboard">На пенокартоне</option></select></label>
+    </div>
+    <div class="a-foot">
+      <label class="check"><input type="checkbox" data-k="num"> Нумеровать копии</label>
+      <label class="check"><input type="checkbox" data-k="trim"> Обрезать пустые поля</label>
+
+      <details class="pop-wrap" data-close-outside>
+        <summary class="quiet" data-t="popLabel"></summary>
+        <div class="pop scale-panel" data-panel></div>
+      </details>
+
+      <details class="fold-row" data-for-design="fold">
+        <summary class="quiet"><span class="chev" aria-hidden="true">›</span><span data-t="foldLabel"></span></summary>
+        <div class="scale-panel" data-panel></div>
+      </details>
+
+      <span class="inplace" data-for-design="inplace" data-inplace></span>
+    </div>
+    <div class="a-side">
+      <p class="total"><span class="has-rows" data-t="total"></span><span class="no-rows note">Добавьте изображения для печати миниатюр.</span></p>
+      <button class="btn btn--pdf pdfdep" type="button">Скачать PDF</button>
+      <div class="links" style="justify-content:center;flex-wrap:wrap">
+        <button class="link pdfdep" type="button">Предпросмотр</button><span aria-hidden="true">·</span><button class="link pdfdep" type="button">ZIP</button>
+        <span aria-hidden="true" data-for-design="side">·</span>
+        <details class="side-pop" data-for-design="side" data-close-outside>
+          <summary class="link" data-t="sideLabel"></summary>
+          <div class="pop scale-panel" data-panel></div>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <dialog class="scale-dlg" id="scale-dlg" aria-labelledby="dlg-title">
+    <h2 id="dlg-title">Точность печати</h2>
+    <p class="note">Нужна, только если фигурки печатаются чуть меньше или больше нужного.</p>
+    <ol>
+      <li>Скачайте <button class="link" type="button" style="min-height:0">тестовый лист</button> и распечатайте его так же, как будете печатать фигурки.</li>
+      <li>Измерьте линейку на листе.</li>
+      <li><span class="measure" style="display:inline-grid;grid-template-columns:auto 5.5rem auto"><span>Вышло</span><input class="field" type="number" min="80" max="100" step="any" placeholder="100" data-k="measure"><span class="note">из 100 мм</span></span></li>
+    </ol>
+    <div class="acts">
+      <button class="btn btn--ghost" type="button" data-reset data-cal-only>Сбросить измерение</button>
+      <button class="btn" type="button" data-close-dlg>Готово</button>
+    </div>
+  </dialog>
+
+  <div class="mini" id="mini" aria-hidden="true">
+    <div class="wrap">
+      <p class="line"><b>Настройки</b><span data-t="line"></span></p>
+      <button class="btn btn--ghost" type="button" id="mini-edit">Изменить</button>
+      <button class="btn pdfdep" type="button">Скачать PDF</button>
+    </div>
+  </div>
+
+  <div>
+    <button class="drop" type="button"><span>Добавить изображения</span><span>Перетащите файлы сюда или нажмите для выбора. PNG, JPG, WebP.</span></button>
+    <p class="hint">В конце имени файла: <code>имя-back</code> — оборот, <code>имя-large</code> — размер.</p>
+  </div>
+
+  <section aria-label="Миниатюры">
+    <div class="list-head has-rows">
+      <h2>Миниатюры <span>· 6</span></h2>
+      <button class="btn btn--ghost" type="button">Сменить высоту ▾</button>
+    </div>
+    <div class="rows has-rows" id="rows"></div>
+  </section>
+
+  <aside class="facts">
+    <div>
+      <p><b>Изображения обрабатываются в браузере</b> и не отправляются на сервер. Сохраняются только настройки печати.</p>
+      <p><b>Печатайте с подгонкой под страницу.</b> Контрольная линейка на листе должна быть ровно 100 мм.</p>
+    </div>
+    <div>
+      <p>Высота задаёт размер фигурки на бумаге. Очень широкие изображения уменьшаются целиком.</p>
+      <p>Обрезка убирает прозрачные или одноцветные поля. Отключите её, чтобы печатать оригинал.</p>
+    </div>
+  </aside>
+</main>
+
+<script type="application/json" id="grill-round">
+{
+  "question": "Как нарисовать фигурку слева?",
+  "designs": [
+    { "id": "scheme", "name": "схема с подписями", "angle": "то, что было: развёртка с условной фигуркой и подписями язычка, сгиба, оборота", "cost": "фигурка условная; подписи мелкие и тянут рисунок вширь" },
+    { "id": "art", "name": "ваша картинка", "angle": "та же развёртка, но в ней первая загруженная миниатюра; без файлов — условная фигурка", "cost": "рисунок меняется при каждой загрузке; мелкая картинка может читаться хуже схемы" },
+    { "id": "print", "name": "как в PDF", "angle": "развёртка нарисована так, как её напечатают: контур, метки реза по углам, пунктир сгиба, без слов", "cost": "без подписей; новичку непонятно, что такое пунктир и метки" },
+    { "id": "steps", "name": "три шага", "angle": "не развёртка, а сборка: вырезать → согнуть → поставить, три кадра под основу", "cost": "три кадра в узкой колонке мельче одного; рисунок про процесс, а не про настройки" },
+    { "id": "solid", "name": "собранная", "angle": "собранная фигурка на столе в объёме: домик, карточка в подставке или брусок пенокартона", "cost": "не показывает, как резать и гнуть; объём рисовать дороже" }
+  ],
+  "states": [{ "id": "full", "name": "6 миниатюр" }, { "id": "empty", "name": "пусто" }]
+}
+</script>
+
+<script>
+(() => {
+  const S = { page: 'a4', margin: 5, base: 'tent', num: true, trim: true, measure: '' };
+  const PAGES = { a4: [210, 297], letter: [216, 279] };
+  const baseLabel = { tent: 'Складная', flat: 'Плоская', foamboard: 'На пенокартоне' };
+  const MINIS = [
+    ['Гоблин-лучник', 'Маленький · 0,95 м', 2, 20, 20],
+    ['Рыцарь Ордена Пепла', 'Средний · 1,7 м', 1, 35, 25],
+    ['Волшебница', 'Средний · 1,7 м', 1, 35, 25],
+    ['Волк', 'Маленький · 0,95 м', 3, 20, 20],
+    ['Огр', 'Большой · 2,7 м', 1, 56, 50],
+    ['Совомедведь', 'Большой · 2,7 м', 1, 56, 50],
+  ];
+  const empty = () => document.documentElement.dataset.state === 'empty';
+  const P = () => (S.page === 'a4' ? 'A4' : 'Letter');
+  const plural = (n, [one, few, many]) => {
+    const t = n % 10, h = n % 100;
+    return `${n} ${t === 1 && h !== 11 ? one : t >= 2 && t <= 4 && (h < 12 || h > 14) ? few : many}`;
+  };
+  const LIST = ['лист', 'листа', 'листов'];
+  function sheetCount() {
+    const [pw, ph] = PAGES[S.page];
+    const m = Math.max(0, Number(S.margin) || 0);
+    const W = pw - 2 * m, H = ph - 2 * m - 10, gap = 2;
+    const items = [];
+    MINIS.forEach(([, , count, fh, bw]) => {
+      const face = (S.trim ? fh : fh * 0.8) + 4;
+      const h = S.base === 'tent' ? face * 2 + 26 : S.base === 'flat' ? face * 2 + 12 : face + 6;
+      for (let i = 0; i < count; i++) items.push({ w: bw, h });
+    });
+    items.sort((a, b) => b.h - a.h);
+    let pages = 1, x = 0, y = 0, row = 0;
+    for (const it of items) {
+      if (x + it.w > W) { x = 0; y += row + gap; row = 0; }
+      if (y + it.h > H) { pages++; x = 0; y = 0; row = 0; }
+      x += it.w + gap; row = Math.max(row, it.h);
+    }
+    return pages;
+  }
+  const sheetsText = (n) => (S.base === 'foamboard' ? `${plural(n, LIST)} лиц + ${plural(n, LIST)} оборотов ${P()}` : `${plural(n, LIST)} ${P()}`);
+  const figures = () => [S.trim && 'обрезка', S.num && 'нумерация'].filter(Boolean).join(', ') || '—';
+  const scale = () => (S.measure === '' ? 'по умолчанию' : `подогнан · ${S.measure} мм`);
+
+  const figure = (x, y, w, h, { flip = false, fade = false } = {}) => {
+    const cx = x + w / 2, r = Math.min(w, h) * 0.17;
+    const g = `<g${fade ? ' opacity=".35"' : ''}><circle cx="${cx}" cy="${y + r + h * 0.08}" r="${r}" fill="oklch(0.444 0.01 73)"/><path d="M${x + w * 0.2} ${y + h} Q${cx} ${y + h * 0.2} ${x + w * 0.8} ${y + h}Z" fill="oklch(0.555 0.145 49)"/></g>`;
+    return flip ? `<g transform="rotate(180 ${cx} ${y + h / 2})">${g}</g>` : g;
+  };
+  function netSVG() {
+    const x = 18, w = 44, face = 46, fig = S.trim ? 1 : 0.72;
+    const figIn = (y, opts) => ink(x + (w - w * fig) / 2 + 4, y + face * (1 - fig) + 2, w * fig - 8, face * fig - 4, opts);
+    const label = (y, t) => `<text x="${x + w + 6}" y="${y}">${t}</text>`;
+    const badge = (y) => (S.num ? `<circle class="badge" cx="${x + w - 7}" cy="${y}" r="4.5"/><text class="badge-t" x="${x + w - 7}" y="${y + 2}" text-anchor="middle">2</text>${label(y + 2, '№ копии')}` : '');
+    let s = '';
+    if (S.base === 'tent') {
+      let y = 6;
+      s += `<rect class="tab" x="${x}" y="${y}" width="${w}" height="8"/>${label(y + 6, 'язычок')}`; y += 8;
+      s += `<rect class="face" x="${x}" y="${y}" width="${w}" height="${face}"/>${figIn(y, { flip: true, fade: true })}${label(y + face / 2, 'оборот')}`; y += face;
+      s += `<line class="fold" x1="${x - 6}" x2="${x + w + 4}" y1="${y}" y2="${y}"/>${label(y + 2, 'сгиб')}`;
+      s += `<rect class="face" x="${x}" y="${y}" width="${w}" height="${face}"/>${figIn(y)}${label(y + face / 2, 'лицо')}`; y += face;
+      s += `<rect class="tab" x="${x}" y="${y}" width="${w}" height="8"/>${badge(y + 4)}`; y += 8;
+      s += `<rect class="tab" x="${x - 6}" y="${y + 2}" width="${w + 12}" height="12"/>${label(y + 22, 'полоска основания')}`;
+    } else if (S.base === 'flat') {
+      let y = 10;
+      s += `<rect class="tab" x="${x + 8}" y="${y}" width="${w - 16}" height="7"/>${label(y + 5, 'язычок')}`; y += 7;
+      s += `<rect class="face" x="${x}" y="${y}" width="${w}" height="${face}"/>${figIn(y, { flip: true, fade: true })}${label(y + face / 2, 'оборот')}`; y += face;
+      s += `<line class="fold" x1="${x - 6}" x2="${x + w + 4}" y1="${y}" y2="${y}"/>${label(y + 2, 'сгиб')}`;
+      s += `<rect class="face" x="${x}" y="${y}" width="${w}" height="${face}"/>${figIn(y)}${label(y + face / 2, 'лицо')}`; y += face;
+      s += `<rect class="tab" x="${x + 8}" y="${y}" width="${w - 16}" height="7"/>${badge(y + 3.5)}`;
+      s += `<path d="M${x + 8} ${y} l-3 -3 M${x + w - 8} ${y} l3 -3" stroke="var(--text)" stroke-width=".6"/>${label(y + 16, 'надрезы → в подставку')}`;
+    } else {
+      let y = 40;
+      s += `<rect class="ghost" x="${x + 8}" y="${y - 10}" width="${w}" height="${face + 7}"/>${label(y - 12, 'оборот — на своём листе')}`;
+      s += `<rect class="face" x="${x}" y="${y}" width="${w}" height="${face}"/>${figIn(y)}${label(y + face / 2, 'лицо')}`; y += face;
+      s += `<rect class="tab" x="${x + 8}" y="${y}" width="${w - 16}" height="7"/>${badge(y + 3.5)}`;
+      s += `<rect x="${x - 4}" y="${y + 14}" width="${w + 8}" height="6" fill="var(--muted-bg)" stroke="var(--text)" stroke-width=".6"/>${label(y + 28, 'пенокартон')}`;
+    }
+    return `<svg viewBox="0 0 130 140" role="img" aria-label="Развёртка: ${baseLabel[S.base].toLowerCase()}">${s}</svg>`;
+  }
+  const RULER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2M11.5 9.5l2-2M8.5 6.5l2-2M17.5 15.5l2-2"/></svg>';
+  const cal = () => S.measure !== '';
+  // Stand-in for the first uploaded file: a goblin archer, drawn so the
+  // mock can show "your own picture" without shipping a real image.
+  const art = (x, y, w, h, { flip = false, fade = false } = {}) => {
+    const sx = w / 40, sy = h / 60;
+    const g = `<g transform="translate(${x} ${y}) scale(${sx} ${sy})"${fade ? ' opacity=".35"' : ''}>
+      <path d="M8 60 L12 34 Q20 28 28 34 L32 60Z" fill="#5b4a3a"/>
+      <path d="M12 40 Q20 36 28 40 L29 52 Q20 55 11 52Z" fill="#7a6a4f"/>
+      <path d="M9 28 Q20 2 31 28 Q20 34 9 28Z" fill="#3f5b3a"/>
+      <ellipse cx="20" cy="25" rx="7" ry="6" fill="#8fa35c"/>
+      <path d="M13 23 L5 19 L13 26Z M27 23 L35 19 L27 26Z" fill="#8fa35c"/>
+      <circle cx="17.5" cy="24.5" r="1.1" fill="#f3d36b"/><circle cx="22.5" cy="24.5" r="1.1" fill="#f3d36b"/>
+      <path d="M34 14 Q42 34 34 54" fill="none" stroke="#6b4a2b" stroke-width="1.6"/>
+      <path d="M34 14 L34 54" stroke="#cbbf9f" stroke-width=".5"/>
+      <path d="M26 38 L35 33" stroke="#8fa35c" stroke-width="2.4" stroke-linecap="round"/>
+    </g>`;
+    return flip ? `<g transform="rotate(180 ${x + w / 2} ${y + h / 2})">${g}</g>` : g;
+  };
+  const design = () => document.documentElement.dataset.design;
+  const ink = (x, y, w, h, opts) => (design() === 'art' && !empty() ? art(x, y, w, h, opts) : figure(x, y, w, h, opts));
+
+  // the net as the PDF prints it: outline cut, corner marks, dashed fold, no words
+  function printSVG() {
+    const x = 33, w = 44, face = 46, fig = S.trim ? 1 : 0.72;
+    const figIn = (y, opts) => ink(x + (w - w * fig) / 2 + 4, y + face * (1 - fig) + 2, w * fig - 8, face * fig - 4, opts);
+    const tick = (cx, cy, dx, dy) => `<path d="M${cx + dx * 2} ${cy} h${dx * 5} M${cx} ${cy + dy * 2} v${dy * 5}" stroke="var(--text)" stroke-width=".5"/>`;
+    const corners = (x1, y1, x2, y2) => tick(x1, y1, -1, -1) + tick(x2, y1, 1, -1) + tick(x1, y2, -1, 1) + tick(x2, y2, 1, 1);
+    const num = (cx, cy) => (S.num ? `<text x="${cx}" y="${cy}" text-anchor="middle" style="font:600 6px var(--sans);fill:var(--text)">2</text>` : '');
+    let s = '', top, bottom;
+    if (S.base === 'tent') {
+      top = 8; let y = top;
+      s += `<rect class="tab" x="${x}" y="${y}" width="${w}" height="8"/>`; y += 8;
+      s += `<rect class="face" x="${x}" y="${y}" width="${w}" height="${face}"/>${figIn(y, { flip: true })}`; y += face;
+      s += `<line class="fold" x1="${x}" x2="${x + w}" y1="${y}" y2="${y}"/>`;
+      s += `<rect class="face" x="${x}" y="${y}" width="${w}" height="${face}"/>${figIn(y)}`; y += face;
+      s += `<rect class="tab" x="${x}" y="${y}" width="${w}" height="8"/>${num(x + w / 2, y + 6)}`; y += 8;
+      s += `<line class="fold" x1="${x}" x2="${x + w}" y1="${y - 8}" y2="${y - 8}"/><line class="fold" x1="${x}" x2="${x + w}" y1="${top + 8}" y2="${top + 8}"/>`;
+      s += `<rect class="tab" x="${x}" y="${y + 6}" width="${w}" height="12"/>${corners(x, y + 6, x + w, y + 18)}`;
+      bottom = y;
+    } else if (S.base === 'flat') {
+      top = 14; let y = top;
+      s += `<rect class="tab" x="${x + 8}" y="${y}" width="${w - 16}" height="7"/>`; y += 7;
+      s += `<rect class="face" x="${x}" y="${y}" width="${w}" height="${face}"/>${figIn(y, { flip: true })}`; y += face;
+      s += `<line class="fold" x1="${x}" x2="${x + w}" y1="${y}" y2="${y}"/>`;
+      s += `<rect class="face" x="${x}" y="${y}" width="${w}" height="${face}"/>${figIn(y)}`; y += face;
+      s += `<rect class="tab" x="${x + 8}" y="${y}" width="${w - 16}" height="7"/>${num(x + w / 2, y + 5.5)}`;
+      s += `<path d="M${x + 8} ${y} l-3 -3 M${x + w - 8} ${y} l3 -3 M${x + 8} ${top + 7} l-3 3 M${x + w - 8} ${top + 7} l3 3" stroke="var(--text)" stroke-width=".6"/>`;
+      bottom = y + 7;
+    } else {
+      top = 40; let y = top;
+      s += `<rect class="face" x="${x}" y="${y}" width="${w}" height="${face}"/>${figIn(y)}`; y += face;
+      s += `<rect class="tab" x="${x + 8}" y="${y}" width="${w - 16}" height="7"/>${num(x + w / 2, y + 5.5)}`;
+      bottom = y + 7;
+    }
+    s += corners(x, top, x + w, bottom);
+    return `<svg viewBox="0 0 110 140" role="img" aria-label="Развёртка, как на листе: ${baseLabel[S.base].toLowerCase()}">${s}</svg>`;
+  }
+
+  // the assembled mini standing on the table, oblique view
+  function solidSVG(small = false) {
+    const fig = S.trim ? 1 : 0.72;
+    let s = `<ellipse cx="55" cy="128" rx="46" ry="7" fill="var(--muted-bg)"/>`;
+    const numOn = (cx, cy) => (S.num ? `<circle cx="${cx}" cy="${cy}" r="4.5" fill="var(--primary)"/><text x="${cx}" y="${cy + 2}" text-anchor="middle" style="font:600 6px var(--sans);fill:#fff">2</text>` : '');
+    if (S.base === 'tent') {
+      s += `<path d="M18 124 L92 124 L100 116 L26 116Z" class="tab"/>`;
+      s += `<path d="M34 118 L80 118 L72 30 L42 30Z" fill="var(--muted-bg)" stroke="var(--text)" stroke-width=".6"/>`;
+      s += `<path d="M30 122 L76 122 L72 30 L42 30Z" class="face"/>`;
+      s += `<g transform="translate(0 0)">${ink(40 + (1 - fig) * 12, 40 + (1 - fig) * 70, 34 * fig, 78 * fig)}</g>`;
+      s += `<line class="fold" x1="42" x2="72" y1="30" y2="30"/>`;
+      s += numOn(53, 119);
+    } else if (S.base === 'flat') {
+      s += `<path d="M24 126 L86 126 L94 118 L32 118Z" class="tab"/><path d="M24 126 L24 120 L32 112 L94 112 L94 118" fill="none" stroke="var(--text)" stroke-width=".6"/>`;
+      s += `<path d="M36 116 L76 116 L76 28 L36 28Z" class="face"/>`;
+      s += ink(38 + (1 - fig) * 12, 32 + (1 - fig) * 70, 36 * fig, 80 * fig);
+      s += numOn(56, 120);
+    } else {
+      s += `<path d="M24 126 L86 126 L94 118 L32 118Z" class="tab"/>`;
+      s += `<path d="M76 116 L82 110 L82 22 L76 28Z" fill="var(--muted-bg)" stroke="var(--text)" stroke-width=".6"/><path d="M36 28 L42 22 L82 22 L76 28Z" fill="var(--surface)" stroke="var(--text)" stroke-width=".6"/>`;
+      s += `<path d="M36 116 L76 116 L76 28 L36 28Z" class="face"/>`;
+      s += ink(38 + (1 - fig) * 12, 32 + (1 - fig) * 70, 36 * fig, 80 * fig);
+      s += numOn(56, 121);
+    }
+    return `<svg viewBox="0 0 110 140" role="img" aria-label="Собранная фигурка: ${baseLabel[S.base].toLowerCase()}"${small ? ' class="small"' : ''}>${s}</svg>`;
+  }
+
+  // three steps from sheet to table
+  const STEPS = {
+    tent: ['вырезать', 'согнуть пополам', 'приклеить к полоске'],
+    flat: ['вырезать', 'надрезать, согнуть, склеить', 'вставить в подставку'],
+    foamboard: ['наклеить на пенокартон', 'вырезать по меткам', 'поставить'],
+  };
+  function stepsHTML() {
+    const fold = S.base === 'tent'
+      ? `<svg viewBox="0 0 110 140"><path d="M20 124 L55 30 L90 124" class="face" fill="none"/><path d="M14 124 h12 M84 124 h12" stroke="var(--text)" stroke-width="1.2"/><line class="fold" x1="48" x2="62" y1="30" y2="30"/><path d="M30 60 q-14 20 0 40" fill="none" stroke="var(--primary)" stroke-width="1.2" marker-end="url(#arr)"/></svg>`
+      : S.base === 'flat'
+        ? `<svg viewBox="0 0 110 140"><path d="M38 124 V30 H72 V124Z" class="face"/><path d="M48 124 v8 h14 v-8" class="tab"/><path d="M80 50 q14 30 0 60" fill="none" stroke="var(--primary)" stroke-width="1.2" marker-end="url(#arr)"/></svg>`
+        : `<svg viewBox="0 0 110 140"><rect x="30" y="34" width="50" height="86" class="face"/><rect x="36" y="28" width="50" height="86" fill="var(--muted-bg)" stroke="var(--text)" stroke-width=".6"/><rect x="30" y="34" width="50" height="86" class="face" opacity=".9"/>${ink(36, 44, 38, 70)}</svg>`;
+    const frames = [printSVG(), fold, solidSVG(true)];
+    return `<svg width="0" height="0" style="position:absolute"><defs><marker id="arr" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L6 3 L0 6Z" fill="var(--primary)"/></marker></defs></svg>
+      <ol class="steps">${frames.map((f, i) => `<li><span class="frame">${f}</span><span class="step-cap"><b>${i + 1}</b> ${STEPS[S.base][i]}</span></li>`).join('')}</ol>`;
+  }
+
+  function drawNet() {
+    const d = design();
+    if (d === 'print') return printSVG();
+    if (d === 'solid') return solidSVG();
+    if (d === 'steps') return stepsHTML();
+    return netSVG();
+  }
+  const T = {
+    netCap: () => ({ scheme: 'как собрать одну фигурку', art: empty() ? 'здесь будет ваша первая миниатюра' : 'Гоблин-лучник на листе', print: 'одна фигурка, как на листе', steps: 'как собрать', solid: 'так она встанет на стол' })[design()],
+    total: () => (empty() ? '' : `9 миниатюр · ${sheetsText(sheetCount())}`),
+    line: () => `${P()} · поля ${S.margin} мм · ${baseLabel[S.base].toLowerCase()} · ${figures()}${cal() ? ` · масштаб ${S.measure} мм` : ''}`,
+    popLabel: () => (cal() ? `<span class="dot"></span>Масштаб · ${S.measure} мм ▾` : 'Масштаб ▾'),
+    foldLabel: () => (cal() ? `<span class="dot"></span>Масштаб подогнан · ${S.measure} мм` : 'Точная подгонка масштаба'),
+    sideLabel: () => (cal() ? `<span class="dot"></span>Масштаб ${S.measure} мм` : 'Масштаб'),
+    cornerLabel: () => `${RULER}${cal() ? `<span class="dot" style="margin:0 0 0 .25rem"></span>${S.measure} мм` : 'Точность печати'}`,
+  };
+  const panelHTML = () => `
+    <p>Если фигурки печатаются чуть меньше или больше нужного: распечатайте <button class="link" type="button" style="min-height:0">тестовый лист</button> и измерьте линейку на нём.</p>
+    <span class="measure"><span>Вышло</span><input class="field" type="number" min="80" max="100" step="any" placeholder="100" data-k="measure"><span class="note">из 100 мм</span></span>
+    <button class="btn btn--ghost reset" type="button" data-reset data-cal-only>Сбросить измерение</button>`;
+  for (const el of document.querySelectorAll('[data-panel]')) el.innerHTML = panelHTML();
+
+  let editing = false;
+  function paintInplace() {
+    const el = document.querySelector('[data-inplace]');
+    if (editing) {
+      el.innerHTML = `<span class="measure"><span>Вышло</span><input class="field" type="number" min="80" max="100" step="any" placeholder="100" data-k="measure" aria-label="Вышло из 100 мм"><span>из 100 мм на <button class="link" type="button" style="min-height:0">тестовом листе</button></span></span><button class="link" type="button" data-inplace-done>Готово</button>`;
+      el.querySelector('input').value = S.measure;
+      el.querySelector('input').focus();
+    } else {
+      el.innerHTML = cal()
+        ? `<span><span class="dot"></span>Масштаб подогнан · ${S.measure} мм</span><button class="link" type="button" data-inplace-edit>изменить</button><button class="link" type="button" data-reset>сбросить</button>`
+        : `<span>Масштаб по умолчанию</span><button class="link" type="button" data-inplace-edit>изменить</button>`;
+    }
+  }
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('[data-inplace-edit]')) { editing = true; paintInplace(); return; }
+    if (e.target.closest('[data-inplace-done]')) { editing = false; paintInplace(); return; }
+    if (e.target.closest('[data-reset]')) { S.measure = ''; sync(); return; }
+    if (e.target.closest('[data-open-dlg]')) { document.getElementById('scale-dlg').showModal(); return; }
+    if (e.target.closest('[data-close-dlg]')) { document.getElementById('scale-dlg').close(); return; }
+    for (const d of document.querySelectorAll('details[data-close-outside][open]')) if (!d.contains(e.target)) d.open = false;
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') for (const d of document.querySelectorAll('details[data-close-outside][open]')) d.open = false;
+  });
+
+  function sync() {
+    for (const el of document.querySelectorAll('[data-k]')) {
+      const k = el.dataset.k;
+      if (el.type === 'checkbox') el.checked = S[k];
+      else if (el.type === 'radio') el.checked = el.value === S[k];
+      else if (el !== document.activeElement) el.value = S[k];
+    }
+    for (const el of document.querySelectorAll('[data-t]')) el.innerHTML = T[el.dataset.t]();
+    for (const el of document.querySelectorAll('[data-cal-only]')) el.hidden = !cal();
+    if (!editing) paintInplace();
+    document.querySelector('[data-draw="net"]').innerHTML = drawNet();
+    for (const b of document.querySelectorAll('.pdfdep')) b.disabled = empty();
+  }
+  document.addEventListener('input', (e) => {
+    const el = e.target.closest('[data-k]');
+    if (!el) return;
+    S[el.dataset.k] = el.type === 'checkbox' ? el.checked : el.value;
+    sync();
+  });
+
+  const sizes = ['Крошечный · 0,6 м', 'Маленький · 0,95 м', 'Средний, низкий · 1,3 м', 'Средний · 1,7 м', 'Средний, высокий · 2,1 м', 'Большой · 2,7 м', 'Большой, высокий · 4 м', 'Огромный · 6 м', 'Громадный · 10 м и выше', 'Свой размер'];
+  const copy = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+  const trash = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+  const thumb = (h, i) => `<svg viewBox="0 0 60 90" aria-hidden="true">${i === 0 ? art(12, 90 - h * 1.9, 36, h * 1.9) : figure(10, 90 - h * 1.4, 40, h * 1.4)}</svg>`;
+  document.getElementById('rows').innerHTML = MINIS.map(([name, size, count, h], i) => `
+    <article class="row" aria-label="Миниатюра ${i + 1}">
+      <div class="thumbs"><span class="thumb">${thumb(h, i)}</span><span class="thumb thumb--back">${thumb(h, i)}</span></div>
+      <div class="row-title"><h3>${name}</h3><button class="icon" type="button" aria-label="Дублировать">${copy}</button><button class="icon" type="button" aria-label="Удалить">${trash}</button></div>
+      <div class="row-controls">
+        <select class="field" aria-label="Высота существа">${sizes.map((s) => `<option${s === size ? ' selected' : ''}>${s}</option>`).join('')}</select>
+        <span class="stepper"><button type="button" aria-label="Меньше копий">−</button><span>${count}</span><button type="button" aria-label="Больше копий">+</button></span>
+      </div>
+    </article>`).join('');
+
+  const board = document.getElementById('board');
+  const mini = document.getElementById('mini');
+  new IntersectionObserver(([entry]) => {
+    const on = !entry.isIntersecting;
+    mini.classList.toggle('on', on);
+    mini.setAttribute('aria-hidden', String(!on));
+  }).observe(board);
+  document.getElementById('mini-edit').addEventListener('click', () => {
+    board.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+    board.querySelector('select').focus({ preventScroll: true });
+  });
+  document.addEventListener('grill:change', sync);
+  sync();
+})();
+</script>
+<script>
+// grill-design picker: a draggable dock that switches the designs of one round.
+//
+// Inline this file into the round's HTML, after the round's JSON block: a
+// script element of type application/json with id grill-round, holding
+// { question, designs: [{ id, name, angle, cost }], states: [{ id, name }] }.
+// This file never spells out a closing script tag, because the HTML parser
+// would end the inline script at it.
+//
+// The live choice is written to data-design and data-state on the html
+// element, so each design styles itself under [data-design="<id>"]. Elements marked
+// data-for-design="<id> <id>" or data-for-state="<id>" are hidden unless the
+// live choice is listed. Every switch dispatches a "grill:change" event on
+// document with { design, state, replay } in detail.
+//
+// Ideas borrowed from the variate card (github.com/Nutlope/variate, MIT).
+
+(() => {
+  "use strict";
+
+  const source = document.getElementById("grill-round");
+  if (!source) {
+    console.error("grill-design picker: no application/json script with id grill-round");
+    return;
+  }
+  let round;
+  try {
+    round = JSON.parse(source.textContent);
+  } catch (error) {
+    console.error("grill-design picker: grill-round is not valid JSON", error);
+    return;
+  }
+  const designs = Array.isArray(round.designs) ? round.designs : [];
+  const states = Array.isArray(round.states) ? round.states : [];
+  if (!designs.length) {
+    console.error("grill-design picker: grill-round has no designs");
+    return;
+  }
+
+  const root = document.documentElement;
+  const POSITION_KEY = "grill-design:dock-position";
+
+  // localStorage throws in private windows and sandboxed previews; the dock
+  // must still work there, it only forgets where it was dragged.
+  const storage = {
+    get(key) { try { return JSON.parse(localStorage.getItem(key)); } catch (_) { return null; } },
+    set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (_) {} },
+  };
+
+  const fromHash = () => {
+    const params = new URLSearchParams(location.hash.slice(1));
+    return { design: params.get("design"), state: params.get("state") };
+  };
+  const known = (list, id) => list.some((item) => item.id === id);
+
+  const initial = fromHash();
+  let design = known(designs, initial.design) ? initial.design : designs[0].id;
+  let state = states.length ? (known(states, initial.state) ? initial.state : states[0].id) : null;
+
+  function applyChoice(replay) {
+    root.dataset.design = design;
+    if (state) root.dataset.state = state; else delete root.dataset.state;
+    for (const node of document.querySelectorAll("[data-for-design]")) {
+      node.hidden = !node.dataset.forDesign.split(/\s+/).includes(design);
+    }
+    for (const node of document.querySelectorAll("[data-for-state]")) {
+      node.hidden = !node.dataset.forState.split(/\s+/).includes(state);
+    }
+    const hash = new URLSearchParams({ design, ...(state ? { state } : {}) });
+    history.replaceState(null, "", `#${hash}`);
+    document.dispatchEvent(new CustomEvent("grill:change", { detail: { design, state, replay } }));
+    render();
+  }
+
+  // Re-entering the same design restarts its CSS animations, so a round about
+  // motion can be watched more than once.
+  function replay() {
+    delete root.dataset.design;
+    void root.offsetWidth;
+    applyChoice(true);
+  }
+
+  function selectDesign(id) {
+    if (id === design) { replay(); return; }
+    design = id;
+    applyChoice(false);
+  }
+
+  function step(delta) {
+    const index = designs.findIndex((item) => item.id === design);
+    selectDesign(designs[(index + delta + designs.length) % designs.length].id);
+  }
+
+  // The dock lives in a shadow root reset with all: initial, so the designs
+  // under review cannot restyle it and it cannot leak into them.
+  const host = document.createElement("grill-picker");
+  const shadow = host.attachShadow({ mode: "open" });
+  shadow.innerHTML = `
+<style>
+:host { all: initial; display: block; position: fixed; right: 16px; bottom: 16px; z-index: 2147483646; }
+@media print { :host { display: none } }
+* { box-sizing: border-box; margin: 0; }
+.dock {
+  width: min(320px, calc(100vw - 32px));
+  padding: 10px 12px 12px;
+  border-radius: 12px;
+  background: #16181d;
+  color: #e8e9ed;
+  box-shadow: 0 8px 28px rgb(0 0 0 / .35), 0 0 0 1px rgb(255 255 255 / .08);
+  font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+.grip {
+  display: flex; align-items: center; gap: 8px;
+  cursor: grab; touch-action: none; user-select: none;
+  color: #9a9ea8; font-size: 12px;
+}
+.grip:active { cursor: grabbing; }
+.grip::before { content: "⋮⋮"; letter-spacing: -2px; }
+.question { color: #e8e9ed; font-weight: 600; }
+.pager { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+button {
+  all: unset; box-sizing: border-box;
+  min-width: 28px; height: 28px; padding: 0 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 7px; background: #23262d; color: #c9ccd3;
+  font: inherit; cursor: pointer; white-space: nowrap;
+}
+button:hover { background: #2d3139; }
+button:focus-visible { outline: 2px solid #7aa2ff; outline-offset: 1px; }
+button[aria-pressed="true"] { background: #e8e9ed; color: #16181d; font-weight: 600; }
+.detail { margin-top: 8px; color: #b4b8c1; }
+.detail b { color: #e8e9ed; font-weight: 600; }
+.cost { color: #f0b37e; }
+.states { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #2d3139; }
+.keys { margin-top: 8px; color: #6f7480; font-size: 11px; }
+</style>
+<div class="dock" role="region" aria-label="Design picker">
+  <div class="grip"><span class="question"></span></div>
+  <div class="pager" role="group" aria-label="Designs"></div>
+  <p class="detail" aria-live="polite"></p>
+  <div class="states" role="group" aria-label="States"></div>
+  <p class="keys">← → or 1–9 switch · click the current design to replay it</p>
+</div>`;
+
+  const dock = shadow.querySelector(".dock");
+  const grip = shadow.querySelector(".grip");
+  const pager = shadow.querySelector(".pager");
+  const detail = shadow.querySelector(".detail");
+  const stateBar = shadow.querySelector(".states");
+  shadow.querySelector(".question").textContent = round.question || "Pick a design";
+  if (!states.length) stateBar.remove();
+
+  const designButtons = designs.map((item, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.addEventListener("click", () => selectDesign(item.id));
+    button.dataset.number = String(index + 1);
+    pager.append(button);
+    return button;
+  });
+  const stateButtons = states.map((item) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = item.name || item.id;
+    button.addEventListener("click", () => { state = item.id; applyChoice(false); });
+    stateBar.append(button);
+    return button;
+  });
+
+  function render() {
+    designs.forEach((item, index) => {
+      const live = item.id === design;
+      const button = designButtons[index];
+      // The live chip wears its name and the rest stay numbers, so the dock
+      // stays narrow while always saying what is on screen.
+      button.textContent = live ? `${index + 1} · ${item.name || item.id}` : String(index + 1);
+      button.setAttribute("aria-pressed", String(live));
+      button.title = [item.name, item.angle, item.cost && `cost: ${item.cost}`].filter(Boolean).join(" — ");
+    });
+    stateButtons.forEach((button, index) => {
+      button.setAttribute("aria-pressed", String(states[index].id === state));
+    });
+    const current = designs.find((item) => item.id === design);
+    detail.replaceChildren();
+    if (current.angle) {
+      const angle = document.createElement("b");
+      angle.textContent = current.angle;
+      detail.append(angle);
+    }
+    if (current.cost) {
+      const cost = document.createElement("span");
+      cost.className = "cost";
+      cost.textContent = `${current.angle ? " · " : ""}cost: ${current.cost}`;
+      detail.append(cost);
+    }
+    detail.hidden = !current.angle && !current.cost;
+  }
+
+  function onKey(event) {
+    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+    const target = event.composedPath()[0];
+    if (target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+    if (event.key === "ArrowRight") { step(1); event.preventDefault(); return; }
+    if (event.key === "ArrowLeft") { step(-1); event.preventDefault(); return; }
+    const number = Number(event.key);
+    if (Number.isInteger(number) && number >= 1 && number <= designs.length) {
+      selectDesign(designs[number - 1].id);
+      event.preventDefault();
+    }
+  }
+
+  function place(position) {
+    if (!position) return;
+    const maxX = Math.max(0, innerWidth - dock.offsetWidth);
+    const maxY = Math.max(0, innerHeight - dock.offsetHeight);
+    host.style.left = `${Math.min(Math.max(0, position.x), maxX)}px`;
+    host.style.top = `${Math.min(Math.max(0, position.y), maxY)}px`;
+    host.style.right = "auto";
+    host.style.bottom = "auto";
+  }
+
+  grip.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    const box = host.getBoundingClientRect();
+    const offsetX = event.clientX - box.left;
+    const offsetY = event.clientY - box.top;
+    grip.setPointerCapture(event.pointerId);
+    const move = (moveEvent) => place({ x: moveEvent.clientX - offsetX, y: moveEvent.clientY - offsetY });
+    const end = () => {
+      grip.removeEventListener("pointermove", move);
+      grip.removeEventListener("pointerup", end);
+      grip.removeEventListener("pointercancel", end);
+      const placed = host.getBoundingClientRect();
+      storage.set(POSITION_KEY, { x: placed.left, y: placed.top });
+    };
+    grip.addEventListener("pointermove", move);
+    grip.addEventListener("pointerup", end);
+    grip.addEventListener("pointercancel", end);
+  });
+
+  addEventListener("keydown", onKey);
+  addEventListener("hashchange", () => {
+    const next = fromHash();
+    if (known(designs, next.design)) design = next.design;
+    if (known(states, next.state)) state = next.state;
+    applyChoice(false);
+  });
+  addEventListener("resize", () => { if (host.style.left) place({ x: parseFloat(host.style.left), y: parseFloat(host.style.top) }); });
+
+  document.body.append(host);
+  place(storage.get(POSITION_KEY));
+  applyChoice(false);
+})();
+
+</script>
+</body>
+</html>

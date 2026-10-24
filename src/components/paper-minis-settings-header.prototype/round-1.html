@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paper minis · раунд 1</title>
+<style>
+:root {
+  --primary: oklch(0.555283 0.145505 48.9975);
+  --primary-hover: color-mix(in oklch, var(--primary), black 12%);
+  --primary-subtle: color-mix(in oklch, var(--primary) 10%, transparent);
+  --secondary: oklch(0.408389 0.116468 38.1715);
+  --warning: oklch(0.456365 0.099394 69.1443);
+  --surface: oklch(0.977026 0.011414 84.5781);
+  --elevated: oklch(1 0 none);
+  --text: oklch(0.216115 0.006126 56.0434);
+  --muted: oklch(0.444417 0.009597 73.639);
+  --border: oklch(0.913158 0.018236 89.3643);
+  --muted-bg: oklch(0.937165 0.023468 90.7554);
+  --veil: color-mix(in oklch, var(--surface) 92%, transparent);
+  --sans: Inter, Roboto, 'Helvetica Neue', 'Arial Nova', 'Nimbus Sans', Arial, sans-serif;
+  --mono: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+  --display: 'Iowan Old Style', 'Palatino Linotype', 'URW Palladio L', P052, serif;
+  --gutter: clamp(1rem, 0.64rem + 1.79vw, 1.5rem);
+  --ease: cubic-bezier(0.23, 1, 0.32, 1);
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--surface); color: var(--text); font-family: var(--sans); }
+body { min-height: 100svh; font-size: 16px; line-height: 1.5; overflow-wrap: break-word; }
+h1, h2, h3 { font-family: var(--display); font-weight: 400; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+code { font-family: var(--mono); font-size: .9em; }
+[hidden] { display: none !important; }
+
+.wrap { width: min(100% - var(--gutter) * 2, 72rem); margin-inline: auto; }
+.top { border-bottom: 1px solid var(--border); padding-block: 1rem; }
+.home { display: inline-flex; min-height: 44px; align-items: center; font: 500 .75rem var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); text-decoration: none; }
+main.wrap { padding-block: clamp(2rem, 1.29rem + 3.57vw, 3rem); display: flex; flex-direction: column; gap: 1.5rem; }
+.heading { display: flex; flex-direction: column; gap: .5rem; margin-bottom: 1rem; }
+.heading h1 { font-size: clamp(2rem, 1.64rem + 1.79vw, 2.5rem); line-height: 1.1; }
+.heading p { color: var(--muted); max-width: 48rem; }
+
+/* shared controls */
+.field { min-height: 44px; width: 100%; border: 1px solid var(--border); border-radius: 8px; background: var(--elevated); padding: 0 .75rem; }
+select.field { appearance: none; padding-right: 2rem; background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
+.lbl { display: flex; flex-direction: column; gap: .25rem; font-size: .875rem; color: var(--muted); }
+.check { display: flex; align-items: center; gap: .75rem; min-height: 44px; font-size: .875rem; }
+.check input { width: 1rem; height: 1rem; accent-color: var(--primary); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 44px; padding: .5rem 1rem; border-radius: 12px; border: 1px solid transparent; background: var(--primary); color: var(--surface); font-weight: 500; cursor: pointer; white-space: nowrap; }
+.btn:hover { background: var(--primary-hover); }
+.btn:disabled { opacity: .5; cursor: not-allowed; background: var(--primary); }
+.btn--pdf { flex-direction: column; gap: 0; line-height: 1.25; padding-block: .4rem; }
+.btn--pdf small { font-size: .75rem; font-weight: 400; opacity: .85; white-space: normal; }
+.btn--ghost { background: transparent; color: var(--text); border-color: var(--border); }
+.btn--ghost:hover { background: var(--muted-bg); }
+.link { background: none; border: 0; padding: 0 .25rem; min-height: 44px; color: var(--text); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; font-size: .875rem; }
+.note .link, .cal .link { min-height: 0; }
+.link:disabled { color: var(--muted); cursor: not-allowed; }
+.links { display: flex; gap: .25rem; align-items: center; color: var(--muted); font-size: .875rem; }
+.note { font-size: .875rem; color: var(--muted); }
+.measure { display: grid; grid-template-columns: auto minmax(0, 5.5rem) auto; gap: .5rem; align-items: center; font-size: .875rem; }
+.measure input { text-align: end; }
+
+/* upload + list (shared by every design) */
+.drop { width: 100%; min-height: 7rem; border: 1px dashed var(--border); border-radius: 12px; background: transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .25rem; padding: 1.5rem; cursor: pointer; }
+.drop:hover { background: var(--muted-bg); }
+.drop span:last-child { font-size: .875rem; color: var(--muted); }
+.hint { font-size: .875rem; color: var(--muted); line-height: 1.6; margin-top: .5rem; }
+.hint code { color: var(--text); }
+.list-head { display: flex; justify-content: space-between; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.list-head h2 { font-size: 1.25rem; }
+.list-head h2 span { color: var(--muted); }
+.rows { display: flex; flex-direction: column; gap: .75rem; margin-top: 1.25rem; }
+.row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .625rem 1rem; padding: .75rem; margin-inline: -.75rem; border-radius: 12px; align-items: start; }
+.row:hover { background: color-mix(in oklch, var(--muted-bg) 40%, transparent); }
+.thumbs { grid-row: span 2; display: flex; gap: 6px; }
+.thumb { width: 80px; height: 104px; border: 1px solid var(--border); border-radius: 4px; background: var(--elevated); display: grid; place-items: center; padding: 6px; }
+.thumb svg { width: 100%; height: 100%; }
+.thumb--back svg { transform: scaleX(-1); opacity: .35; }
+.row-title { display: flex; align-items: start; gap: .25rem; margin-right: -.5rem; }
+@media (max-width: 640px) { .thumb { width: 56px; height: 80px; } .row { margin-inline: -.5rem; padding: .5rem; } }
+.row-title h3 { flex: 1; font-size: 1.25rem; line-height: 1.2; padding-top: 2px; }
+.icon { width: 44px; height: 44px; margin-block: -10px; display: grid; place-items: center; border: 0; background: none; color: var(--muted); border-radius: 8px; cursor: pointer; }
+.icon:hover { color: var(--text); background: var(--muted-bg); }
+.icon svg { width: 20px; height: 20px; }
+.row-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.row-controls select { max-width: 14rem; min-height: 40px; font-size: .875rem; }
+.stepper { margin-left: auto; display: inline-flex; height: 40px; align-items: center; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-weight: 600; font-size: .875rem; }
+.stepper button { width: 36px; height: 100%; border: 0; background: none; cursor: pointer; border-radius: 8px; }
+.stepper span { width: 2.5rem; text-align: center; font-variant-numeric: tabular-nums; }
+.empty-note { font-size: .875rem; color: var(--muted); }
+.facts { border-top: 1px solid var(--border); padding-top: 1.5rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: .5rem 1rem; font-size: .875rem; color: var(--muted); }
+.facts p + p { margin-top: .5rem; }
+html[data-state="empty"] .has-rows { display: none !important; }
+html[data-state="full"] .no-rows { display: none !important; }
+
+/* ---------- 1 · полоса ---------- */
+.strip { position: sticky; top: .75rem; z-index: 20; display: flex; flex-wrap: wrap; align-items: stretch; gap: .25rem; padding: .375rem; background: var(--elevated); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 1px 0 var(--border), 0 6px 18px -12px rgb(60 40 20 / .35); }
+.strip details { display: contents; }
+.strip summary { list-style: none; display: flex; flex-direction: column; justify-content: center; min-height: 52px; padding: .25rem .875rem; border-radius: 8px; cursor: pointer; min-width: 0; }
+.strip summary::-webkit-details-marker { display: none; }
+.strip summary:hover { background: var(--muted-bg); }
+.strip details[open] > summary { background: var(--primary-subtle); box-shadow: inset 0 -2px 0 var(--primary); }
+.strip summary b { font-weight: 400; font-size: .75rem; color: var(--muted); }
+.strip summary span { font-size: .9375rem; white-space: nowrap; }
+.strip summary span::after { content: ' ▾'; color: var(--muted); font-size: .75rem; }
+.strip .pop { position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: var(--elevated); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; box-shadow: 0 16px 32px -16px rgb(60 40 20 / .35); display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 16rem)); gap: .75rem 1rem; }
+.strip .end { margin-left: auto; display: flex; align-items: center; gap: .5rem; padding-left: .5rem; }
+.strip .end .links { gap: 0; }
+@media (max-width: 720px) {
+  .strip summary { flex: 1 1 40%; }
+  .strip .end { margin-left: 0; flex: 1 1 100%; padding: .25rem 0 0; border-top: 1px solid var(--border); justify-content: space-between; }
+  .strip .end .btn { flex: 1; }
+}
+
+/* ---------- 2 · разворот ---------- */
+.spread { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); border-block: 1px solid var(--text); }
+.spread section { padding: 1rem 1.25rem 1.25rem; display: flex; flex-direction: column; gap: .75rem; }
+.spread section + section { border-left: 1px solid var(--border); }
+.spread h2 { font-size: 1.375rem; }
+.spread .pair { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+@media (max-width: 720px) { .spread section + section { border-left: 0; border-top: 1px solid var(--border); } .spread section { padding-inline: 0; } }
+.dock-bar { position: sticky; bottom: 0; z-index: 20; margin-inline: calc(var(--gutter) * -1); padding: .75rem var(--gutter); background: var(--veil); backdrop-filter: blur(6px); border-top: 1px solid var(--border); display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.dock-bar .sum { font-family: var(--display); font-size: 1.25rem; }
+.dock-bar .sum small { display: block; font-family: var(--sans); font-size: .8125rem; color: var(--muted); }
+.dock-bar .act { margin-left: auto; display: flex; align-items: center; gap: .5rem; }
+@media (max-width: 720px) { .dock-bar .act { margin-left: 0; width: 100%; } .dock-bar .act .btn { flex: 1; } }
+
+/* ---------- 3 · складная шапка ---------- */
+.board { background: var(--elevated); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1.25rem 2rem; }
+.board .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: .75rem 1rem; align-items: end; }
+.board .grid .wide { grid-column: span 2; }
+.board .side { display: flex; flex-direction: column; gap: .25rem; align-items: stretch; min-width: 15rem; }
+.board .more { grid-column: 1 / -1; border-top: 1px solid var(--border); padding-top: .75rem; display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; align-items: center; font-size: .875rem; }
+@media (max-width: 720px) { .board .more .measure { margin-left: 0 !important; grid-template-columns: auto 5rem auto; } .board { grid-template-columns: 1fr; } .board .side { min-width: 0; } .board .grid .wide { grid-column: auto; } }
+.mini { position: fixed; z-index: 30; top: 0; left: 0; right: 0; transform: translateY(-110%); transition: transform 220ms var(--ease); background: var(--veil); backdrop-filter: blur(6px); border-bottom: 1px solid var(--border); }
+.mini.on { transform: none; }
+@media (prefers-reduced-motion: reduce) { .mini { transition: none; } }
+.mini .wrap { display: flex; align-items: center; gap: .75rem; min-height: 60px; padding-block: .375rem; }
+.mini .line { flex: 1; min-width: 0; font-size: .875rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini .line b { font-family: var(--display); font-weight: 400; font-size: 1.0625rem; margin-right: .5rem; }
+@media (max-width: 720px) { .mini .line b { display: none; } }
+
+/* ---------- 4 · фраза ---------- */
+.order { padding: 1.5rem 0 1.25rem; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 1.25rem; }
+.order p.say { font-family: var(--display); font-size: clamp(1.375rem, 1.1rem + 1.2vw, 1.875rem); line-height: 1.55; max-width: 44rem; }
+.word { appearance: none; border: 0; border-bottom: 2px solid var(--primary); background: var(--primary-subtle); color: var(--secondary); font: inherit; padding: 0 .25rem; border-radius: 4px 4px 0 0; cursor: pointer; }
+.word:hover { background: color-mix(in oklch, var(--primary) 18%, transparent); }
+input.word { width: 2.4em; text-align: center; cursor: text; -moz-appearance: textfield; }
+input.word::-webkit-inner-spin-button { appearance: none; }
+.order .foot { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.5rem; }
+.order .cal { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; font-size: .875rem; color: var(--muted); }
+
+/* ---------- 5 · лист ---------- */
+.sheetbox { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(14rem, 17rem); gap: 1.5rem; align-items: start; padding: 1.25rem; background: var(--elevated); border: 1px solid var(--border); border-radius: 12px; }
+.paper { width: 120px; position: relative; background: #fff; border: 1px solid var(--border); box-shadow: 3px 3px 0 var(--border); transition: aspect-ratio 200ms var(--ease); }
+.paper .safe { position: absolute; border: 1px dashed var(--primary); display: flex; flex-wrap: wrap; align-content: flex-start; gap: 3px; padding: 3px; }
+.paper .safe i { display: block; width: 14px; height: 24px; background: var(--muted-bg); border: 1px solid var(--border); }
+.paper-cap { margin-top: .5rem; font: 500 .75rem var(--mono); color: var(--muted); text-align: center; }
+.sheetbox .controls { display: flex; flex-direction: column; gap: 1rem; }
+.sheetbox .pair { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.seg label { display: flex; flex-direction: column; align-items: center; gap: .25rem; padding: .5rem .25rem; font-size: .8125rem; cursor: pointer; text-align: center; }
+.seg label + label { border-left: 1px solid var(--border); }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg svg { width: 36px; height: 28px; stroke: currentColor; fill: none; stroke-width: 1.5; }
+.seg label:has(input:checked) { background: var(--primary); color: var(--surface); }
+.seg label:has(input:focus-visible) { outline: 2px solid var(--primary); outline-offset: -2px; }
+.sheetbox .out { display: flex; flex-direction: column; gap: .5rem; border-left: 1px solid var(--border); padding-left: 1.5rem; }
+.sheetbox .out h2 { font-size: 1.375rem; }
+@media (max-width: 860px) { .sheetbox { grid-template-columns: auto minmax(0, 1fr); } .sheetbox .out { grid-column: 1 / -1; border-left: 0; padding-left: 0; border-top: 1px solid var(--border); padding-top: 1rem; } }
+@media (max-width: 520px) { .sheetbox { grid-template-columns: 1fr; } .paper { width: 96px; margin-inline: auto; } }
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap"><a class="home" href="#">← TTRPG Tools</a></div></header>
+
+<main class="wrap">
+  <div class="heading">
+    <h1>Бумажные миниатюры</h1>
+    <p>Загрузите изображения, выберите высоту и получите PDF с раскладкой складных миниатюр для печати.</p>
+  </div>
+
+  <!-- 1 · полоса -->
+  <div class="strip" data-for-design="strip" aria-label="Настройки">
+    <details name="strip">
+      <summary><b>Бумага</b><span data-t="paper"></span></summary>
+      <div class="pop">
+        <label class="lbl">Формат<select class="field" data-k="page"><option value="a4">A4</option><option value="letter">Letter</option></select></label>
+        <label class="lbl">Поля, мм<input class="field" type="number" min="0" step="any" data-k="margin"></label>
+      </div>
+    </details>
+    <details name="strip">
+      <summary><b>Основа</b><span data-t="base"></span></summary>
+      <div class="pop">
+        <label class="lbl">Стиль основы<select class="field" data-k="base"><option value="tent">Складная</option><option value="flat">Плоская</option><option value="foamboard">На пенокартоне</option></select></label>
+      </div>
+    </details>
+    <details name="strip">
+      <summary><b>Фигурки</b><span data-t="figures"></span></summary>
+      <div class="pop">
+        <label class="check"><input type="checkbox" data-k="num"> Нумеровать копии</label>
+        <label class="check"><input type="checkbox" data-k="trim"> Обрезать пустые поля</label>
+      </div>
+    </details>
+    <details name="strip">
+      <summary><b>Масштаб</b><span data-t="scale"></span></summary>
+      <div class="pop">
+        <p class="note" style="grid-column:1/-1">Если фигурки печатаются чуть меньше или больше нужного: распечатайте <button class="link" type="button">тестовый лист</button> и измерьте линейку на нём.</p>
+        <div class="measure"><span>Вышло</span><input class="field" type="number" min="80" max="100" step="any" placeholder="100" data-k="measure"><span class="note">из 100 мм</span></div>
+      </div>
+    </details>
+    <div class="end">
+      <div class="links"><button class="link pdfdep" type="button">Предпросмотр</button><span aria-hidden="true">·</span><button class="link pdfdep" type="button">ZIP</button></div>
+      <button class="btn btn--pdf pdfdep" type="button">Скачать PDF<small class="has-rows" data-t="pdf"></small></button>
+    </div>
+  </div>
+
+  <!-- 2 · разворот -->
+  <div class="spread" data-for-design="spread" aria-label="Настройки">
+    <section>
+      <h2>Бумага</h2>
+      <div class="pair">
+        <label class="lbl">Формат<select class="field" data-k="page"><option value="a4">A4</option><option value="letter">Letter</option></select></label>
+        <label class="lbl">Поля, мм<input class="field" type="number" min="0" step="any" data-k="margin"></label>
+      </div>
+      <label class="lbl">Стиль основы<select class="field" data-k="base"><option value="tent">Складная</option><option value="flat">Плоская</option><option value="foamboard">На пенокартоне</option></select></label>
+    </section>
+    <section>
+      <h2>Фигурки</h2>
+      <div>
+        <label class="check"><input type="checkbox" data-k="num"> Нумеровать копии</label>
+        <label class="check"><input type="checkbox" data-k="trim"> Обрезать пустые поля</label>
+      </div>
+    </section>
+    <section>
+      <h2>Масштаб</h2>
+      <p class="note">Если фигурки печатаются чуть меньше или больше нужного: распечатайте <button class="link" type="button">тестовый лист</button> и измерьте линейку на нём.</p>
+      <div class="measure"><span>Вышло</span><input class="field" type="number" min="80" max="100" step="any" placeholder="100" data-k="measure"><span class="note">из 100 мм</span></div>
+    </section>
+  </div>
+
+  <!-- 3 · складная шапка -->
+  <div class="board" data-for-design="fold" id="board" aria-label="Настройки">
+    <div class="grid">
+      <label class="lbl">Формат<select class="field" data-k="page"><option value="a4">A4</option><option value="letter">Letter</option></select></label>
+      <label class="lbl">Поля, мм<input class="field" type="number" min="0" step="any" data-k="margin"></label>
+      <label class="lbl wide">Стиль основы<select class="field" data-k="base"><option value="tent">Складная</option><option value="flat">Плоская</option><option value="foamboard">На пенокартоне</option></select></label>
+    </div>
+    <div class="side">
+      <button class="btn btn--pdf pdfdep" type="button">Скачать PDF<small class="has-rows" data-t="pdf"></small></button>
+      <div class="links" style="justify-content:center"><button class="link pdfdep" type="button">Предпросмотр</button><span aria-hidden="true">·</span><button class="link pdfdep" type="button">ZIP</button></div>
+    </div>
+    <div class="more">
+      <label class="check"><input type="checkbox" data-k="num"> Нумеровать копии</label>
+      <label class="check"><input type="checkbox" data-k="trim"> Обрезать пустые поля</label>
+      <span class="measure" style="margin-left:auto"><span>Масштаб: вышло</span><input class="field" type="number" min="80" max="100" step="any" placeholder="100" data-k="measure"><span class="note">из 100 мм · <button class="link" type="button">тестовый лист</button></span></span>
+    </div>
+  </div>
+  <div class="mini" id="mini" data-for-design="fold" aria-hidden="true">
+    <div class="wrap">
+      <p class="line"><b>Настройки</b><span data-t="line"></span></p>
+      <button class="btn btn--ghost" type="button" id="mini-edit">Изменить</button>
+      <button class="btn pdfdep" type="button">Скачать PDF</button>
+    </div>
+  </div>
+
+  <!-- 4 · фраза -->
+  <div class="order" data-for-design="phrase" aria-label="Настройки">
+    <p class="say">
+      Печатаем на листах <select class="word" data-k="page" aria-label="Формат"><option value="a4">A4</option><option value="letter">Letter</option></select>
+      с полями <input class="word" type="number" min="0" step="any" data-k="margin" aria-label="Поля, мм"> мм.
+      Основа <select class="word" data-k="base" aria-label="Стиль основы"><option value="tent">складная</option><option value="flat">плоская</option><option value="foamboard">на пенокартоне</option></select>.
+      Копии <select class="word" data-k="num" data-bool aria-label="Нумерация копий"><option value="1">нумеруем</option><option value="0">не нумеруем</option></select>,
+      пустые поля <select class="word" data-k="trim" data-bool aria-label="Обрезка полей"><option value="1">обрезаем</option><option value="0">оставляем</option></select>.
+    </p>
+    <div class="foot">
+      <button class="btn btn--pdf pdfdep" type="button">Скачать PDF<small class="has-rows" data-t="pdf"></small></button>
+      <div class="links"><button class="link pdfdep" type="button">Предпросмотр</button><span aria-hidden="true">·</span><button class="link pdfdep" type="button">ZIP</button></div>
+      <div class="cal">Масштаб <span data-t="scale"></span> · <span class="measure" style="display:inline-grid"><span>вышло</span><input class="field" type="number" min="80" max="100" step="any" placeholder="100" data-k="measure" style="min-height:36px"><span>из 100 мм на <button class="link" type="button">тестовом листе</button></span></span></div>
+    </div>
+  </div>
+
+  <!-- 5 · лист -->
+  <div class="sheetbox" data-for-design="sheet" aria-label="Настройки">
+    <div>
+      <div class="paper" id="paper"><div class="safe" id="safe"></div></div>
+      <p class="paper-cap" data-t="paper"></p>
+    </div>
+    <div class="controls">
+      <div class="pair">
+        <label class="lbl">Формат<select class="field" data-k="page"><option value="a4">A4</option><option value="letter">Letter</option></select></label>
+        <label class="lbl">Поля, мм<input class="field" type="number" min="0" step="any" data-k="margin"></label>
+      </div>
+      <fieldset style="border:0;padding:0;margin:0" class="lbl">
+        <legend style="padding:0;margin-bottom:.25rem">Стиль основы</legend>
+        <div class="seg">
+          <label><input type="radio" name="base5" value="tent" data-k="base"><svg viewBox="0 0 36 28"><path d="M4 26 18 3l14 23"/><path d="M2 26h32"/></svg>Складная</label>
+          <label><input type="radio" name="base5" value="flat" data-k="base"><svg viewBox="0 0 36 28"><rect x="11" y="3" width="14" height="19"/><path d="M5 25h26M11 22l-4 3M25 22l4 3"/></svg>Плоская</label>
+          <label><input type="radio" name="base5" value="foamboard" data-k="base"><svg viewBox="0 0 36 28"><rect x="10" y="3" width="16" height="20"/><rect x="13" y="3" width="10" height="20"/><path d="M4 26h28"/></svg>Пенокартон</label>
+        </div>
+      </fieldset>
+      <div style="display:flex;flex-wrap:wrap;gap:0 1.5rem">
+        <label class="check"><input type="checkbox" data-k="num"> Нумеровать копии</label>
+        <label class="check"><input type="checkbox" data-k="trim"> Обрезать пустые поля</label>
+      </div>
+    </div>
+    <div class="out">
+      <h2 class="has-rows" data-t="pdfShort"></h2>
+      <p class="note no-rows">Добавьте изображения для печати миниатюр.</p>
+      <button class="btn btn--pdf pdfdep" type="button">Скачать PDF</button>
+      <div class="links" style="justify-content:center"><button class="link pdfdep" type="button">Предпросмотр</button><span aria-hidden="true">·</span><button class="link pdfdep" type="button">ZIP</button></div>
+      <p class="note">Масштаб <span data-t="scale"></span>. <button class="link" type="button" style="min-height:0">Подогнать по тестовому листу</button></p>
+    </div>
+  </div>
+
+  <p class="empty-note no-rows" data-for-design="strip spread fold phrase">Добавьте изображения для печати миниатюр.</p>
+
+  <!-- shared workspace -->
+  <div>
+    <button class="drop" type="button"><span>Добавить изображения</span><span>Перетащите файлы сюда или нажмите для выбора. PNG, JPG, WebP.</span></button>
+    <p class="hint">В конце имени файла: <code>имя-back</code> — оборот, <code>имя-large</code> — размер.</p>
+  </div>
+
+  <section aria-label="Миниатюры">
+    <div class="list-head has-rows">
+      <h2>Миниатюры <span>· 6</span></h2>
+      <button class="btn btn--ghost" type="button">Сменить высоту ▾</button>
+    </div>
+    <div class="rows has-rows" id="rows"></div>
+  </section>
+
+  <div class="dock-bar" data-for-design="spread">
+    <p class="sum"><span class="has-rows" data-t="pdfShort"></span><span class="no-rows">Пока пусто</span><small data-t="line"></small></p>
+    <div class="act">
+      <div class="links"><button class="link pdfdep" type="button">Предпросмотр</button><span aria-hidden="true">·</span><button class="link pdfdep" type="button">ZIP</button></div>
+      <button class="btn pdfdep" type="button">Скачать PDF</button>
+    </div>
+  </div>
+
+  <aside class="facts">
+    <div>
+      <p><b>Изображения обрабатываются в браузере</b> и не отправляются на сервер. Сохраняются только настройки печати.</p>
+      <p><b>Печатайте с подгонкой под страницу.</b> Контрольная линейка на листе должна быть ровно 100 мм.</p>
+    </div>
+    <div>
+      <p>Высота задаёт размер фигурки на бумаге. Очень широкие изображения уменьшаются целиком.</p>
+      <p>Обрезка убирает прозрачные или одноцветные поля. Отключите её, чтобы печатать оригинал.</p>
+    </div>
+  </aside>
+</main>
+
+<script type="application/json" id="grill-round">
+{
+  "question": "Как устроить настройки сверху колонки?",
+  "designs": [
+    { "id": "strip", "name": "полоса", "angle": "одна sticky-строка значений; клик по значению раскрывает его поля под строкой", "cost": "поля спрятаны за клик; раскрытая панель ложится поверх списка" },
+    { "id": "spread", "name": "разворот", "angle": "все поля открыты в три колонки, как разворот рулбука; sticky только полоса «Скачать PDF» внизу экрана", "cost": "~200 px высоты над списком всегда; настройки уезжают при скролле" },
+    { "id": "fold", "name": "складная шапка", "angle": "сверху полная форма с кнопкой; при скролле её место занимает тонкая sticky-строка со сводкой", "cost": "два вида одних настроек; строка выезжает и привлекает внимание" },
+    { "id": "phrase", "name": "фраза", "angle": "настройки — одно предложение с выбираемыми словами", "cost": "значения не сканируются как столбец; масштаб не влезает во фразу и живёт строкой ниже" },
+    { "id": "sheet", "name": "лист", "angle": "рисунок листа показывает формат и поля; основа — пиктограммы; справа итог и кнопка", "cost": "самый высокий блок; рисунок тратит место на то, что видно и в полях" }
+  ],
+  "states": [{ "id": "full", "name": "6 миниатюр" }, { "id": "empty", "name": "пусто" }]
+}
+</script>
+<script>
+(() => {
+  const S = { page: 'a4', margin: 5, base: 'tent', num: true, trim: true, measure: '' };
+  const baseLabel = { tent: 'Складная', flat: 'Плоская', foamboard: 'На пенокартоне' };
+  const P = () => (S.page === 'a4' ? 'A4' : 'Letter');
+  const sheets = () => (S.base === 'foamboard' ? `2 листа лиц + 2 листа оборотов ${P()}` : `2 листа ${P()}`);
+  const scale = () => (S.measure === '' ? 'по умолчанию' : `подогнан · ${S.measure} мм`);
+  const figures = () => [S.trim && 'обрезка', S.num && 'нумерация'].filter(Boolean).join(', ') || '—';
+  const T = {
+    paper: () => `${P()} · поля ${S.margin} мм`,
+    base: () => baseLabel[S.base],
+    figures,
+    scale,
+    pdf: () => `9 миниатюр · ${sheets()}`,
+    pdfShort: () => `9 миниатюр · ${sheets()}`,
+    line: () => `${P()} · поля ${S.margin} мм · ${baseLabel[S.base].toLowerCase()} · ${figures()} · масштаб ${scale()}`,
+  };
+
+  function sync() {
+    for (const el of document.querySelectorAll('[data-k]')) {
+      const k = el.dataset.k;
+      if (el.type === 'checkbox') el.checked = S[k];
+      else if (el.type === 'radio') el.checked = el.value === S[k];
+      else if ('bool' in el.dataset) el.value = S[k] ? '1' : '0';
+      else if (el !== document.activeElement) el.value = S[k];
+    }
+    for (const el of document.querySelectorAll('[data-t]')) el.textContent = T[el.dataset.t]();
+    const paper = document.getElementById('paper');
+    const [w, h] = S.page === 'a4' ? [210, 297] : [216, 279];
+    paper.style.aspectRatio = `${w} / ${h}`;
+    const m = Math.min(Math.max(Number(S.margin) || 0, 0), 40);
+    Object.assign(document.getElementById('safe').style, { inset: `${(m / h) * 100}% ${(m / w) * 100}%` });
+  }
+  document.addEventListener('input', (e) => {
+    const el = e.target.closest('[data-k]');
+    if (!el) return;
+    const k = el.dataset.k;
+    S[k] = el.type === 'checkbox' ? el.checked : 'bool' in el.dataset ? el.value === '1' : el.value;
+    sync();
+  });
+  document.getElementById('safe').innerHTML = '<i></i>'.repeat(12);
+
+  // shared minis list
+  const fig = (h) => `<svg viewBox="0 0 60 90" aria-hidden="true"><ellipse cx="30" cy="${90 - h * 0.85}" rx="${6 + h / 12}" ry="${6 + h / 12}" fill="oklch(0.444 0.01 73)"/><path d="M${18 - h / 10} 86 Q30 ${80 - h * 0.7} ${42 + h / 10} 86Z" fill="oklch(0.555 0.145 49)"/></svg>`;
+  const minis = [
+    ['Гоблин-лучник', 'Маленький · 0,95 м', 2, 30],
+    ['Рыцарь Ордена Пепла', 'Средний · 1,7 м', 1, 55],
+    ['Волшебница', 'Средний · 1,7 м', 1, 52],
+    ['Волк', 'Маленький · 0,95 м', 3, 28],
+    ['Огр', 'Большой · 2,7 м', 1, 72],
+    ['Совомедведь', 'Большой · 2,7 м', 1, 68],
+  ];
+  const sizes = ['Крошечный · 0,6 м', 'Маленький · 0,95 м', 'Средний, низкий · 1,3 м', 'Средний · 1,7 м', 'Средний, высокий · 2,1 м', 'Большой · 2,7 м', 'Большой, высокий · 4 м', 'Огромный · 6 м', 'Громадный · 10 м и выше', 'Свой размер'];
+  const copy = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+  const trash = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+  document.getElementById('rows').innerHTML = minis.map(([name, size, count, h], i) => `
+    <article class="row" aria-label="Миниатюра ${i + 1}">
+      <div class="thumbs"><span class="thumb">${fig(h)}</span><span class="thumb thumb--back">${fig(h)}</span></div>
+      <div class="row-title"><h3>${name}</h3><button class="icon" type="button" aria-label="Дублировать">${copy}</button><button class="icon" type="button" aria-label="Удалить">${trash}</button></div>
+      <div class="row-controls">
+        <select class="field" aria-label="Высота существа">${sizes.map((s) => `<option${s === size ? ' selected' : ''}>${s}</option>`).join('')}</select>
+        <span class="stepper"><button type="button" aria-label="Меньше копий">−</button><span>${count}</span><button type="button" aria-label="Больше копий">+</button></span>
+      </div>
+    </article>`).join('');
+
+  // 1 · close an open strip panel on an outside click or Escape
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('.strip')) return;
+    for (const d of document.querySelectorAll('.strip details[open]')) d.open = false;
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') for (const d of document.querySelectorAll('.strip details[open]')) d.open = false;
+  });
+
+  // 3 · the thin line takes over once the full board scrolls away
+  const board = document.getElementById('board');
+  const mini = document.getElementById('mini');
+  let boardVisible = true;
+  new IntersectionObserver(([entry]) => {
+    boardVisible = entry.isIntersecting;
+    paint();
+  }).observe(board);
+  function paint() {
+    const on = document.documentElement.dataset.design === 'fold' && !boardVisible;
+    mini.classList.toggle('on', on);
+    mini.setAttribute('aria-hidden', String(!on));
+  }
+  document.getElementById('mini-edit').addEventListener('click', () => {
+    board.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+    board.querySelector('select').focus({ preventScroll: true });
+  });
+
+  document.addEventListener('grill:change', (e) => {
+    const empty = e.detail.state === 'empty';
+    for (const b of document.querySelectorAll('.pdfdep')) b.disabled = empty;
+    paint();
+  });
+  sync();
+})();
+</script>
+<script>
+// grill-design picker: a draggable dock that switches the designs of one round.
+//
+// Inline this file into the round's HTML, after the round's JSON block: a
+// script element of type application/json with id grill-round, holding
+// { question, designs: [{ id, name, angle, cost }], states: [{ id, name }] }.
+// This file never spells out a closing script tag, because the HTML parser
+// would end the inline script at it.
+//
+// The live choice is written to data-design and data-state on the html
+// element, so each design styles itself under [data-design="<id>"]. Elements marked
+// data-for-design="<id> <id>" or data-for-state="<id>" are hidden unless the
+// live choice is listed. Every switch dispatches a "grill:change" event on
+// document with { design, state, replay } in detail.
+//
+// Ideas borrowed from the variate card (github.com/Nutlope/variate, MIT).
+
+(() => {
+  "use strict";
+
+  const source = document.getElementById("grill-round");
+  if (!source) {
+    console.error("grill-design picker: no application/json script with id grill-round");
+    return;
+  }
+  let round;
+  try {
+    round = JSON.parse(source.textContent);
+  } catch (error) {
+    console.error("grill-design picker: grill-round is not valid JSON", error);
+    return;
+  }
+  const designs = Array.isArray(round.designs) ? round.designs : [];
+  const states = Array.isArray(round.states) ? round.states : [];
+  if (!designs.length) {
+    console.error("grill-design picker: grill-round has no designs");
+    return;
+  }
+
+  const root = document.documentElement;
+  const POSITION_KEY = "grill-design:dock-position";
+
+  // localStorage throws in private windows and sandboxed previews; the dock
+  // must still work there, it only forgets where it was dragged.
+  const storage = {
+    get(key) { try { return JSON.parse(localStorage.getItem(key)); } catch (_) { return null; } },
+    set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (_) {} },
+  };
+
+  const fromHash = () => {
+    const params = new URLSearchParams(location.hash.slice(1));
+    return { design: params.get("design"), state: params.get("state") };
+  };
+  const known = (list, id) => list.some((item) => item.id === id);
+
+  const initial = fromHash();
+  let design = known(designs, initial.design) ? initial.design : designs[0].id;
+  let state = states.length ? (known(states, initial.state) ? initial.state : states[0].id) : null;
+
+  function applyChoice(replay) {
+    root.dataset.design = design;
+    if (state) root.dataset.state = state; else delete root.dataset.state;
+    for (const node of document.querySelectorAll("[data-for-design]")) {
+      node.hidden = !node.dataset.forDesign.split(/\s+/).includes(design);
+    }
+    for (const node of document.querySelectorAll("[data-for-state]")) {
+      node.hidden = !node.dataset.forState.split(/\s+/).includes(state);
+    }
+    const hash = new URLSearchParams({ design, ...(state ? { state } : {}) });
+    history.replaceState(null, "", `#${hash}`);
+    document.dispatchEvent(new CustomEvent("grill:change", { detail: { design, state, replay } }));
+    render();
+  }
+
+  // Re-entering the same design restarts its CSS animations, so a round about
+  // motion can be watched more than once.
+  function replay() {
+    delete root.dataset.design;
+    void root.offsetWidth;
+    applyChoice(true);
+  }
+
+  function selectDesign(id) {
+    if (id === design) { replay(); return; }
+    design = id;
+    applyChoice(false);
+  }
+
+  function step(delta) {
+    const index = designs.findIndex((item) => item.id === design);
+    selectDesign(designs[(index + delta + designs.length) % designs.length].id);
+  }
+
+  // The dock lives in a shadow root reset with all: initial, so the designs
+  // under review cannot restyle it and it cannot leak into them.
+  const host = document.createElement("grill-picker");
+  const shadow = host.attachShadow({ mode: "open" });
+  shadow.innerHTML = `
+<style>
+:host { all: initial; display: block; position: fixed; right: 16px; bottom: 16px; z-index: 2147483646; }
+@media print { :host { display: none } }
+* { box-sizing: border-box; margin: 0; }
+.dock {
+  width: min(320px, calc(100vw - 32px));
+  padding: 10px 12px 12px;
+  border-radius: 12px;
+  background: #16181d;
+  color: #e8e9ed;
+  box-shadow: 0 8px 28px rgb(0 0 0 / .35), 0 0 0 1px rgb(255 255 255 / .08);
+  font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+.grip {
+  display: flex; align-items: center; gap: 8px;
+  cursor: grab; touch-action: none; user-select: none;
+  color: #9a9ea8; font-size: 12px;
+}
+.grip:active { cursor: grabbing; }
+.grip::before { content: "⋮⋮"; letter-spacing: -2px; }
+.question { color: #e8e9ed; font-weight: 600; }
+.pager { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+button {
+  all: unset; box-sizing: border-box;
+  min-width: 28px; height: 28px; padding: 0 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 7px; background: #23262d; color: #c9ccd3;
+  font: inherit; cursor: pointer; white-space: nowrap;
+}
+button:hover { background: #2d3139; }
+button:focus-visible { outline: 2px solid #7aa2ff; outline-offset: 1px; }
+button[aria-pressed="true"] { background: #e8e9ed; color: #16181d; font-weight: 600; }
+.detail { margin-top: 8px; color: #b4b8c1; }
+.detail b { color: #e8e9ed; font-weight: 600; }
+.cost { color: #f0b37e; }
+.states { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #2d3139; }
+.keys { margin-top: 8px; color: #6f7480; font-size: 11px; }
+</style>
+<div class="dock" role="region" aria-label="Design picker">
+  <div class="grip"><span class="question"></span></div>
+  <div class="pager" role="group" aria-label="Designs"></div>
+  <p class="detail" aria-live="polite"></p>
+  <div class="states" role="group" aria-label="States"></div>
+  <p class="keys">← → or 1–9 switch · click the current design to replay it</p>
+</div>`;
+
+  const dock = shadow.querySelector(".dock");
+  const grip = shadow.querySelector(".grip");
+  const pager = shadow.querySelector(".pager");
+  const detail = shadow.querySelector(".detail");
+  const stateBar = shadow.querySelector(".states");
+  shadow.querySelector(".question").textContent = round.question || "Pick a design";
+  if (!states.length) stateBar.remove();
+
+  const designButtons = designs.map((item, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.addEventListener("click", () => selectDesign(item.id));
+    button.dataset.number = String(index + 1);
+    pager.append(button);
+    return button;
+  });
+  const stateButtons = states.map((item) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = item.name || item.id;
+    button.addEventListener("click", () => { state = item.id; applyChoice(false); });
+    stateBar.append(button);
+    return button;
+  });
+
+  function render() {
+    designs.forEach((item, index) => {
+      const live = item.id === design;
+      const button = designButtons[index];
+      // The live chip wears its name and the rest stay numbers, so the dock
+      // stays narrow while always saying what is on screen.
+      button.textContent = live ? `${index + 1} · ${item.name || item.id}` : String(index + 1);
+      button.setAttribute("aria-pressed", String(live));
+      button.title = [item.name, item.angle, item.cost && `cost: ${item.cost}`].filter(Boolean).join(" — ");
+    });
+    stateButtons.forEach((button, index) => {
+      button.setAttribute("aria-pressed", String(states[index].id === state));
+    });
+    const current = designs.find((item) => item.id === design);
+    detail.replaceChildren();
+    if (current.angle) {
+      const angle = document.createElement("b");
+      angle.textContent = current.angle;
+      detail.append(angle);
+    }
+    if (current.cost) {
+      const cost = document.createElement("span");
+      cost.className = "cost";
+      cost.textContent = `${current.angle ? " · " : ""}cost: ${current.cost}`;
+      detail.append(cost);
+    }
+    detail.hidden = !current.angle && !current.cost;
+  }
+
+  function onKey(event) {
+    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+    const target = event.composedPath()[0];
+    if (target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+    if (event.key === "ArrowRight") { step(1); event.preventDefault(); return; }
+    if (event.key === "ArrowLeft") { step(-1); event.preventDefault(); return; }
+    const number = Number(event.key);
+    if (Number.isInteger(number) && number >= 1 && number <= designs.length) {
+      selectDesign(designs[number - 1].id);
+      event.preventDefault();
+    }
+  }
+
+  function place(position) {
+    if (!position) return;
+    const maxX = Math.max(0, innerWidth - dock.offsetWidth);
+    const maxY = Math.max(0, innerHeight - dock.offsetHeight);
+    host.style.left = `${Math.min(Math.max(0, position.x), maxX)}px`;
+    host.style.top = `${Math.min(Math.max(0, position.y), maxY)}px`;
+    host.style.right = "auto";
+    host.style.bottom = "auto";
+  }
+
+  grip.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    const box = host.getBoundingClientRect();
+    const offsetX = event.clientX - box.left;
+    const offsetY = event.clientY - box.top;
+    grip.setPointerCapture(event.pointerId);
+    const move = (moveEvent) => place({ x: moveEvent.clientX - offsetX, y: moveEvent.clientY - offsetY });
+    const end = () => {
+      grip.removeEventListener("pointermove", move);
+      grip.removeEventListener("pointerup", end);
+      grip.removeEventListener("pointercancel", end);
+      const placed = host.getBoundingClientRect();
+      storage.set(POSITION_KEY, { x: placed.left, y: placed.top });
+    };
+    grip.addEventListener("pointermove", move);
+    grip.addEventListener("pointerup", end);
+    grip.addEventListener("pointercancel", end);
+  });
+
+  addEventListener("keydown", onKey);
+  addEventListener("hashchange", () => {
+    const next = fromHash();
+    if (known(designs, next.design)) design = next.design;
+    if (known(states, next.state)) state = next.state;
+    applyChoice(false);
+  });
+  addEventListener("resize", () => { if (host.style.left) place({ x: parseFloat(host.style.left), y: parseFloat(host.style.top) }); });
+
+  document.body.append(host);
+  place(storage.get(POSITION_KEY));
+  applyChoice(false);
+})();
+
+</script>
+</body>
+</html>
