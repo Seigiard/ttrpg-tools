@@ -1318,7 +1318,7 @@ describe('flat base style', () => {
     const {
       minis: [mini],
     } = await read(
-      await generatePDF([entry], {
+      await generatePDF([{ ...entry, heightSlot: 'medium' }], {
         pageSize: 'a4',
         baseStyle: 'flat',
         numberDuplicates: true,
