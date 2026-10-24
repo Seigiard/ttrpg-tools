@@ -80,6 +80,7 @@ type Drawing = {
   role: Role;
   flipped: boolean;
   box: Box;
+  determinant?: number;
   text?: Text;
   mirror?: Mirror;
   segments?: Segment[];
@@ -198,6 +199,7 @@ async function read(bytes: Uint8Array, readUprightMinis = true) {
             mirror: { x: matrix[0] < 0, y: matrix[3] < 0 },
             xobject: xobject(images, tokens[0]),
             axes: matrix.slice(0, 4).map((v) => Math.sign(v) || 0),
+            determinant: matrix[0] * matrix[3] - matrix[1] * matrix[2],
           });
 
         if (op === 'Tf') {
@@ -231,6 +233,9 @@ async function read(bytes: Uint8Array, readUprightMinis = true) {
               role: 'text',
               flipped,
               box: bounds([position]),
+              determinant:
+                (matrix[0] * matrix[3] - matrix[1] * matrix[2]) *
+                (textMatrix[0] * textMatrix[3] - textMatrix[1] * textMatrix[2]),
               text,
             });
         }
@@ -1479,6 +1484,66 @@ describe('foamboard base style', () => {
       },
     );
   });
+
+  t(
+    'keeps supplied Back art and the duplicate badge readable on a rotated foamboard mini',
+    async () => {
+      // #given  the oversized upright mini is packed clockwise with supplied back artwork
+      const oversizedUpright: Entry = {
+        ...entry,
+        heightSlot: 'custom',
+        customWidthMm: 20,
+        customHeightMm: 140,
+        artwork: { ...artwork, width: 10, height: 1 },
+        backImage: new File([], 'back.png'),
+        backArtwork: { ...artwork, width: 10, height: 1 },
+      };
+
+      // #when
+      const sheet = await read(
+        await generatePDF([oversizedUpright], { ...foamboardOptions, marginMm: 2 }),
+        false,
+      );
+
+      const front = sheet.drawings.find(
+        (drawing) => drawing.page === 0 && drawing.role === 'image',
+      )!;
+
+      const back = sheet.drawings.find(
+        (drawing) => drawing.page === 1 && drawing.role === 'image',
+      )!;
+
+      const badge = sheet.drawings.find(
+        (drawing) => drawing.page === 1 && drawing.role === 'text' && drawing.text?.label === '1',
+      )!;
+
+      const pageWidth = sheet.pageSizes[0]!.width;
+
+      // #then  stacking the sheets preserves placement while the supplied art and digit stay readable
+      assert.deepEqual(
+        {
+          backArtDeterminant: Math.sign(back.determinant!),
+          badgeTextDeterminant: Math.sign(badge.determinant!),
+          backBox: [
+            asMm(back.box.left),
+            asMm(back.box.bottom),
+            asMm(back.box.right),
+            asMm(back.box.top),
+          ],
+        },
+        {
+          backArtDeterminant: 1,
+          badgeTextDeterminant: 1,
+          backBox: [
+            asMm(pageWidth - front.box.right),
+            asMm(front.box.bottom),
+            asMm(pageWidth - front.box.left),
+            asMm(front.box.top),
+          ],
+        },
+      );
+    },
+  );
 
   t(
     'puts the duplicate badge on the Back Tongue and draws cut marks only on the Front',
