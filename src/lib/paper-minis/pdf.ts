@@ -298,10 +298,7 @@ function drawMini(
 
     const badgeWidthMm = mini.baseStyle === 'flat' ? mini.tongueWidthMm : mini.baseWidthMm;
 
-    const badgeOffsetXMm =
-      mini.baseStyle === 'flat'
-        ? mini.baseOffsetXMm + (mini.baseWidthMm - badgeWidthMm) / 2 - back.imageOffsetXMm
-        : mini.backBadgeOffsetXMm;
+    const badgeOffsetXMm = mini.backBadgeOffsetXMm;
 
     drawLabelBadge(
       pdfPage,
@@ -430,19 +427,19 @@ function drawCutMarks(pdfPage: PDFPage, mini: PackedMini, x: number, yBottom: nu
   }
 
   if (mini.baseStyle === 'flat') {
-    const tongueLeft = x + mm(mini.baseOffsetXMm + (mini.baseWidthMm - mini.tongueWidthMm) / 2);
+    const tongueLeft = x + mm(mini.tongueOffsetXMm);
     const tongueRight = tongueLeft + mm(mini.tongueWidthMm);
     const lowerShoulder = yBottom + mm(mini.levels.frontTongueTopMm);
     const upperShoulder = yBottom + mm(mini.levels.backFaceTopMm);
 
     for (const [shoulder, direction] of [
-      [tongueLeft, 1],
-      [tongueRight, -1],
+      [tongueLeft, -1],
+      [tongueRight, 1],
     ] as const) {
       segment(shoulder, lowerShoulder, shoulder + direction * arm, lowerShoulder);
-      segment(shoulder, lowerShoulder, shoulder, lowerShoulder + arm);
+      segment(shoulder, lowerShoulder, shoulder, lowerShoulder - arm);
       segment(shoulder, upperShoulder, shoulder + direction * arm, upperShoulder);
-      segment(shoulder, upperShoulder, shoulder, upperShoulder - arm);
+      segment(shoulder, upperShoulder, shoulder, upperShoulder + arm);
     }
   } else if (mini.baseStyle === 'foamboard') {
     const tongueLeft = x + mm(mini.tongueOffsetXMm);
@@ -450,11 +447,11 @@ function drawCutMarks(pdfPage: PDFPage, mini: PackedMini, x: number, yBottom: nu
     const tongueTop = yBottom + mm(mini.levels.frontTongueTopMm);
 
     for (const [shoulder, direction] of [
-      [tongueLeft, 1],
-      [tongueRight, -1],
+      [tongueLeft, -1],
+      [tongueRight, 1],
     ] as const) {
       segment(shoulder, tongueTop, shoulder + direction * arm, tongueTop);
-      segment(shoulder, tongueTop, shoulder, tongueTop + arm);
+      segment(shoulder, tongueTop, shoulder, tongueTop - arm);
     }
   }
 

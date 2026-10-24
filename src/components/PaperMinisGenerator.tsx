@@ -490,6 +490,13 @@ export default function PaperMinisGenerator() {
       .filter(Boolean)
       .join(', ') || '—';
 
+  const assemblyInstruction =
+    settings.baseStyle === 'flat'
+      ? 'Вырежьте развёртку по внешним меткам, сделайте два надреза у плеч язычка, согните пополам между изображениями, склейте половинки и вставьте оба язычка в подставку.'
+      : settings.baseStyle === 'foamboard'
+        ? 'Наклейте лист лиц и лист оборотов на две стороны пенокартона по меткам совмещения и вырежьте фигурки по меткам реза на листе лиц.'
+        : undefined;
+
   const [previewUrl, setPreviewUrl] = useState<string>();
   const [dragging, setDragging] = useState(false);
   const files = useRef<HTMLInputElement>(null);
@@ -1206,8 +1213,12 @@ export default function PaperMinisGenerator() {
             ровно 100 мм.
           </p>
           <p>
-            <b>Вырежьте развёртку</b> по внешним меткам, согните пополам между изображениями,
-            отогните оба язычка наружу и приклейте их к полоске основания.
+            {assemblyInstruction ?? (
+              <>
+                <b>Вырежьте развёртку</b> по внешним меткам, согните пополам между изображениями,
+                отогните оба язычка наружу и приклейте их к полоске основания.
+              </>
+            )}
           </p>
         </div>
         <div className="flex flex-col gap-2">

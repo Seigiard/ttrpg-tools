@@ -439,7 +439,9 @@ export function resolveMini(
   if (baseStyle === 'foamboard') {
     const frontTongueTopMm = FLAT_TONGUE_DEPTH_MM;
     const frontFaceTopMm = frontTongueTopMm + marginMm + faceHeightMm;
-    const topMm = frontFaceTopMm + marginMm;
+    // Use the same closed form that fitMiniFaces inverts at the page cap. A
+    // chained sum can round one ulp above the usable height and reject the mini.
+    const topMm = faceHeightMm + marginMm * 2 + FLAT_TONGUE_DEPTH_MM;
     const tongueWidthMm = baseWidthMm - FLAT_TONGUE_INSET_MM * 2;
     const tongueOffsetXMm = baseOffsetXMm + FLAT_TONGUE_INSET_MM;
 
@@ -489,7 +491,7 @@ export function resolveMini(
     const tongueWidthMm = baseWidthMm - FLAT_TONGUE_INSET_MM * 2;
     // Keep this relative to the reserved column. The base itself is centred
     // in that column; the PDF derives the absolute tongue position from it.
-    const tongueOffsetXMm = marginMm + FLAT_TONGUE_INSET_MM;
+    const tongueOffsetXMm = baseOffsetXMm + FLAT_TONGUE_INSET_MM;
 
     const levels: FlatMiniLevels = {
       frontTongueTopMm,
