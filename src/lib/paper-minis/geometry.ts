@@ -68,27 +68,47 @@ export const CUT_MARK_ARM_MM = 1.5;
 
 export const CUT_MARK_STROKE_MM = 0.2;
 
-export type MiniLevels = {
-  floorStripTopMm?: number;
-  frontTabTopMm?: number;
-  frontTongueTopMm?: number;
-  frontFaceTopMm?: number;
-  foldMm?: number;
-  backFaceBottomMm?: number;
-  backFaceTopMm?: number;
-  topMm: number;
-  cutMarks: {
-    cornersMm: number[];
-    edgeTicksMm: number[];
-  };
+type TentCutMarks = {
+  cornersMm: [number, number];
+  edgeTicksMm: [number, number, number, number];
 };
+
+type FlatCutMarks = {
+  cornersMm: [number, number, number, number];
+  edgeTicksMm: [number];
+};
+
+export type TentMiniLevels = {
+  floorStripTopMm: number;
+  frontTabTopMm: number;
+  frontTongueTopMm?: never;
+  frontFaceTopMm: number;
+  foldMm: number;
+  backFaceBottomMm: number;
+  backFaceTopMm: number;
+  topMm: number;
+  cutMarks: TentCutMarks;
+};
+
+export type FlatMiniLevels = {
+  floorStripTopMm?: never;
+  frontTabTopMm?: never;
+  frontTongueTopMm: number;
+  frontFaceTopMm: number;
+  foldMm: number;
+  backFaceBottomMm: number;
+  backFaceTopMm: number;
+  topMm: number;
+  cutMarks: FlatCutMarks;
+};
+
+export type MiniLevels = TentMiniLevels | FlatMiniLevels;
 
 // A single copy of an entry, with its resolved geometry. entryIndex maps back
 // to the source entry so the PDF drawer can attribute each mini to its row.
-export type PackedMini = {
+type PackedMiniCommon = {
   entryIndex: number;
   copyIndex: number; // 0-based copy within the entry
-  baseStyle: BaseStyle;
   heightSlot: MiniSize;
   baseWidthMm: number; // the category's base, which sizes the stand and the badge
   totalWidthMm: number; // the widest of base and both figures, plus margins — the cut-out's width, and every strip's
@@ -102,14 +122,27 @@ export type PackedMini = {
   // images, so both halves fold to the same length and both tabs meet the floor.
   faceHeightMm: number;
   back?: BackFace; // present only for an entry with back artwork
-  levels: MiniLevels; // vertical levels measured from the mini's bottom edge
-  tongueWidthMm?: number;
-  tongueOffsetXMm?: number;
   backBadgeOffsetXMm: number; // measured from the back image's own origin
   fitLimits: FigureFitLimit[];
   totalHeightMm: number;
   label?: string;
 };
+
+export type TentPackedMini = PackedMiniCommon & {
+  baseStyle: 'tent';
+  levels: TentMiniLevels; // vertical levels measured from the mini's bottom edge
+  tongueWidthMm?: never;
+  tongueOffsetXMm?: never;
+};
+
+export type FlatPackedMini = PackedMiniCommon & {
+  baseStyle: 'flat';
+  levels: FlatMiniLevels; // vertical levels measured from the mini's bottom edge
+  tongueWidthMm: number;
+  tongueOffsetXMm: number;
+};
+
+export type PackedMini = TentPackedMini | FlatPackedMini;
 
 // The front's three image fields again, for the back artwork.
 export type BackFace = { imageWidthMm: number; imageHeightMm: number; imageOffsetXMm: number };
@@ -366,9 +399,8 @@ export function resolveMini(
 
   const faceHeightMm = Math.max(imageHeightMm, backFit?.imageHeightMm ?? 0);
   const baseOffsetXMm = marginMm + (contentWidthMm - baseWidthMm) / 2;
-  let levels: MiniLevels;
-  let tongueWidthMm: number | undefined;
-  let tongueOffsetXMm: number | undefined;
+  const limits = [...new Set([...front.limits, ...(rawBackFit?.limits ?? [])])];
+  const copies: PackedMini[] = [];
 
   if (baseStyle === 'flat') {
     const frontTongueTopMm = FLAT_TONGUE_DEPTH_MM;
@@ -379,12 +411,12 @@ export function resolveMini(
     // Use the same closed form that fitMiniFaces inverts at the page cap. A
     // chained sum can round one ulp above the usable height and reject the mini.
     const topMm = faceHeightMm * 2 + marginMm * 2 + FLAT_TONGUE_DEPTH_MM * 2;
-
-    tongueWidthMm = baseWidthMm - FLAT_TONGUE_INSET_MM * 2;
+    const tongueWidthMm = baseWidthMm - FLAT_TONGUE_INSET_MM * 2;
     // Keep this relative to the reserved column. The base itself is centred
     // in that column; the PDF derives the absolute tongue position from it.
-    tongueOffsetXMm = marginMm + FLAT_TONGUE_INSET_MM;
-    levels = {
+    const tongueOffsetXMm = marginMm + FLAT_TONGUE_INSET_MM;
+
+    const levels: FlatMiniLevels = {
       frontTongueTopMm,
       frontFaceTopMm,
       foldMm,
@@ -396,6 +428,35 @@ export function resolveMini(
         edgeTicksMm: [foldMm],
       },
     };
+
+    const backBadgeOffsetXMm =
+      baseOffsetXMm + (baseWidthMm - tongueWidthMm) / 2 - (back?.imageOffsetXMm ?? imageOffsetXMm);
+
+    for (let i = 0; i < e.count; i++) {
+      copies.push({
+        entryIndex,
+        copyIndex: i,
+        baseStyle,
+        heightSlot: e.heightSlot,
+        baseWidthMm,
+        totalWidthMm,
+        baseOffsetXMm,
+        tabHeightMm: tabHMm,
+        marginMm,
+        imageWidthMm,
+        imageHeightMm,
+        imageOffsetXMm,
+        faceHeightMm,
+        ...(back && { back }),
+        levels,
+        tongueWidthMm,
+        tongueOffsetXMm,
+        backBadgeOffsetXMm,
+        fitLimits: [...limits],
+        totalHeightMm: levels.topMm,
+        label: opts.numberDuplicates ? String(i + 1) : undefined,
+      });
+    }
   } else {
     const floorStripTopMm = tabHMm * 2;
     const frontTabTopMm = floorStripTopMm + tabHMm;
@@ -407,7 +468,7 @@ export function resolveMini(
     const topMm = faceHeightMm * 2 + marginMm * 2 + tabHMm * 4;
     const backFaceTopMm = topMm - tabHMm;
 
-    levels = {
+    const levels: TentMiniLevels = {
       floorStripTopMm,
       frontTabTopMm,
       frontFaceTopMm,
@@ -420,42 +481,32 @@ export function resolveMini(
         edgeTicksMm: [floorStripTopMm, frontTabTopMm, foldMm, backFaceTopMm],
       },
     };
-  }
 
-  const backBadgeOffsetXMm =
-    baseStyle === 'flat'
-      ? baseOffsetXMm +
-        (baseWidthMm - tongueWidthMm!) / 2 -
-        (back?.imageOffsetXMm ?? imageOffsetXMm)
-      : ((back?.imageWidthMm ?? imageWidthMm) - baseWidthMm) / 2;
+    const backBadgeOffsetXMm = ((back?.imageWidthMm ?? imageWidthMm) - baseWidthMm) / 2;
 
-  const limits = [...new Set([...front.limits, ...(rawBackFit?.limits ?? [])])];
-  const copies: PackedMini[] = [];
-
-  for (let i = 0; i < e.count; i++) {
-    copies.push({
-      entryIndex,
-      copyIndex: i,
-      baseStyle,
-      heightSlot: e.heightSlot,
-      baseWidthMm,
-      totalWidthMm,
-      baseOffsetXMm,
-      tabHeightMm: tabHMm,
-      marginMm,
-      imageWidthMm,
-      imageHeightMm,
-      imageOffsetXMm,
-      faceHeightMm,
-      ...(back && { back }),
-      levels,
-      ...(tongueWidthMm !== undefined && { tongueWidthMm }),
-      ...(tongueOffsetXMm !== undefined && { tongueOffsetXMm }),
-      backBadgeOffsetXMm,
-      fitLimits: [...limits],
-      totalHeightMm: levels.topMm,
-      label: opts.numberDuplicates ? String(i + 1) : undefined,
-    });
+    for (let i = 0; i < e.count; i++) {
+      copies.push({
+        entryIndex,
+        copyIndex: i,
+        baseStyle,
+        heightSlot: e.heightSlot,
+        baseWidthMm,
+        totalWidthMm,
+        baseOffsetXMm,
+        tabHeightMm: tabHMm,
+        marginMm,
+        imageWidthMm,
+        imageHeightMm,
+        imageOffsetXMm,
+        faceHeightMm,
+        ...(back && { back }),
+        levels,
+        backBadgeOffsetXMm,
+        fitLimits: [...limits],
+        totalHeightMm: levels.topMm,
+        label: opts.numberDuplicates ? String(i + 1) : undefined,
+      });
+    }
   }
 
   // A count that is not a number passes the check above but yields no copy.

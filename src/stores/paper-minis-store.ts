@@ -46,7 +46,7 @@ export type PaperMinisSettings = {
   printerMeasurementMm?: number;
   numberDuplicates: boolean;
   normalization: boolean;
-  baseStyle?: BaseStyle;
+  baseStyle: BaseStyle;
 };
 
 export type NumericInput = { text: string; valid: boolean };
@@ -96,15 +96,7 @@ function withBaseStyle(
   settings: Omit<PaperMinisSettings, 'baseStyle'> & { baseStyle?: BaseStyle },
   baseStyle: BaseStyle = settings.baseStyle ?? 'tent',
 ): PaperMinisSettings {
-  Object.defineProperty(settings, 'baseStyle', {
-    configurable: true,
-    enumerable: false,
-    value: baseStyle,
-    writable: true,
-  });
-
-  // SAFETY: defineProperty above installs the required runtime field before this return.
-  return settings as PaperMinisSettings;
+  return { ...settings, baseStyle };
 }
 
 const successMessage = 'PDF готов.';
@@ -143,26 +135,16 @@ function printerMeasurementInput(settings: Readonly<PaperMinisSettings>) {
 }
 
 function packOptions(settings: Readonly<PaperMinisSettings>): PackOptions {
-  const options: PackOptions = {
+  return {
     pageSize: settings.pageSize,
     marginMm: settings.marginMm,
     numberDuplicates: settings.numberDuplicates,
+    baseStyle: settings.baseStyle,
     printerScale:
       settings.printerMeasurementMm === undefined
         ? DEFAULT_PRINTER_SCALE
         : settings.printerMeasurementMm / 100,
   };
-
-  // Keep the new option available to the geometry and renderer without
-  // changing the enumerable shape consumed by existing store clients.
-  Object.defineProperty(options, 'baseStyle', {
-    configurable: true,
-    enumerable: false,
-    value: settings.baseStyle,
-    writable: true,
-  });
-
-  return options;
 }
 
 const exportSuccessMessage = 'Архив готов.';
@@ -926,7 +908,7 @@ export function createPaperMinisStore({
     changed();
 
     try {
-      localStorage.setItem(storageKey, JSON.stringify({ ...next, baseStyle: next.baseStyle }));
+      localStorage.setItem(storageKey, JSON.stringify(next));
     } catch {
       /* Storage is optional. */
     }

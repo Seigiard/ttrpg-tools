@@ -210,13 +210,14 @@ function drawMini(
   const iw = mm(mini.imageWidthMm);
   const offX = mm(mini.imageOffsetXMm);
   const imgH = mm(mini.imageHeightMm);
-  const flat = mini.baseStyle === 'flat';
 
   // Bottom-up: floor strip (two tabs deep), front tab, front face, margin,
   // fold, margin, back face, back tab. The figures stand straight on their
   // tabs, so a figure shorter than its face leaves paper by the fold instead.
-  const frontBottom =
-    yBottom + mm(flat ? mini.levels.frontTongueTopMm! : mini.levels.frontTabTopMm!);
+  const frontTopMm =
+    mini.baseStyle === 'flat' ? mini.levels.frontTongueTopMm : mini.levels.frontTabTopMm;
+
+  const frontBottom = yBottom + mm(frontTopMm);
 
   pdfPage.drawImage(images.front, {
     x: x + offX,
@@ -228,7 +229,7 @@ function drawMini(
   // Either way the back image fills (x + backOffX, backTop - h) to
   // (x + backOffX + backW, backTop), right under the back tab, so the figure's
   // feet touch it.
-  const backTop = yBottom + mm(mini.levels.backFaceTopMm!);
+  const backTop = yBottom + mm(mini.levels.backFaceTopMm);
   // Packing sets `mini.back` exactly when the entry has back artwork, and
   // `images.back` comes from the same artwork.
   const back: BackFace = mini.back ?? mini;
@@ -266,18 +267,20 @@ function drawMini(
   if (mini.label) {
     pdfPage.pushOperators(pushGraphicsState());
     pdfPage.pushOperators(concatTransformationMatrix(-1, 0, 0, -1, x + backOffX + backW, backTop));
-    const badgeWidthMm = flat ? mini.tongueWidthMm! : mini.baseWidthMm;
 
-    const badgeOffsetXMm = flat
-      ? mini.baseOffsetXMm + (mini.baseWidthMm - badgeWidthMm) / 2 - back.imageOffsetXMm
-      : mini.backBadgeOffsetXMm;
+    const badgeWidthMm = mini.baseStyle === 'flat' ? mini.tongueWidthMm : mini.baseWidthMm;
+
+    const badgeOffsetXMm =
+      mini.baseStyle === 'flat'
+        ? mini.baseOffsetXMm + (mini.baseWidthMm - badgeWidthMm) / 2 - back.imageOffsetXMm
+        : mini.backBadgeOffsetXMm;
 
     drawLabelBadge(
       pdfPage,
       mini.label,
       font,
       badgeWidthMm,
-      flat ? FLAT_TONGUE_DEPTH_MM : mini.tabHeightMm,
+      mini.baseStyle === 'flat' ? FLAT_TONGUE_DEPTH_MM : mini.tabHeightMm,
       mm(badgeOffsetXMm),
       0,
     );
@@ -326,10 +329,10 @@ function drawCutMarks(pdfPage: PDFPage, mini: PackedMini, x: number, yBottom: nu
   }
 
   if (mini.baseStyle === 'flat') {
-    const tongueLeft = x + mm(mini.baseOffsetXMm + (mini.baseWidthMm - mini.tongueWidthMm!) / 2);
-    const tongueRight = tongueLeft + mm(mini.tongueWidthMm!);
-    const lowerShoulder = yBottom + mm(mini.levels.frontTongueTopMm!);
-    const upperShoulder = yBottom + mm(mini.levels.backFaceTopMm!);
+    const tongueLeft = x + mm(mini.baseOffsetXMm + (mini.baseWidthMm - mini.tongueWidthMm) / 2);
+    const tongueRight = tongueLeft + mm(mini.tongueWidthMm);
+    const lowerShoulder = yBottom + mm(mini.levels.frontTongueTopMm);
+    const upperShoulder = yBottom + mm(mini.levels.backFaceTopMm);
 
     for (const [shoulder, direction] of [
       [tongueLeft, 1],
