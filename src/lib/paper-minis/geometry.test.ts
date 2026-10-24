@@ -9,7 +9,7 @@ import {
 } from './sizes.ts';
 import type { PackingEntry as Entry } from './types.ts';
 
-import { test as t } from 'bun:test';
+import { describe, test as t } from 'bun:test';
 
 t('every adjacent pair of slots prints a taller figure than the one below it', () => {
   // #given  identical artwork, so only the slot decides the height
@@ -1240,4 +1240,128 @@ t('a mini without a back artwork carries no back face geometry', () => {
   const m = packMinis([entry({})], sheetOpts).pages[0].placements[0].mini;
   // #then
   assert.deepEqual([m.back, m.faceHeightMm], [undefined, m.imageHeightMm]);
+});
+
+describe('flat base style', () => {
+  t('resolves two centred Tongues around the folded faces', () => {
+    // #given  Medium's 25 mm base and 35 mm face, with the ADR's 2 mm fold margins
+    const resolved = resolveMini(entry({}), 0, {
+      ...sheetOpts,
+      baseStyle: 'flat',
+      marginMm: 2,
+    })!;
+
+    const mini = resolved.copies[0];
+
+    // #when
+    const levels = mini.levels;
+
+    // #then  ADR-0004 specifies 6 mm Tongues, 4 mm narrower than the base
+    assert.deepEqual(
+      {
+        orientation: resolved.orientation,
+        tongue: [mini.tongueWidthMm, mini.tongueOffsetXMm],
+        levels: [
+          levels.frontTongueTopMm,
+          levels.frontFaceTopMm,
+          levels.foldMm,
+          levels.backFaceBottomMm,
+          levels.backFaceTopMm,
+          levels.topMm,
+        ],
+        totalHeightMm: mini.totalHeightMm,
+      },
+      {
+        orientation: 'upright',
+        tongue: [21, 9],
+        levels: [6, 41, 43, 45, 80, 86],
+        totalHeightMm: 86,
+      },
+    );
+  });
+
+  t('uses the flat stack when a calibrated mini reaches the page-height cap', () => {
+    // #given  140 mm calibrated artwork must shrink to the flat stack's available face height
+    const tall = entry({
+      heightSlot: 'custom',
+      customWidthMm: 10,
+      customHeightMm: 140,
+      naturalWidth: 50,
+      naturalHeight: 100,
+      calibration: { head: 0.25, feet: 0.75 },
+    });
+
+    // #when
+    const mini = resolveMini(tall, 0, {
+      ...sheetOpts,
+      baseStyle: 'flat',
+      marginMm: 2,
+    })!.copies[0];
+
+    // #then  270.27 mm usable page − 4 mm margins − two 6 mm Tongues, split between faces
+    assert.deepEqual(
+      [mini.imageHeightMm, mini.totalHeightMm, mini.fitLimits],
+      [127.13499999999999, usableH, ['page']],
+    );
+  });
+});
+
+describe('foamboard base style', () => {
+  t('resolves each Medium face as one Face and one centred Tongue', () => {
+    // #given  a Medium has a 25 mm base and a 35 mm square Face
+    const foamboardOptions = {
+      ...sheetOpts,
+      baseStyle: 'foamboard' as const,
+      marginMm: 0,
+    };
+
+    const mini = resolveMini(entry({}), 0, foamboardOptions)!.copies[0];
+
+    // #when
+    const piece = [mini.baseStyle, mini.tongueWidthMm, mini.totalHeightMm];
+
+    // #then  ADR-0004 gives foamboard one 35 mm Face and a 6 mm, 21 mm-wide Tongue
+    assert.deepEqual(piece, ['foamboard', 21, 41]);
+  });
+
+  for (const [marginMm, expectedFaceHeightMm] of [
+    [0.6, 263.07],
+    [1.1, 262.07],
+    [1.6, 261.07],
+    [2.1, 260.07],
+  ]) {
+    t(`fits a calibrated 140 mm Face at the A4 page cap with ${marginMm} mm margins`, () => {
+      // #given  A4 at 91% holds one Face, two margins and one 6 mm Tongue
+      const tall = entry({
+        heightSlot: 'custom',
+        customWidthMm: 10,
+        customHeightMm: 140,
+        naturalWidth: 50,
+        naturalHeight: 100,
+        calibration: { head: 0.25, feet: 0.75 },
+      });
+
+      // #when
+      const resolved = resolveMini(tall, 0, {
+        ...sheetOpts,
+        baseStyle: 'foamboard',
+        marginMm,
+        printerScale: 0.91,
+      })!;
+
+      const mini = resolved.copies[0];
+
+      // #then  270.27 mm = Face + two margins + one 6 mm Tongue
+      assert.deepEqual(
+        [
+          resolved.orientation,
+          mini.imageHeightMm,
+          mini.levels.topMm,
+          mini.totalHeightMm,
+          mini.fitLimits,
+        ],
+        ['upright', expectedFaceHeightMm, 270.27, 270.27, ['page']],
+      );
+    });
+  }
 });

@@ -25,6 +25,7 @@ import {
   DEFAULT_FIGURE_MARGIN_MM,
   DEFAULT_PRINTER_SCALE,
   entryStatusWarning,
+  type BaseStyle,
   type PackOptions,
   type PageSizeKey,
 } from '@/lib/paper-minis/geometry';
@@ -45,6 +46,7 @@ export type PaperMinisSettings = {
   printerMeasurementMm?: number;
   numberDuplicates: boolean;
   normalization: boolean;
+  baseStyle: BaseStyle;
 };
 
 export type NumericInput = { text: string; valid: boolean };
@@ -90,6 +92,13 @@ export type CalibrationSession = CalibrationDraft & {
 
 const storageKey = 'pmg-settings';
 
+function withBaseStyle(
+  settings: Omit<PaperMinisSettings, 'baseStyle'> & { baseStyle?: BaseStyle },
+  baseStyle: BaseStyle = settings.baseStyle ?? 'tent',
+): PaperMinisSettings {
+  return { ...settings, baseStyle };
+}
+
 const successMessage = 'PDF готов.';
 
 const failureMessage = 'Не удалось создать PDF. Попробуйте ещё раз или уменьшите изображения.';
@@ -130,6 +139,7 @@ function packOptions(settings: Readonly<PaperMinisSettings>): PackOptions {
     pageSize: settings.pageSize,
     marginMm: settings.marginMm,
     numberDuplicates: settings.numberDuplicates,
+    baseStyle: settings.baseStyle,
     printerScale:
       settings.printerMeasurementMm === undefined
         ? DEFAULT_PRINTER_SCALE
@@ -164,6 +174,7 @@ const settingsSchema = z.object({
   ),
   numberDuplicates: z.catch(z.optional(z.boolean()), undefined),
   normalization: z.catch(z.optional(z.boolean()), undefined),
+  baseStyle: z.catch(z.optional(z.enum(['tent', 'flat', 'foamboard'])), undefined),
 });
 
 function parseNumericInput(text: string, accepts: (value: number) => boolean) {
@@ -282,12 +293,12 @@ export function createPaperMinisStore({
 }: PaperMinisStoreDependencies = {}) {
   const $rows = atom<MiniRow[]>([]);
 
-  const initialSettings: PaperMinisSettings = {
+  const initialSettings = withBaseStyle({
     pageSize: 'a4',
     marginMm: DEFAULT_FIGURE_MARGIN_MM,
     numberDuplicates: false,
     normalization: true,
-  };
+  });
 
   const $settings = atom(initialSettings);
 
@@ -856,7 +867,7 @@ export function createPaperMinisStore({
 
     if (fields.normalization !== undefined) next.normalization = fields.normalization;
 
-    return next;
+    return withBaseStyle(next, fields.baseStyle ?? previous.baseStyle);
   }
 
   function applyNormalizationChange() {

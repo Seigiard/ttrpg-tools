@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { packMinis, type Placement } from './packing';
 import { fullPageAreaMm, usableAreaMm } from './geometry';
 import { HEIGHT_SLOT_ORDER } from './sizes';
@@ -368,4 +368,48 @@ test('later small minis backfill the first sheet', () => {
     [0, 0, 1],
     [0],
   ]);
+});
+
+describe('foamboard base style', () => {
+  test('interleaves each packed Front sheet with placements reflected across the page centre', () => {
+    // #given  each 200 mm Face plus its Tongue fills a sheet, making two Front/Back pairs
+    const result = packMinis(
+      [
+        {
+          heightSlot: 'custom',
+          customWidthMm: 100,
+          customHeightMm: 200,
+          naturalWidth: 1,
+          naturalHeight: 2,
+          count: 2,
+        },
+      ],
+      { pageSize: 'a4', numberDuplicates: false, baseStyle: 'foamboard', marginMm: 0 },
+    );
+
+    const pageWidthMm = fullPageAreaMm({ pageSize: 'a4' }).widthMm;
+
+    // #when
+    const pairs = Array.from({ length: Math.floor(result.pages.length / 2) }, (_, pageIndex) => {
+      const front = result.pages[pageIndex * 2].placements;
+      const back = result.pages[pageIndex * 2 + 1].placements;
+
+      return front.every((placement, placementIndex) => {
+        const reflected = back[placementIndex];
+
+        const widthMm = placement.rotated
+          ? placement.mini.totalHeightMm
+          : placement.mini.totalWidthMm;
+
+        return (
+          reflected?.yMm === placement.yMm &&
+          reflected?.rotated === placement.rotated &&
+          reflected?.xMm === pageWidthMm - placement.xMm - widthMm
+        );
+      });
+    });
+
+    // #then  the ADR reflection x' = pageWidth − x − width preserves each matching cut rectangle
+    expect({ pages: result.pages.length, pairs }).toEqual({ pages: 4, pairs: [true, true] });
+  });
 });

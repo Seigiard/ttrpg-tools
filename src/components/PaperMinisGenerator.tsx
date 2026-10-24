@@ -37,7 +37,7 @@ import { createPaperMinisStore, type CalibrationSession } from '@/stores/paper-m
 import { ARTWORK_ACCEPT, artworkMimeType } from '@/lib/paper-minis/artwork-formats';
 import { isSupportedArtwork } from '@/lib/paper-minis/artwork';
 import type { CalibrationLine } from '@/lib/paper-minis/calibration-session';
-import { entryStatusWarning } from '@/lib/paper-minis/geometry';
+import { entryStatusWarning, type BaseStyle } from '@/lib/paper-minis/geometry';
 import { buildFilename, buildPrinterScaleTestSheetFilename } from '@/lib/paper-minis/pdf-filenames';
 import {
   CUSTOM_SIZE_NAME,
@@ -71,6 +71,12 @@ const overlayButton =
 const miniatureForms = { one: 'миниатюра', few: 'миниатюры', many: 'миниатюр' };
 
 const sheetForms = { one: 'лист', few: 'листа', many: 'листов' };
+
+const baseStyleOptions: ReadonlyArray<{ value: BaseStyle; label: string }> = [
+  { value: 'tent', label: 'Складная' },
+  { value: 'flat', label: 'Плоская' },
+  { value: 'foamboard', label: 'На пенокартоне' },
+];
 
 function formatMm(value: number) {
   return value.toLocaleString('ru-RU');
@@ -472,11 +478,24 @@ export default function PaperMinisGenerator() {
   const calibration = useStore(store.$calibration);
 
   const pageLabel = settings.pageSize === 'a4' ? 'A4' : 'Letter';
+  const sheetCount = settings.baseStyle === 'foamboard' ? packed.pageCount / 2 : packed.pageCount;
+
+  const sheetSummary =
+    settings.baseStyle === 'foamboard'
+      ? `${pluralRu(sheetCount, sheetForms)} лиц + ${pluralRu(sheetCount, sheetForms)} оборотов ${pageLabel}`
+      : `${pluralRu(sheetCount, sheetForms)} ${pageLabel}`;
 
   const figuresSummary =
     [settings.normalization && 'обрезка', settings.numberDuplicates && 'нумерация']
       .filter(Boolean)
       .join(', ') || '—';
+
+  const assemblyInstruction =
+    settings.baseStyle === 'flat'
+      ? 'Вырежьте развёртку по внешним меткам, сделайте два надреза у плеч язычка, согните пополам между изображениями, склейте половинки и вставьте оба язычка в подставку.'
+      : settings.baseStyle === 'foamboard'
+        ? 'Наклейте лист лиц и лист оборотов на две стороны пенокартона по меткам совмещения и вырежьте фигурки по меткам реза на листе лиц.'
+        : undefined;
 
   const [previewUrl, setPreviewUrl] = useState<string>();
   const [dragging, setDragging] = useState(false);
@@ -669,6 +688,34 @@ export default function PaperMinisGenerator() {
                         </SelectContent>
                       </Select>
                     </div>
+                    <div className="col-span-full block text-sm text-text-muted">
+                      <Select
+                        value={settings.baseStyle}
+                        onChange={(baseStyle) => {
+                          if (
+                            baseStyle === 'tent' ||
+                            baseStyle === 'flat' ||
+                            baseStyle === 'foamboard'
+                          )
+                            store.settings({ baseStyle });
+                        }}
+                      >
+                        <Label>Стиль основы</Label>
+                        <SelectTrigger className="mbs-1">
+                          <SelectValue>
+                            {baseStyleOptions.find(({ value }) => value === settings.baseStyle)
+                              ?.label ?? 'Складная'}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {baseStyleOptions.map(({ value, label }) => (
+                            <SelectItem key={value} value={value}>
+                              {label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <label className="block text-sm text-text-muted">
                       Поля, мм
                       <input
@@ -809,8 +856,7 @@ export default function PaperMinisGenerator() {
                       aria-live="polite"
                       className="text-xs font-normal whitespace-normal opacity-85"
                     >
-                      {pluralRu(packed.miniCount, miniatureForms)} ·{' '}
-                      {pluralRu(packed.pageCount, sheetForms)} {pageLabel}
+                      {pluralRu(packed.miniCount, miniatureForms)} · {sheetSummary}
                     </span>
                   )}
                 </Button>
@@ -1167,8 +1213,12 @@ export default function PaperMinisGenerator() {
             ровно 100 мм.
           </p>
           <p>
-            <b>Вырежьте развёртку</b> по внешним меткам, согните пополам между изображениями,
-            отогните оба язычка наружу и приклейте их к полоске основания.
+            {assemblyInstruction ?? (
+              <>
+                <b>Вырежьте развёртку</b> по внешним меткам, согните пополам между изображениями,
+                отогните оба язычка наружу и приклейте их к полоске основания.
+              </>
+            )}
           </p>
         </div>
         <div className="flex flex-col gap-2">

@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 import { unzipSync, zipSync } from 'fflate';
 import { DEFAULT_CUSTOM_HEIGHT_MM, DEFAULT_CUSTOM_WIDTH_MM } from '@/lib/paper-minis/sizes';
 import type { HeightCalibration, PreparedArtwork } from '@/lib/paper-minis/types';
@@ -335,13 +335,47 @@ test('direct and loaded settings reject the same invalid fields', () => {
       marginMm: 2,
       numberDuplicates: false,
       normalization: false,
+      baseStyle: 'tent',
     },
     loaded: {
       pageSize: 'a4',
       marginMm: 2,
       numberDuplicates: false,
       normalization: false,
+      baseStyle: 'tent',
     },
+  });
+});
+
+describe('foamboard base style', () => {
+  test('accepts foamboard from direct and persisted settings while unknown values fall back to tent', () => {
+    // #given  one direct update and one stored setting for each accepted and unknown value
+    const direct = setup();
+    const loaded = setup();
+    const unknown = setup();
+    const storedUnknown = setup();
+    localStorage.setItem('pmg-settings', JSON.stringify({ baseStyle: 'foamboard' }));
+
+    // #when
+    direct.settings({ baseStyle: 'foamboard' });
+    loaded.loadSettings();
+    // SAFETY: `cardboard` exercises the schema's runtime fallback for an unknown value.
+    unknown.settings({ baseStyle: 'cardboard' as never });
+    localStorage.setItem('pmg-settings', JSON.stringify({ baseStyle: 'cardboard' }));
+    storedUnknown.loadSettings();
+
+    // #then  the Base style vocabulary is closed, with tent as the safe fallback
+    expect({
+      direct: direct.$settings.get().baseStyle,
+      loaded: loaded.$settings.get().baseStyle,
+      unknown: unknown.$settings.get().baseStyle,
+      storedUnknown: storedUnknown.$settings.get().baseStyle,
+    }).toEqual({
+      direct: 'foamboard',
+      loaded: 'foamboard',
+      unknown: 'tent',
+      storedUnknown: 'tent',
+    });
   });
 });
 
@@ -520,6 +554,7 @@ test('download renders the layout shown by the counter and returns the renderer 
       marginMm: 2,
       numberDuplicates: false,
       printerScale: 0.91,
+      baseStyle: 'tent',
     },
     busy: false,
     message: 'PDF готов.',
@@ -2044,4 +2079,48 @@ test('removing one of two sides keeps calibration', async () => {
     null,
     { head: 0.2, feet: 0.8 },
   ]);
+});
+
+describe('base style settings', () => {
+  test('uses tent for missing or unknown stored base styles and accepts flat', () => {
+    // #given  old saved settings omit the field, while a future value is not valid for this version
+    const missing = setup();
+    missing.loadSettings();
+    localStorage.setItem('pmg-settings', JSON.stringify({ baseStyle: 'cardboard' }));
+    const unknown = setup();
+    unknown.loadSettings();
+
+    const flat = setup();
+
+    // #when
+    flat.settings({ baseStyle: 'flat' });
+
+    // #then  ADR-0004 keeps tent as the whole-print default
+    expect({
+      missing: missing.$settings.get().baseStyle,
+      unknown: unknown.$settings.get().baseStyle,
+      flat: flat.$settings.get().baseStyle,
+    }).toEqual({ missing: 'tent', unknown: 'tent', flat: 'flat' });
+  });
+
+  test('passes the selected base style to the packer and PDF renderer', async () => {
+    // #given
+    let rendered: Parameters<PaperMinisRenderer> | undefined;
+
+    const store = setup(async (...input) => {
+      rendered = input;
+
+      return Uint8Array.from([1]);
+    });
+
+    const id = store.addBlank()!;
+    await store.setImage(id, artworkFile(1, 1));
+    store.settings({ baseStyle: 'flat' });
+
+    // #when
+    await store.download();
+
+    // #then
+    expect(rendered?.[2].baseStyle).toBe('flat');
+  });
 });

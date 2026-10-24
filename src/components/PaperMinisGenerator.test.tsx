@@ -329,6 +329,81 @@ test('the PDF button describes its output with Russian plural forms', async () =
   expect(summary?.textContent).toBe('1 миниатюра · 1 лист A4');
 });
 
+test('the Base style control lists every style and routes a foamboard choice to settings', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  await addFront();
+  openFold('Бумага');
+  const download = screen.getByRole('button', { name: 'Скачать PDF' });
+  const summary = document.getElementById(download.getAttribute('aria-describedby') ?? '');
+  const tentSummary = summary?.textContent;
+
+  // #when
+  const tentTrigger = screen.queryByRole('button', { name: /Складная/ });
+  fireEvent.click(tentTrigger ?? document.body);
+  const options = screen.queryAllByRole('option').map((option) => option.textContent);
+  fireEvent.click(screen.queryByRole('option', { name: 'Плоская' }) ?? document.body);
+  const flatSummary = summary?.textContent;
+  fireEvent.click(screen.queryByRole('button', { name: /Плоская/ }) ?? document.body);
+  fireEvent.click(screen.queryByRole('option', { name: 'На пенокартоне' }) ?? document.body);
+
+  // #then
+  expect({
+    options,
+    selected: screen.queryByRole('button', { name: /На пенокартоне/ })?.textContent ?? null,
+    saved: JSON.parse(localStorage.getItem('pmg-settings') ?? '{}').baseStyle ?? null,
+    summaries: [tentSummary, flatSummary, summary?.textContent],
+  }).toEqual({
+    options: ['Складная', 'Плоская', 'На пенокартоне'],
+    selected: 'На пенокартоне',
+    saved: 'foamboard',
+    summaries: [
+      '1 миниатюра · 1 лист A4',
+      '1 миниатюра · 1 лист A4',
+      '1 миниатюра · 1 лист лиц + 1 лист оборотов A4',
+    ],
+  });
+});
+
+test('the foamboard counter uses Russian plural forms for Front and Back sheets', async () => {
+  // #given
+  localStorage.setItem(
+    'pmg-settings',
+    JSON.stringify({ normalization: false, baseStyle: 'foamboard' }),
+  );
+  const tallPng = Buffer.from(png);
+  tallPng.writeUInt32BE(2, 20);
+  render(<PaperMinisGenerator />);
+  await addFront(tallPng);
+  openFold('Бумага');
+  fireEvent.change(screen.getByRole('spinbutton', { name: 'Поля, мм' }), {
+    target: { value: '0' },
+  });
+  await chooseSelectOption(screen.getByRole('button', { name: /Высота существа/ }), 'Свой размер');
+  fireEvent.change(screen.getByRole('spinbutton', { name: 'Основание, мм' }), {
+    target: { value: '100' },
+  });
+  fireEvent.change(screen.getByRole('spinbutton', { name: 'Фигурка, мм' }), {
+    target: { value: '200' },
+  });
+  const count = screen.getByRole('spinbutton', { name: 'Количество копий' });
+  const download = screen.getByRole('button', { name: 'Скачать PDF' });
+  const summary = document.getElementById(download.getAttribute('aria-describedby') ?? '');
+  const one = summary?.textContent;
+
+  // #when
+  fireEvent.change(count, { target: { value: '2' } });
+  const two = summary?.textContent;
+  fireEvent.change(count, { target: { value: '5' } });
+
+  // #then
+  expect([one, two, summary?.textContent]).toEqual([
+    '1 миниатюра · 1 лист лиц + 1 лист оборотов A4',
+    '2 миниатюры · 2 листа лиц + 2 листа оборотов A4',
+    '5 миниатюр · 5 листов лиц + 5 листов оборотов A4',
+  ]);
+});
+
 test('copy stepper changes how many minis the PDF prints and stops at one', async () => {
   // #given
   render(<PaperMinisGenerator />);

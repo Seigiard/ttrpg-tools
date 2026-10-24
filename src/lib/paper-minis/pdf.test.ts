@@ -4,7 +4,9 @@ import {
   PDFArray,
   PDFDict,
   PDFName,
+  PDFNumber,
   PDFRawStream,
+  PDFStream,
   StandardFonts,
   decodePDFRawStream,
 } from 'pdf-lib';
@@ -13,7 +15,7 @@ import { packEntries } from './packing.ts';
 import type { MiniLevels, PackOptions } from './geometry.ts';
 import type { Entry } from './types.ts';
 
-import { test as t } from 'bun:test';
+import { describe, test as t } from 'bun:test';
 
 const generatePDF = (entries: Entry[], options: PackOptions) => {
   const resolved = { ...options, printerScale: options.printerScale ?? 1 };
@@ -80,10 +82,12 @@ type Drawing = {
   role: Role;
   flipped: boolean;
   box: Box;
+  determinant?: number;
   text?: Text;
   mirror?: Mirror;
   segments?: Segment[];
   xobject?: string;
+  artworkSize?: [number, number];
   axes?: number[];
 };
 
@@ -119,11 +123,20 @@ async function read(bytes: Uint8Array, readUprightMinis = true) {
   const xobjects = new Map<string, string>();
 
   const xobject = (resources: PDFDict, name: string) => {
-    const ref = String(resources.get(PDFName.of(name.slice(1))));
+    const imageName = PDFName.of(name.slice(1));
+    const ref = String(resources.get(imageName));
+    const image = resources.lookup(imageName, PDFStream);
 
     if (!xobjects.has(ref)) xobjects.set(ref, `image-${xobjects.size}`);
 
-    return xobjects.get(ref)!;
+    return {
+      id: xobjects.get(ref)!,
+      // SAFETY: Width and Height are required PDF image XObject fields and are read as numbers above.
+      size: [
+        image.dict.lookup(PDFName.of('Width'), PDFNumber).asNumber(),
+        image.dict.lookup(PDFName.of('Height'), PDFNumber).asNumber(),
+      ] as [number, number],
+    };
   };
 
   for (const [pageIndex, page] of pdf.getPages().entries()) {
@@ -184,7 +197,9 @@ async function read(bytes: Uint8Array, readUprightMinis = true) {
           segments = [];
         }
 
-        if (op === 'Do')
+        if (op === 'Do') {
+          const imageSource = xobject(images, tokens[0]);
+
           drawings.push({
             page: pageIndex,
             role: 'image',
@@ -196,9 +211,12 @@ async function read(bytes: Uint8Array, readUprightMinis = true) {
               point(matrix, 1, 1),
             ]),
             mirror: { x: matrix[0] < 0, y: matrix[3] < 0 },
-            xobject: xobject(images, tokens[0]),
+            xobject: imageSource.id,
+            artworkSize: imageSource.size,
             axes: matrix.slice(0, 4).map((v) => Math.sign(v) || 0),
+            determinant: matrix[0] * matrix[3] - matrix[1] * matrix[2],
           });
+        }
 
         if (op === 'Tf') {
           size = n[1];
@@ -231,6 +249,9 @@ async function read(bytes: Uint8Array, readUprightMinis = true) {
               role: 'text',
               flipped,
               box: bounds([position]),
+              determinant:
+                (matrix[0] * matrix[3] - matrix[1] * matrix[2]) *
+                (textMatrix[0] * textMatrix[3] - textMatrix[1] * textMatrix[2]),
               text,
             });
         }
@@ -534,6 +555,29 @@ const unfold = (mini: Mini) => ({
   levels: mini.levels.map((level) => asMm(level.y - mini.extent.bottom)),
   kinds: mini.levels.map((level) => level.kind),
 });
+
+const localSegments = (marks: Drawing) =>
+  marks
+    .segments!.map(([start, end]) => [
+      [asMm(start.x - marks.box.left), asMm(start.y - marks.box.bottom)],
+      [asMm(end.x - marks.box.left), asMm(end.y - marks.box.bottom)],
+    ])
+    .map(([start, end]) =>
+      start[0] < end[0] || (start[0] === end[0] && start[1] <= end[1])
+        ? [start, end]
+        : [end, start],
+    );
+
+const shoulderSegments = (marks: Drawing, xs: readonly number[], ys: readonly number[]) =>
+  localSegments(marks)
+    .filter(([start, end]) => [start, end].some(([x, y]) => xs.includes(x) && ys.includes(y)))
+    .toSorted(
+      ([leftStart, leftEnd], [rightStart, rightEnd]) =>
+        leftStart[0] - rightStart[0] ||
+        leftStart[1] - rightStart[1] ||
+        leftEnd[0] - rightEnd[0] ||
+        leftEnd[1] - rightEnd[1],
+    );
 
 t('a Tiny prints its number once, upright from behind, on the back tab', async () => {
   // #given
@@ -1310,4 +1354,441 @@ t('one sheet mixes reflected and rotated backs, and waits for a back still loadi
       [{ x: false, y: true }, 35],
     ],
   );
+});
+
+describe('flat base style', () => {
+  t('puts every Tongue shoulder-mark arm on its cut line', async () => {
+    // #given  a numbered Medium has a 21 mm Tongue centred 9 mm from the piece edge
+    const sheet = await read(
+      await generatePDF([{ ...entry, heightSlot: 'medium' }], {
+        pageSize: 'a4',
+        baseStyle: 'flat',
+        numberDuplicates: true,
+        marginMm: 2,
+      }),
+      false,
+    );
+
+    const marks = sheet.drawings.find(
+      (drawing) =>
+        drawing.page === 0 && drawing.role === 'marks' && (drawing.segments?.length ?? 0) > 2,
+    )!;
+
+    // #when
+    const shoulders = shoulderSegments(marks, [9, 30], [6, 80]);
+
+    // #then  each horizontal arm leaves the Tongue and each vertical arm runs to its free end
+    assert.deepEqual(shoulders, [
+      [
+        [7.5, 6],
+        [9, 6],
+      ],
+      [
+        [7.5, 80],
+        [9, 80],
+      ],
+      [
+        [9, 4.5],
+        [9, 6],
+      ],
+      [
+        [9, 80],
+        [9, 81.5],
+      ],
+      [
+        [30, 4.5],
+        [30, 6],
+      ],
+      [
+        [30, 6],
+        [31.5, 6],
+      ],
+      [
+        [30, 80],
+        [30, 81.5],
+      ],
+      [
+        [30, 80],
+        [31.5, 80],
+      ],
+    ]);
+  });
+
+  t('prints a readable back badge in the 6 mm Tongue and marks both shoulders', async () => {
+    // #given  a numbered Medium mini with its default reflected back
+    const {
+      minis: [mini],
+    } = await read(
+      await generatePDF([{ ...entry, heightSlot: 'medium' }], {
+        pageSize: 'a4',
+        baseStyle: 'flat',
+        numberDuplicates: true,
+        marginMm: 2,
+      }),
+    );
+
+    // #when
+    const backTongue = { bottom: mini.extent.top - 6 * PT_PER_MM, top: mini.extent.top };
+    // #then  ADR-0004 puts the label on the back Tongue and uses inward shoulder corners
+    assert.deepEqual(
+      {
+        unfold: unfold(mini),
+        marksStayInward: mini.inward,
+        badgeInBackTongue:
+          mini.back.badge!.bottom > backTongue.bottom && mini.back.badge!.top < backTongue.top,
+        readable: mini.back.text!.size >= 6,
+      },
+      {
+        unfold: {
+          levels: [0, 6, 43, 80, 86],
+          kinds: ['corner', 'corner', 'tick', 'corner', 'corner'],
+        },
+        marksStayInward: true,
+        badgeInBackTongue: true,
+        readable: true,
+      },
+    );
+  });
+
+  t('keeps an oversized upright flat mini whole after rotating its placement', async () => {
+    // #given  10:1 artwork is too wide upright but its 58 mm flat stack fits when turned
+    const wideFlat: Entry = {
+      ...entry,
+      heightSlot: 'custom',
+      customWidthMm: 20,
+      customHeightMm: 140,
+      artwork: { ...artwork, width: 10, height: 1 },
+    };
+
+    // #when
+    const sheet = await read(
+      await generatePDF([wideFlat], {
+        pageSize: 'a4',
+        baseStyle: 'flat',
+        numberDuplicates: true,
+      }),
+      false,
+    );
+
+    const marks = sheet.drawings.find((drawing) => drawing.role === 'marks')!;
+
+    const drawn = sheet.drawings.filter(
+      (drawing) => drawing.role === 'image' || drawing.role === 'badge',
+    );
+
+    // #then  every face and the duplicate badge are inside the turned cut-out
+    assert.deepEqual(
+      {
+        pages: sheet.pages,
+        rotatedHeightMm: widthMm(marks.box),
+        drawnWhole: drawn.every((drawing) => inside(drawing.box, marks.box)),
+      },
+      { pages: 1, rotatedHeightMm: 58, drawnWhole: true },
+    );
+  });
+});
+
+describe('foamboard base style', () => {
+  const foamboardOptions = {
+    pageSize: 'a4' as const,
+    numberDuplicates: true,
+    marginMm: 0,
+    baseStyle: 'foamboard' as const,
+  };
+
+  t('puts each foamboard Tongue shoulder-mark arm on its cut line', async () => {
+    // #given  a Medium foamboard piece has a 21 mm Tongue from 7 to 28 mm
+    const sheet = await read(
+      await generatePDF([{ ...entry, heightSlot: 'medium' }], foamboardOptions),
+      false,
+    );
+
+    const marks = sheet.drawings.find(
+      (drawing) =>
+        drawing.page === 0 && drawing.role === 'marks' && (drawing.segments?.length ?? 0) > 2,
+    )!;
+
+    // #when
+    const shoulders = shoulderSegments(marks, [7, 28], [6]);
+
+    // #then  the top arms leave the Tongue and the side arms continue to its free end
+    assert.deepEqual(shoulders, [
+      [
+        [5.5, 6],
+        [7, 6],
+      ],
+      [
+        [7, 4.5],
+        [7, 6],
+      ],
+      [
+        [28, 4.5],
+        [28, 6],
+      ],
+      [
+        [28, 6],
+        [29.5, 6],
+      ],
+    ]);
+  });
+
+  t(
+    'prints a mirrored Back sheet behind its Front sheet and reserves the same scale-bar band',
+    async () => {
+      // #given  one Medium with no back artwork, so the Back must use mirrored front artwork
+      const sheet = await read(
+        await generatePDF([{ ...entry, heightSlot: 'medium' }], foamboardOptions),
+        false,
+      );
+
+      const images = sheet.drawings.filter((drawing) => drawing.role === 'image');
+      const front = images.filter((drawing) => drawing.page === 0);
+      const back = images.filter((drawing) => drawing.page === 1);
+      const pageWidth = sheet.pageSizes[0]?.width;
+
+      // #when
+      const reflectedFront = front.map(({ box }) => [
+        asMm(pageWidth! - box.right),
+        asMm(box.bottom),
+        asMm(pageWidth! - box.left),
+        asMm(box.top),
+      ]);
+
+      // #then  the second page is the Front placement reflected left-to-right, with no vertical shift
+      assert.deepEqual(
+        {
+          pages: sheet.pages,
+          front: front.map(({ mirror }) => mirror),
+          back: back.map(({ mirror, box }) => ({
+            mirror,
+            box: [asMm(box.left), asMm(box.bottom), asMm(box.right), asMm(box.top)],
+          })),
+        },
+        {
+          pages: 2,
+          front: [{ x: false, y: false }],
+          back: reflectedFront.map((box) => ({ mirror: { x: true, y: false }, box })),
+        },
+      );
+    },
+  );
+
+  t('reflects the Back image box of a rotated foamboard mini across the page centre', async () => {
+    // #given  a 10:1 custom mini is too wide upright but fits when the packer turns it clockwise
+    const oversizedUpright: Entry = {
+      ...entry,
+      heightSlot: 'custom',
+      customWidthMm: 20,
+      customHeightMm: 140,
+      artwork: { ...artwork, width: 10, height: 1 },
+    };
+
+    // #when
+    const sheet = await read(
+      await generatePDF([oversizedUpright], { ...foamboardOptions, marginMm: 2 }),
+      false,
+    );
+
+    const front = sheet.drawings.find((drawing) => drawing.page === 0 && drawing.role === 'image')!;
+    const back = sheet.drawings.find((drawing) => drawing.page === 1 && drawing.role === 'image')!;
+    const pageWidth = sheet.pageSizes[0]!.width;
+
+    // #then  stacking Front and Back aligns the turned Face through the board
+    assert.deepEqual(
+      {
+        frontAxes: front.axes,
+        backBox: [
+          asMm(back.box.left),
+          asMm(back.box.bottom),
+          asMm(back.box.right),
+          asMm(back.box.top),
+        ],
+      },
+      {
+        frontAxes: [0, -1, 1, 0],
+        backBox: [
+          asMm(pageWidth - front.box.right),
+          asMm(front.box.bottom),
+          asMm(pageWidth - front.box.left),
+          asMm(front.box.top),
+        ],
+      },
+    );
+  });
+
+  t(
+    'keeps supplied Back art and the duplicate badge readable on a rotated foamboard mini',
+    async () => {
+      // #given  the oversized upright mini is packed clockwise with supplied back artwork
+      const oversizedUpright: Entry = {
+        ...entry,
+        heightSlot: 'custom',
+        customWidthMm: 20,
+        customHeightMm: 140,
+        artwork: { ...artwork, width: 10, height: 1 },
+        backImage: new File([], 'back.png'),
+        backArtwork: { ...artwork, width: 10, height: 1 },
+      };
+
+      // #when
+      const sheet = await read(
+        await generatePDF([oversizedUpright], { ...foamboardOptions, marginMm: 2 }),
+        false,
+      );
+
+      const front = sheet.drawings.find(
+        (drawing) => drawing.page === 0 && drawing.role === 'image',
+      )!;
+
+      const back = sheet.drawings.find(
+        (drawing) => drawing.page === 1 && drawing.role === 'image',
+      )!;
+
+      const badge = sheet.drawings.find(
+        (drawing) => drawing.page === 1 && drawing.role === 'text' && drawing.text?.label === '1',
+      )!;
+
+      const pageWidth = sheet.pageSizes[0]!.width;
+
+      // #then  stacking the sheets preserves placement while the supplied art and digit stay readable
+      assert.deepEqual(
+        {
+          backArtDeterminant: Math.sign(back.determinant!),
+          badgeTextDeterminant: Math.sign(badge.determinant!),
+          backBox: [
+            asMm(back.box.left),
+            asMm(back.box.bottom),
+            asMm(back.box.right),
+            asMm(back.box.top),
+          ],
+        },
+        {
+          backArtDeterminant: 1,
+          badgeTextDeterminant: 1,
+          backBox: [
+            asMm(pageWidth - front.box.right),
+            asMm(front.box.bottom),
+            asMm(pageWidth - front.box.left),
+            asMm(front.box.top),
+          ],
+        },
+      );
+    },
+  );
+
+  t(
+    'puts the duplicate badge on the Back Tongue and draws cut marks only on the Front',
+    async () => {
+      // #given  one numbered Medium foamboard mini
+      const sheet = await read(
+        await generatePDF([{ ...entry, heightSlot: 'medium' }], foamboardOptions),
+        false,
+      );
+
+      // #when
+      const byPage = [0, 1].map((page) => ({
+        badges: sheet.drawings.filter(
+          (drawing) => drawing.page === page && drawing.role === 'badge',
+        ).length,
+        labels: sheet.texts
+          .filter(
+            (text) =>
+              text.position &&
+              sheet.drawings.some(
+                (drawing) =>
+                  drawing.page === page && drawing.role === 'text' && drawing.text === text,
+              ),
+          )
+          .map((text) => text.label),
+        cutPaths: sheet.drawings.filter(
+          (drawing) =>
+            drawing.page === page &&
+            drawing.role === 'marks' &&
+            (drawing.segments?.length ?? 0) > 2,
+        ).length,
+      }));
+
+      const registrationAtCorners = [0, 1].map((page) => {
+        const pageSize = sheet.pageSizes[page] ?? { width: 0, height: 0 };
+
+        const segments = sheet.drawings
+          .filter((drawing) => drawing.page === page && drawing.role === 'marks')
+          .flatMap((drawing) => drawing.segments ?? []);
+
+        return [
+          [0, 0],
+          [0, pageSize.height],
+          [pageSize.width, 0],
+          [pageSize.width, pageSize.height],
+        ].map(
+          ([cornerX, cornerY]) =>
+            segments.filter(
+              ([start, end]) =>
+                Math.max(
+                  Math.abs(start.x - cornerX),
+                  Math.abs(start.y - cornerY),
+                  Math.abs(end.x - cornerX),
+                  Math.abs(end.y - cornerY),
+                ) <=
+                10 * PT_PER_MM,
+            ).length >= 2,
+        );
+      });
+
+      // #then  the player cuts from the Front; the number identifies the separate Back piece
+      assert.deepEqual(
+        { byPage, registrationAtCorners },
+        {
+          byPage: [
+            { badges: 0, labels: [], cutPaths: 1 },
+            { badges: 1, labels: ['1'], cutPaths: 0 },
+          ],
+          registrationAtCorners: [
+            [true, true, true, true],
+            [true, true, true, true],
+          ],
+        },
+      );
+    },
+  );
+
+  t('uses supplied Back artwork without mirroring it', async () => {
+    // #given  distinct front and back artwork for one Medium
+    const sheet = await read(await generatePDF([withBack], foamboardOptions), false);
+    const images = sheet.drawings.filter((drawing) => drawing.role === 'image');
+
+    // #when
+    const sides = [0, 1].map((page) =>
+      images
+        .filter((drawing) => drawing.page === page)
+        .map(({ artworkSize, mirror }) => ({ artworkSize, mirror })),
+    );
+
+    // #then  the Back sheet uses the 3×2 supplied artwork, not the 1×1 Front image drawn before it
+    assert.deepEqual(sides, [
+      [{ artworkSize: [1, 1], mirror: { x: false, y: false } }],
+      [{ artworkSize: [3, 2], mirror: { x: false, y: false } }],
+    ]);
+  });
+
+  t('keeps the Back-sheet badge inside the back piece Tongue', async () => {
+    // #given  the mirrored Back of a zero-margin Medium has a 21×6 mm Tongue at 182–203 mm
+    const sheet = await read(
+      await generatePDF([{ ...entry, heightSlot: 'medium' }], foamboardOptions),
+      false,
+    );
+
+    const badge = sheet.drawings.find((drawing) => drawing.page === 1 && drawing.role === 'badge')!;
+
+    // #when
+    const backTongue = {
+      left: 182 * PT_PER_MM,
+      bottom: 246 * PT_PER_MM,
+      right: 203 * PT_PER_MM,
+      top: 252 * PT_PER_MM,
+    };
+
+    // #then  ADR-0004 keeps the duplicate number within the back piece's Tongue
+    assert.equal(inside(badge.box, backTongue), true);
+  });
 });
