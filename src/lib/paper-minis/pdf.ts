@@ -115,32 +115,53 @@ export async function generatePDF(
 
   const { w: pageWmm, h: pageHmm } = PAGE_SIZES_MM[opts.pageSize];
   const scale = printerScale(opts);
+  const scaledPageWmm = pageWmm * scale;
   const scaledPageHmm = pageHmm * scale;
 
   for (const [pageIndex, page] of layout.pages.entries()) {
     const pdfPage = pdf.addPage([mm(pageWmm), mm(pageHmm)]);
+    const foamboard = opts.baseStyle === 'foamboard';
+    const backSheet = foamboard && pageIndex % 2 === 1;
+    const hasScaleBarBand = pageIndex === 0 || (foamboard && pageIndex === 1);
     pdfPage.pushOperators(
       pushGraphicsState(),
       concatTransformationMatrix(1 / scale, 0, 0, 1 / scale, 0, 0),
     );
-    const layoutTopMm = scaledPageHmm - (pageIndex === 0 ? SCALE_BAR_BAND_MM : 0);
+    const layoutTopMm = scaledPageHmm - (hasScaleBarBand ? SCALE_BAR_BAND_MM : 0);
 
     for (const { mini, xMm, yMm, rotated } of page.placements) {
+      const images = faces.get(mini.entryIndex);
+
+      if (!images) throw new Error('Layout refers to an entry without prepared artwork.');
+
       if (rotated) {
         // Turn the whole local drawing clockwise about the footprint's top-left.
-        pdfPage.pushOperators(
-          pushGraphicsState(),
-          concatTransformationMatrix(0, -1, 1, 0, mm(xMm), mm(layoutTopMm - yMm)),
-        );
-        drawMini(pdfPage, mini, faces.get(mini.entryIndex)!, 0, mini.totalHeightMm, font);
+        // A Back sheet turns it counter-clockwise so the Tongue moves to the
+        // reflected side without mirroring supplied artwork or badge text.
+        const transform = backSheet
+          ? concatTransformationMatrix(
+              0,
+              1,
+              -1,
+              0,
+              mm(xMm + mini.totalHeightMm),
+              mm(layoutTopMm - yMm - mini.totalWidthMm),
+            )
+          : concatTransformationMatrix(0, -1, 1, 0, mm(xMm), mm(layoutTopMm - yMm));
+
+        pdfPage.pushOperators(pushGraphicsState(), transform);
+        drawMini(pdfPage, mini, images, 0, mini.totalHeightMm, font, backSheet);
         pdfPage.pushOperators(popGraphicsState());
         continue;
       }
 
-      drawMini(pdfPage, mini, faces.get(mini.entryIndex)!, xMm, layoutTopMm - yMm, font);
+      drawMini(pdfPage, mini, images, xMm, layoutTopMm - yMm, font, backSheet);
     }
 
     if (pageIndex === 0) drawScaleBar(pdfPage, scaledPageHmm, noteFont);
+
+    if (foamboard) drawRegistrationMarks(pdfPage, scaledPageWmm, scaledPageHmm);
+
     pdfPage.pushOperators(popGraphicsState());
   }
 
@@ -203,7 +224,14 @@ function drawMini(
   xMm: number,
   yTopMm: number,
   font: PDFFont,
+  backSheet: boolean,
 ) {
+  if (mini.baseStyle === 'foamboard') {
+    drawFoamboardMini(pdfPage, mini, images, xMm, yTopMm, font, backSheet);
+
+    return;
+  }
+
   const yBottomMm = yTopMm - mini.totalHeightMm;
   const x = mm(xMm);
   const yBottom = mm(yBottomMm);
@@ -290,6 +318,79 @@ function drawMini(
   drawCutMarks(pdfPage, mini, x, yBottom);
 }
 
+function drawFoamboardMini(
+  pdfPage: PDFPage,
+  mini: Extract<PackedMini, { baseStyle: 'foamboard' }>,
+  images: FaceImages,
+  xMm: number,
+  yTopMm: number,
+  font: PDFFont,
+  backSheet: boolean,
+) {
+  const yBottomMm = yTopMm - mini.totalHeightMm;
+  const x = mm(xMm);
+  const yBottom = mm(yBottomMm);
+
+  const imageWidthMm = backSheet
+    ? (mini.back?.imageWidthMm ?? mini.imageWidthMm)
+    : mini.imageWidthMm;
+
+  const imageHeightMm = backSheet
+    ? (mini.back?.imageHeightMm ?? mini.imageHeightMm)
+    : mini.imageHeightMm;
+
+  const imageOffsetXMm = backSheet
+    ? (mini.back?.imageOffsetXMm ?? mini.imageOffsetXMm)
+    : mini.imageOffsetXMm;
+
+  const imageBottomMm = yBottomMm + mini.levels.frontTongueTopMm + mini.marginMm;
+  const image = backSheet ? (images.back ?? images.front) : images.front;
+
+  pdfPage.pushOperators(pushGraphicsState());
+
+  if (backSheet && !images.back) {
+    pdfPage.pushOperators(
+      concatTransformationMatrix(
+        -1,
+        0,
+        0,
+        1,
+        x + mm(imageOffsetXMm + imageWidthMm),
+        mm(imageBottomMm),
+      ),
+    );
+    pdfPage.drawImage(image, {
+      x: 0,
+      y: 0,
+      width: mm(imageWidthMm),
+      height: mm(imageHeightMm),
+    });
+  } else {
+    pdfPage.drawImage(image, {
+      x: x + mm(imageOffsetXMm),
+      y: mm(imageBottomMm),
+      width: mm(imageWidthMm),
+      height: mm(imageHeightMm),
+    });
+  }
+
+  pdfPage.pushOperators(popGraphicsState());
+
+  if (backSheet && mini.label) {
+    drawLabelBadge(
+      pdfPage,
+      mini.label,
+      font,
+      mini.tongueWidthMm,
+      FLAT_TONGUE_DEPTH_MM,
+      x + mm(mini.tongueOffsetXMm),
+      yBottom + mm(mini.levels.frontTongueTopMm),
+    );
+  }
+
+  if (!backSheet) drawCutMarks(pdfPage, mini, x, yBottom);
+}
+
 // Cut marks drawn on the piece's own edges, so neighbours can share a cut
 // line with no gap between them. Each arm runs along a cut edge or a fold,
 // where a line belongs anyway, so nothing stray is left once the piece is cut.
@@ -343,6 +444,18 @@ function drawCutMarks(pdfPage: PDFPage, mini: PackedMini, x: number, yBottom: nu
       segment(shoulder, upperShoulder, shoulder + direction * arm, upperShoulder);
       segment(shoulder, upperShoulder, shoulder, upperShoulder - arm);
     }
+  } else if (mini.baseStyle === 'foamboard') {
+    const tongueLeft = x + mm(mini.tongueOffsetXMm);
+    const tongueRight = tongueLeft + mm(mini.tongueWidthMm);
+    const tongueTop = yBottom + mm(mini.levels.frontTongueTopMm);
+
+    for (const [shoulder, direction] of [
+      [tongueLeft, 1],
+      [tongueRight, -1],
+    ] as const) {
+      segment(shoulder, tongueTop, shoulder + direction * arm, tongueTop);
+      segment(shoulder, tongueTop, shoulder, tongueTop + arm);
+    }
   }
 
   ops.push(stroke(), popGraphicsState());
@@ -389,6 +502,29 @@ function drawScaleBar(pdfPage: PDFPage, pageHmm: number, font: PDFFont) {
     font,
     color,
   });
+}
+
+function drawRegistrationMarks(pdfPage: PDFPage, pageWmm: number, pageHmm: number) {
+  const corners = [
+    [0, 0, 1, 1],
+    [pageWmm, 0, -1, 1],
+    [0, pageHmm, 1, -1],
+    [pageWmm, pageHmm, -1, -1],
+  ] as const;
+
+  for (const [xMm, yMm, xDirection, yDirection] of corners) {
+    pdfPage.pushOperators(
+      pushGraphicsState(),
+      setLineWidth(mm(CUT_MARK_STROKE_MM)),
+      setStrokingGrayscaleColor(MARK_GREY),
+      moveTo(mm(xMm), mm(yMm)),
+      lineTo(mm(xMm + xDirection * 3), mm(yMm)),
+      moveTo(mm(xMm), mm(yMm)),
+      lineTo(mm(xMm), mm(yMm + yDirection * 3)),
+      stroke(),
+      popGraphicsState(),
+    );
+  }
 }
 
 // Draws a white number badge below the base's right edge. boxX is the base's
