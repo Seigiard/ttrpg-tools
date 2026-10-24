@@ -10,12 +10,6 @@ import {
   Trash2Icon,
   XIcon,
 } from 'lucide-react';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenuContent,
@@ -33,6 +27,7 @@ import {
   SelectValue,
   selectItemClassName,
 } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { createPaperMinisStore, type CalibrationSession } from '@/stores/paper-minis-store';
 import { ARTWORK_ACCEPT, artworkMimeType } from '@/lib/paper-minis/artwork-formats';
 import { isSupportedArtwork } from '@/lib/paper-minis/artwork';
@@ -53,11 +48,6 @@ import { cn } from '@/lib/utils';
 const field =
   'min-h-11 w-full rounded-lg border border-border bg-surface-elevated px-3 text-text focus-visible:outline-2 focus-visible:outline-primary';
 
-const foldTrigger =
-  'min-h-12 items-center gap-2 py-0 font-sans text-base font-normal hover:no-underline **:data-[slot=accordion-trigger-icon]:ms-0';
-
-const foldValue = 'ms-auto truncate text-sm text-text-muted';
-
 const rowField =
   'inline-flex h-10 items-center rounded-md border border-border bg-surface text-sm text-text';
 
@@ -77,6 +67,12 @@ const baseStyleOptions: ReadonlyArray<{ value: BaseStyle; label: string }> = [
   { value: 'flat', label: 'Плоская' },
   { value: 'foamboard', label: 'На пенокартоне' },
 ];
+
+const baseStyleSummary: Record<BaseStyle, string> = {
+  tent: 'складная',
+  flat: 'плоская',
+  foamboard: 'на пенокартоне',
+};
 
 function formatMm(value: number) {
   return value.toLocaleString('ru-RU');
@@ -485,10 +481,22 @@ export default function PaperMinisGenerator() {
       ? `${pluralRu(sheetCount, sheetForms)} лиц + ${pluralRu(sheetCount, sheetForms)} оборотов ${pageLabel}`
       : `${pluralRu(sheetCount, sheetForms)} ${pageLabel}`;
 
-  const figuresSummary =
+  const settingsSummary = [
+    pageLabel,
+    `поля ${formatMm(settings.marginMm)} мм`,
+    baseStyleSummary[settings.baseStyle],
     [settings.normalization && 'обрезка', settings.numberDuplicates && 'нумерация']
       .filter(Boolean)
-      .join(', ') || '—';
+      .join(', '),
+    settings.printerMeasurementMm === undefined
+      ? undefined
+      : `масштаб ${formatMm(settings.printerMeasurementMm)} мм`,
+  ]
+    .filter((segment): segment is string => Boolean(segment))
+    .join(' · ');
+
+  const totalSummary =
+    rows.length > 0 ? `${pluralRu(packed.miniCount, miniatureForms)} · ${sheetSummary}` : '—';
 
   const assemblyInstruction =
     settings.baseStyle === 'flat'
@@ -499,11 +507,26 @@ export default function PaperMinisGenerator() {
 
   const [previewUrl, setPreviewUrl] = useState<string>();
   const [dragging, setDragging] = useState(false);
+  const [headerOutOfView, setHeaderOutOfView] = useState(false);
+  const headerRef = useRef<HTMLDivElement>(null);
   const files = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     store.loadSettings();
   }, [store]);
+  useEffect(() => {
+    const header = headerRef.current;
+
+    if (!header || typeof IntersectionObserver === 'undefined') return;
+
+    const observer = new IntersectionObserver(([entry]) => {
+      setHeaderOutOfView(!entry.isIntersecting);
+    });
+
+    observer.observe(header);
+
+    return () => observer.disconnect();
+  }, []);
   useEffect(() => {
     if (!preview) {
       setPreviewUrl(undefined);
@@ -653,173 +676,175 @@ export default function PaperMinisGenerator() {
         disabled={busy}
         className="min-w-0 disabled:opacity-60"
       >
-        <div className="minis-layout">
-          <div className="minis-settings">
-            <aside className="rounded-lg border border-border bg-surface-elevated p-4">
-              <h2 className="mbe-2 text-xl text-text">Настройки</h2>
-              <Accordion className="border-y border-border">
-                <AccordionItem value="paper">
-                  <AccordionTrigger className={foldTrigger}>
-                    Бумага
-                    <span className={foldValue}>
-                      {pageLabel} · поля {formatMm(settings.marginMm)} мм
-                    </span>
-                  </AccordionTrigger>
-                  <AccordionContent className="grid grid-cols-[1.4fr_1fr] gap-2 pbe-4">
-                    <div className="block text-sm text-text-muted">
-                      <Select
-                        value={settings.pageSize}
-                        onChange={(pageSize) => {
-                          if (pageSize === 'a4' || pageSize === 'letter')
-                            store.settings({ pageSize });
-                        }}
-                      >
-                        <Label>Формат</Label>
-                        <SelectTrigger className="mbs-1">
-                          <SelectValue>{pageLabel}</SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="a4" title="210 × 297 мм">
-                            A4
-                          </SelectItem>
-                          <SelectItem value="letter" title="216 × 279 мм">
-                            Letter
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="col-span-full block text-sm text-text-muted">
-                      <Select
-                        value={settings.baseStyle}
-                        onChange={(baseStyle) => {
-                          if (
-                            baseStyle === 'tent' ||
-                            baseStyle === 'flat' ||
-                            baseStyle === 'foamboard'
-                          )
-                            store.settings({ baseStyle });
-                        }}
-                      >
-                        <Label>Стиль основы</Label>
-                        <SelectTrigger className="mbs-1">
-                          <SelectValue>
-                            {baseStyleOptions.find(({ value }) => value === settings.baseStyle)
-                              ?.label ?? 'Складная'}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {baseStyleOptions.map(({ value, label }) => (
-                            <SelectItem key={value} value={value}>
-                              {label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <label className="block text-sm text-text-muted">
-                      Поля, мм
-                      <input
-                        className={`${field} mbs-1`}
-                        type="number"
-                        min="0"
-                        step="any"
-                        required
-                        value={inputs.margin.text}
-                        aria-invalid={!inputs.margin.valid}
-                        onChange={(event) => store.setMargin(event.target.value)}
-                        onBlur={store.commitMargin}
-                      />
-                    </label>
-                  </AccordionContent>
-                </AccordionItem>
-                <AccordionItem value="figures">
-                  <AccordionTrigger className={foldTrigger}>
-                    Фигурки
-                    <span className={foldValue}>{figuresSummary}</span>
-                  </AccordionTrigger>
-                  <AccordionContent className="pbe-2">
-                    <label className="flex min-h-11 items-center gap-3 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={settings.numberDuplicates}
-                        onChange={(event) =>
-                          store.settings({ numberDuplicates: event.target.checked })
-                        }
-                      />
-                      Нумеровать копии
-                    </label>
-                    <label className="flex min-h-11 items-center gap-3 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={settings.normalization}
-                        onChange={(event) =>
-                          store.settings({ normalization: event.target.checked })
-                        }
-                      />
-                      Обрезать пустые поля
-                    </label>
-                  </AccordionContent>
-                </AccordionItem>
-                <AccordionItem value="scale">
-                  <AccordionTrigger className={foldTrigger}>
-                    Масштаб
-                    <span className={foldValue}>
-                      {settings.printerMeasurementMm === undefined
-                        ? 'по умолчанию'
-                        : `подогнан · ${formatMm(settings.printerMeasurementMm)} мм`}
-                    </span>
-                  </AccordionTrigger>
-                  <AccordionContent className="flex flex-col gap-3 pbe-4 leading-relaxed">
-                    <p className="text-text-muted">
-                      Если фигурки печатаются чуть меньше или больше нужного:
-                    </p>
-                    <p>
-                      Распечатайте{' '}
-                      <Button
-                        variant="link"
-                        aria-label="Скачать тестовый лист"
-                        className="h-auto min-h-11 px-1 underline underline-offset-3"
-                        onClick={() => void downloadPrinterScaleTestSheet()}
-                      >
-                        тестовый лист
-                      </Button>{' '}
-                      и измерьте линейку на нём.
-                    </p>
-                    <div className="grid grid-cols-[auto_minmax(0,6rem)_auto] items-center justify-start gap-2">
-                      <span id="printer-measurement-label">Вышло</span>
-                      <input
-                        className={`${field} text-end`}
-                        type="number"
-                        min="80"
-                        max="100"
-                        step="any"
-                        placeholder="100"
-                        aria-labelledby="printer-measurement-label printer-measurement-unit"
-                        value={inputs.printerMeasurement.text}
-                        aria-invalid={!inputs.printerMeasurement.valid}
-                        onChange={(event) => store.setPrinterMeasurement(event.target.value)}
-                        onBlur={store.commitPrinterMeasurement}
-                      />
-                      <span
-                        id="printer-measurement-unit"
-                        className="whitespace-nowrap text-text-muted"
-                      >
-                        из 100 мм
-                      </span>
-                    </div>
-                    {settings.printerMeasurementMm !== undefined && (
-                      <Button
-                        variant="ghost"
-                        className="min-h-11 w-full"
-                        onClick={() => store.setPrinterMeasurement('')}
-                      >
-                        Сбросить измерение
-                      </Button>
+        <div className="minis-editor">
+          <div ref={headerRef} className="minis-header-card">
+            <div className="minis-header-mini">
+              <div className="minis-header-mini-drawing" aria-hidden="true">
+                <span className="minis-header-mini-figure">♙</span>
+                <span className="minis-header-mini-base" />
+              </div>
+              <p>как собрать одну фигурку</p>
+            </div>
+
+            <div className="minis-header-fields">
+              <div className="block text-sm text-text-muted">
+                <Select
+                  value={settings.pageSize}
+                  onChange={(pageSize) => {
+                    if (pageSize === 'a4' || pageSize === 'letter') store.settings({ pageSize });
+                  }}
+                >
+                  <Label>Формат</Label>
+                  <SelectTrigger className="mbs-1">
+                    <SelectValue>{pageLabel}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="a4" title="210 × 297 мм">
+                      A4
+                    </SelectItem>
+                    <SelectItem value="letter" title="216 × 279 мм">
+                      Letter
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <label className="block text-sm text-text-muted">
+                Поля, мм
+                <input
+                  className={`${field} mbs-1`}
+                  type="number"
+                  min="0"
+                  step="any"
+                  required
+                  value={inputs.margin.text}
+                  aria-invalid={!inputs.margin.valid}
+                  onChange={(event) => store.setMargin(event.target.value)}
+                  onBlur={store.commitMargin}
+                />
+              </label>
+              <div className="block text-sm text-text-muted">
+                <Select
+                  value={settings.baseStyle}
+                  onChange={(baseStyle) => {
+                    if (baseStyle === 'tent' || baseStyle === 'flat' || baseStyle === 'foamboard')
+                      store.settings({ baseStyle });
+                  }}
+                >
+                  <Label>Стиль основы</Label>
+                  <SelectTrigger className="mbs-1">
+                    <SelectValue>
+                      {baseStyleOptions.find(({ value }) => value === settings.baseStyle)?.label ??
+                        'Складная'}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {baseStyleOptions.map(({ value, label }) => (
+                      <SelectItem key={value} value={value}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="minis-header-footer">
+              <label className="flex min-h-11 items-center gap-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={settings.numberDuplicates}
+                  onChange={(event) => store.settings({ numberDuplicates: event.target.checked })}
+                />
+                Нумеровать копии
+              </label>
+              <label className="flex min-h-11 items-center gap-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={settings.normalization}
+                  onChange={(event) => store.settings({ normalization: event.target.checked })}
+                />
+                Обрезать пустые поля
+              </label>
+              <div className="ms-auto">
+                <PopoverTrigger
+                  onOpenChange={(open) => {
+                    if (!open) store.commitPrinterMeasurement();
+                  }}
+                >
+                  <Button variant="ghost" className="min-h-11">
+                    {settings.printerMeasurementMm === undefined ? (
+                      'Масштаб ▾'
+                    ) : (
+                      <>
+                        Масштаб <span className="text-primary">·</span>{' '}
+                        {formatMm(settings.printerMeasurementMm)} мм ▾
+                      </>
                     )}
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
-              <div className="mbs-4 flex flex-col gap-2">
+                  </Button>
+                  <Popover
+                    placement="bottom end"
+                    className="minis-scale-popover w-[min(24rem,calc(100vw-2rem))] rounded-lg border border-border bg-surface-elevated p-4 shadow-md"
+                  >
+                    <PopoverContent aria-label="Масштаб">
+                      <div className="flex flex-col gap-3 leading-relaxed">
+                        <p className="text-text-muted">
+                          Если фигурки печатаются чуть меньше или больше нужного:
+                        </p>
+                        <p>
+                          Распечатайте{' '}
+                          <Button
+                            variant="link"
+                            aria-label="Скачать тестовый лист"
+                            className="h-auto min-h-11 px-1 underline underline-offset-3"
+                            onClick={() => void downloadPrinterScaleTestSheet()}
+                          >
+                            тестовый лист
+                          </Button>{' '}
+                          и измерьте линейку на нём.
+                        </p>
+                        <div className="grid grid-cols-[auto_minmax(0,6rem)_auto] items-center justify-start gap-2">
+                          <span id="printer-measurement-label">Вышло</span>
+                          <input
+                            className={`${field} text-end`}
+                            type="number"
+                            min="80"
+                            max="100"
+                            step="any"
+                            placeholder="100"
+                            aria-labelledby="printer-measurement-label printer-measurement-unit"
+                            value={inputs.printerMeasurement.text}
+                            aria-invalid={!inputs.printerMeasurement.valid}
+                            onChange={(event) => store.setPrinterMeasurement(event.target.value)}
+                            onBlur={store.commitPrinterMeasurement}
+                          />
+                          <span
+                            id="printer-measurement-unit"
+                            className="whitespace-nowrap text-text-muted"
+                          >
+                            из 100 мм
+                          </span>
+                        </div>
+                        {settings.printerMeasurementMm !== undefined && (
+                          <Button
+                            variant="ghost"
+                            className="min-h-11 w-full"
+                            onClick={() => store.setPrinterMeasurement('')}
+                          >
+                            Сбросить измерение
+                          </Button>
+                        )}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </PopoverTrigger>
+              </div>
+            </div>
+
+            <div className="minis-header-pdf">
+              <p className="minis-header-total font-display text-xl" aria-live="polite">
+                {totalSummary}
+              </p>
+              <div className="flex flex-col gap-2">
                 {!rows.length && (
                   <p className="text-sm text-text-muted">
                     Добавьте изображения для печати миниатюр.
@@ -853,10 +878,9 @@ export default function PaperMinisGenerator() {
                   {rows.length > 0 && (
                     <span
                       id="pdf-summary"
-                      aria-live="polite"
                       className="text-xs font-normal whitespace-normal opacity-85"
                     >
-                      {pluralRu(packed.miniCount, miniatureForms)} · {sheetSummary}
+                      {totalSummary}
                     </span>
                   )}
                 </Button>
@@ -884,7 +908,51 @@ export default function PaperMinisGenerator() {
                   </Button>
                 </p>
               </div>
-            </aside>
+            </div>
+          </div>
+
+          <div
+            className="minis-summary-bar"
+            data-visible={headerOutOfView}
+            aria-hidden={!headerOutOfView}
+          >
+            <div className="minis-summary-content">
+              <span className="min-w-0 truncate">{settingsSummary}</span>
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  variant="ghost"
+                  className="min-h-11"
+                  onClick={() => {
+                    const header = headerRef.current;
+
+                    const firstField = header?.querySelector<HTMLButtonElement>(
+                      '[data-slot="select-trigger"]',
+                    );
+
+                    firstField?.focus();
+
+                    const shouldAnimate = window.matchMedia(
+                      '(prefers-reduced-motion: no-preference)',
+                    ).matches;
+
+                    header?.scrollIntoView({
+                      behavior: shouldAnimate ? 'smooth' : 'auto',
+                      block: 'start',
+                    });
+                  }}
+                >
+                  Изменить
+                </Button>
+                <Button
+                  className="min-h-11"
+                  disabled={!canGenerate}
+                  aria-label="Скачать PDF"
+                  onClick={() => void download()}
+                >
+                  Скачать PDF
+                </Button>
+              </div>
+            </div>
           </div>
 
           <div className="minis-workspace flex flex-col gap-6">
