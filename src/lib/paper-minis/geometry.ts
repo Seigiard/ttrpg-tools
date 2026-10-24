@@ -489,8 +489,8 @@ export function resolveMini(
     // chained sum can round one ulp above the usable height and reject the mini.
     const topMm = faceHeightMm * 2 + marginMm * 2 + FLAT_TONGUE_DEPTH_MM * 2;
     const tongueWidthMm = baseWidthMm - FLAT_TONGUE_INSET_MM * 2;
-    // Keep this relative to the reserved column. The base itself is centred
-    // in that column; the PDF derives the absolute tongue position from it.
+    // Store the tongue offset from the piece's left edge. The base is centred
+    // in the reserved column, and the inset moves inward from its left edge.
     const tongueOffsetXMm = baseOffsetXMm + FLAT_TONGUE_INSET_MM;
 
     const levels: FlatMiniLevels = {
