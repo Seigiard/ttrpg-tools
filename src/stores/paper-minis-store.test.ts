@@ -335,12 +335,14 @@ test('direct and loaded settings reject the same invalid fields', () => {
       marginMm: 2,
       numberDuplicates: false,
       normalization: false,
+      baseStyle: 'tent',
     },
     loaded: {
       pageSize: 'a4',
       marginMm: 2,
       numberDuplicates: false,
       normalization: false,
+      baseStyle: 'tent',
     },
   });
 });
@@ -520,6 +522,7 @@ test('download renders the layout shown by the counter and returns the renderer 
       marginMm: 2,
       numberDuplicates: false,
       printerScale: 0.91,
+      baseStyle: 'tent',
     },
     busy: false,
     message: 'PDF готов.',
