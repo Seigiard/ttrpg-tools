@@ -136,19 +136,28 @@ export async function generatePDF(
 
       if (rotated) {
         // Turn the whole local drawing clockwise about the footprint's top-left.
-        pdfPage.pushOperators(
-          pushGraphicsState(),
-          concatTransformationMatrix(0, -1, 1, 0, mm(xMm), mm(layoutTopMm - yMm)),
-        );
-        drawMini(pdfPage, mini, images, 0, mini.totalHeightMm, font, backSheet);
+        // A Back sheet reflects that complete drawing across the page centre.
+        const transform = backSheet
+          ? concatTransformationMatrix(
+              0,
+              -1,
+              -1,
+              0,
+              mm(xMm + mini.totalHeightMm),
+              mm(layoutTopMm - yMm),
+            )
+          : concatTransformationMatrix(0, -1, 1, 0, mm(xMm), mm(layoutTopMm - yMm));
+
+        pdfPage.pushOperators(pushGraphicsState(), transform);
+        drawMini(pdfPage, mini, images, 0, mini.totalHeightMm, font, backSheet, true);
         pdfPage.pushOperators(popGraphicsState());
         continue;
       }
 
-      drawMini(pdfPage, mini, images, xMm, layoutTopMm - yMm, font, backSheet);
+      drawMini(pdfPage, mini, images, xMm, layoutTopMm - yMm, font, backSheet, false);
     }
 
-    if (hasScaleBarBand) drawScaleBar(pdfPage, scaledPageHmm, noteFont, scaledPageWmm, backSheet);
+    if (pageIndex === 0) drawScaleBar(pdfPage, scaledPageHmm, noteFont);
 
     if (foamboard) drawRegistrationMarks(pdfPage, scaledPageWmm, scaledPageHmm);
 
@@ -214,10 +223,11 @@ function drawMini(
   xMm: number,
   yTopMm: number,
   font: PDFFont,
-  backSheet = false,
+  backSheet: boolean,
+  rotated: boolean,
 ) {
   if (mini.baseStyle === 'foamboard') {
-    drawFoamboardMini(pdfPage, mini, images, xMm, yTopMm, font, backSheet);
+    drawFoamboardMini(pdfPage, mini, images, xMm, yTopMm, font, backSheet, rotated);
 
     return;
   }
@@ -316,6 +326,7 @@ function drawFoamboardMini(
   yTopMm: number,
   font: PDFFont,
   backSheet: boolean,
+  rotated: boolean,
 ) {
   const yBottomMm = yTopMm - mini.totalHeightMm;
   const x = mm(xMm);
@@ -338,7 +349,7 @@ function drawFoamboardMini(
 
   pdfPage.pushOperators(pushGraphicsState());
 
-  if (backSheet && !images.back) {
+  if (backSheet && !images.back && !rotated) {
     pdfPage.pushOperators(
       concatTransformationMatrix(
         -1,
@@ -453,24 +464,7 @@ function drawCutMarks(pdfPage: PDFPage, mini: PackedMini, x: number, yBottom: nu
 }
 
 // Filled shapes only, drawn after the minis: a stroke would read as a cut mark.
-function drawScaleBar(
-  pdfPage: PDFPage,
-  pageHmm: number,
-  font: PDFFont,
-  pageWmm?: number,
-  mirrored = false,
-) {
-  if (mirrored && pageWmm !== undefined) {
-    pdfPage.pushOperators(
-      pushGraphicsState(),
-      concatTransformationMatrix(-1, 0, 0, 1, mm(pageWmm), 0),
-    );
-    drawScaleBar(pdfPage, pageHmm, font);
-    pdfPage.pushOperators(popGraphicsState());
-
-    return;
-  }
-
+function drawScaleBar(pdfPage: PDFPage, pageHmm: number, font: PDFFont) {
   const barY = pageHmm - SCALE_BAR_Y_FROM_TOP_MM;
   const color = rgb(0, 0, 0);
   pdfPage.drawRectangle({
