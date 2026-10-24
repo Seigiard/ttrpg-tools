@@ -13,7 +13,7 @@ import { packEntries } from './packing.ts';
 import type { MiniLevels, PackOptions } from './geometry.ts';
 import type { Entry } from './types.ts';
 
-import { test as t } from 'bun:test';
+import { describe, test as t } from 'bun:test';
 
 const generatePDF = (entries: Entry[], options: PackOptions) => {
   const resolved = { ...options, printerScale: options.printerScale ?? 1 };
@@ -1310,4 +1310,79 @@ t('one sheet mixes reflected and rotated backs, and waits for a back still loadi
       [{ x: false, y: true }, 35],
     ],
   );
+});
+
+describe('flat base style', () => {
+  t('prints a readable back badge in the 6 mm Tongue and marks both shoulders', async () => {
+    // #given  a numbered Medium mini with its default reflected back
+    const {
+      minis: [mini],
+    } = await read(
+      await generatePDF([entry], {
+        pageSize: 'a4',
+        baseStyle: 'flat',
+        numberDuplicates: true,
+        marginMm: 2,
+      }),
+    );
+
+    // #when
+    const backTongue = { bottom: mini.extent.top - 6 * PT_PER_MM, top: mini.extent.top };
+    // #then  ADR-0004 puts the label on the back Tongue and uses inward shoulder corners
+    assert.deepEqual(
+      {
+        unfold: unfold(mini),
+        marksStayInward: mini.inward,
+        badgeInBackTongue:
+          mini.back.badge!.bottom > backTongue.bottom && mini.back.badge!.top < backTongue.top,
+        readable: mini.back.text!.size >= 6,
+      },
+      {
+        unfold: {
+          levels: [0, 6, 43, 80, 86],
+          kinds: ['corner', 'corner', 'tick', 'corner', 'corner'],
+        },
+        marksStayInward: true,
+        badgeInBackTongue: true,
+        readable: true,
+      },
+    );
+  });
+
+  t('keeps an oversized upright flat mini whole after rotating its placement', async () => {
+    // #given  10:1 artwork is too wide upright but its 58 mm flat stack fits when turned
+    const wideFlat: Entry = {
+      ...entry,
+      heightSlot: 'custom',
+      customWidthMm: 20,
+      customHeightMm: 140,
+      artwork: { ...artwork, width: 10, height: 1 },
+    };
+
+    // #when
+    const sheet = await read(
+      await generatePDF([wideFlat], {
+        pageSize: 'a4',
+        baseStyle: 'flat',
+        numberDuplicates: true,
+      }),
+      false,
+    );
+
+    const marks = sheet.drawings.find((drawing) => drawing.role === 'marks')!;
+
+    const drawn = sheet.drawings.filter(
+      (drawing) => drawing.role === 'image' || drawing.role === 'badge',
+    );
+
+    // #then  every face and the duplicate badge are inside the turned cut-out
+    assert.deepEqual(
+      {
+        pages: sheet.pages,
+        rotatedHeightMm: widthMm(marks.box),
+        drawnWhole: drawn.every((drawing) => inside(drawing.box, marks.box)),
+      },
+      { pages: 1, rotatedHeightMm: 58, drawnWhole: true },
+    );
+  });
 });
