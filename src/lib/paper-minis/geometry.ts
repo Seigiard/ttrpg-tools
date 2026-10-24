@@ -32,9 +32,16 @@ export const DEFAULT_PRINTER_SCALE = 0.91;
 
 export const SCALE_BAR_BAND_MM = 10;
 
+export const FLAT_TONGUE_DEPTH_MM = 6;
+
+export const FLAT_TONGUE_INSET_MM = 2;
+
+export type BaseStyle = 'tent' | 'flat';
+
 export type PackOptions = {
   pageSize: PageSizeKey;
   numberDuplicates: boolean;
+  baseStyle?: BaseStyle;
   marginMm?: number;
   printerScale?: number;
 };
@@ -62,16 +69,17 @@ export const CUT_MARK_ARM_MM = 1.5;
 export const CUT_MARK_STROKE_MM = 0.2;
 
 export type MiniLevels = {
-  floorStripTopMm: number;
-  frontTabTopMm: number;
-  frontFaceTopMm: number;
-  foldMm: number;
-  backFaceBottomMm: number;
-  backFaceTopMm: number;
+  floorStripTopMm?: number;
+  frontTabTopMm?: number;
+  frontTongueTopMm?: number;
+  frontFaceTopMm?: number;
+  foldMm?: number;
+  backFaceBottomMm?: number;
+  backFaceTopMm?: number;
   topMm: number;
   cutMarks: {
-    cornersMm: [number, number];
-    edgeTicksMm: [number, number, number, number];
+    cornersMm: number[];
+    edgeTicksMm: number[];
   };
 };
 
@@ -80,6 +88,7 @@ export type MiniLevels = {
 export type PackedMini = {
   entryIndex: number;
   copyIndex: number; // 0-based copy within the entry
+  baseStyle: BaseStyle;
   heightSlot: MiniSize;
   baseWidthMm: number; // the category's base, which sizes the stand and the badge
   totalWidthMm: number; // the widest of base and both figures, plus margins — the cut-out's width, and every strip's
@@ -94,6 +103,8 @@ export type PackedMini = {
   faceHeightMm: number;
   back?: BackFace; // present only for an entry with back artwork
   levels: MiniLevels; // vertical levels measured from the mini's bottom edge
+  tongueWidthMm?: number;
+  tongueOffsetXMm?: number;
   backBadgeOffsetXMm: number; // measured from the back image's own origin
   fitLimits: FigureFitLimit[];
   totalHeightMm: number;
@@ -227,7 +238,11 @@ function fitMiniFaces(
   const dimensions = resolveSizeDimensionsMm(e);
   const { widthMm: usableWidthMm, heightMm: usableHeightMm } = fullPageAreaMm(opts);
   const marginMm = opts.marginMm ?? DEFAULT_FIGURE_MARGIN_MM;
-  const imageSpaceMm = (usableHeightMm - marginMm * 2 - resolveTabHeightMm(e) * 4) / 2;
+
+  const supportHeightMm =
+    (opts.baseStyle ?? 'tent') === 'flat' ? FLAT_TONGUE_DEPTH_MM * 2 : resolveTabHeightMm(e) * 4;
+
+  const imageSpaceMm = (usableHeightMm - marginMm * 2 - supportHeightMm) / 2;
   const calibrated = calibrationGap(e.calibration);
 
   // Page fitting belongs to the whole calibrated mini. Do not promise a page
@@ -322,8 +337,9 @@ export function resolveMini(
   }
 
   const { baseWidthMm } = resolveSizeDimensionsMm(e);
+  const baseStyle = opts.baseStyle ?? 'tent';
   const marginMm = opts.marginMm ?? DEFAULT_FIGURE_MARGIN_MM;
-  const tabHMm = resolveTabHeightMm(e);
+  const tabHMm = baseStyle === 'flat' ? FLAT_TONGUE_DEPTH_MM : resolveTabHeightMm(e);
 
   const { front, back: rawBackFit } = fitMiniFaces(
     { ...e, naturalWidth: e.naturalWidth, naturalHeight: e.naturalHeight },
@@ -350,31 +366,69 @@ export function resolveMini(
 
   const faceHeightMm = Math.max(imageHeightMm, backFit?.imageHeightMm ?? 0);
   const baseOffsetXMm = marginMm + (contentWidthMm - baseWidthMm) / 2;
-  const floorStripTopMm = tabHMm * 2;
-  const frontTabTopMm = floorStripTopMm + tabHMm;
-  const frontFaceTopMm = frontTabTopMm + faceHeightMm;
-  const foldMm = frontFaceTopMm + marginMm;
-  const backFaceBottomMm = foldMm + marginMm;
-  // Use the same closed form that fitMiniFaces inverts at the page cap. A
-  // chained sum can round one ulp above the usable height and reject the mini.
-  const topMm = faceHeightMm * 2 + marginMm * 2 + tabHMm * 4;
-  const backFaceTopMm = topMm - tabHMm;
+  let levels: MiniLevels;
+  let tongueWidthMm: number | undefined;
+  let tongueOffsetXMm: number | undefined;
 
-  const levels: MiniLevels = {
-    floorStripTopMm,
-    frontTabTopMm,
-    frontFaceTopMm,
-    foldMm,
-    backFaceBottomMm,
-    backFaceTopMm,
-    topMm,
-    cutMarks: {
-      cornersMm: [0, topMm],
-      edgeTicksMm: [floorStripTopMm, frontTabTopMm, foldMm, backFaceTopMm],
-    },
-  };
+  if (baseStyle === 'flat') {
+    const frontTongueTopMm = FLAT_TONGUE_DEPTH_MM;
+    const frontFaceTopMm = frontTongueTopMm + faceHeightMm;
+    const foldMm = frontFaceTopMm + marginMm;
+    const backFaceBottomMm = foldMm + marginMm;
+    const backFaceTopMm = backFaceBottomMm + faceHeightMm;
+    // Use the same closed form that fitMiniFaces inverts at the page cap. A
+    // chained sum can round one ulp above the usable height and reject the mini.
+    const topMm = faceHeightMm * 2 + marginMm * 2 + FLAT_TONGUE_DEPTH_MM * 2;
 
-  const backBadgeOffsetXMm = ((back?.imageWidthMm ?? imageWidthMm) - baseWidthMm) / 2;
+    tongueWidthMm = baseWidthMm - FLAT_TONGUE_INSET_MM * 2;
+    // Keep this relative to the reserved column. The base itself is centred
+    // in that column; the PDF derives the absolute tongue position from it.
+    tongueOffsetXMm = marginMm + FLAT_TONGUE_INSET_MM;
+    levels = {
+      frontTongueTopMm,
+      frontFaceTopMm,
+      foldMm,
+      backFaceBottomMm,
+      backFaceTopMm,
+      topMm,
+      cutMarks: {
+        cornersMm: [0, frontTongueTopMm, backFaceTopMm, topMm],
+        edgeTicksMm: [foldMm],
+      },
+    };
+  } else {
+    const floorStripTopMm = tabHMm * 2;
+    const frontTabTopMm = floorStripTopMm + tabHMm;
+    const frontFaceTopMm = frontTabTopMm + faceHeightMm;
+    const foldMm = frontFaceTopMm + marginMm;
+    const backFaceBottomMm = foldMm + marginMm;
+    // Use the same closed form that fitMiniFaces inverts at the page cap. A
+    // chained sum can round one ulp above the usable height and reject the mini.
+    const topMm = faceHeightMm * 2 + marginMm * 2 + tabHMm * 4;
+    const backFaceTopMm = topMm - tabHMm;
+
+    levels = {
+      floorStripTopMm,
+      frontTabTopMm,
+      frontFaceTopMm,
+      foldMm,
+      backFaceBottomMm,
+      backFaceTopMm,
+      topMm,
+      cutMarks: {
+        cornersMm: [0, topMm],
+        edgeTicksMm: [floorStripTopMm, frontTabTopMm, foldMm, backFaceTopMm],
+      },
+    };
+  }
+
+  const backBadgeOffsetXMm =
+    baseStyle === 'flat'
+      ? baseOffsetXMm +
+        (baseWidthMm - tongueWidthMm!) / 2 -
+        (back?.imageOffsetXMm ?? imageOffsetXMm)
+      : ((back?.imageWidthMm ?? imageWidthMm) - baseWidthMm) / 2;
+
   const limits = [...new Set([...front.limits, ...(rawBackFit?.limits ?? [])])];
   const copies: PackedMini[] = [];
 
@@ -382,6 +436,7 @@ export function resolveMini(
     copies.push({
       entryIndex,
       copyIndex: i,
+      baseStyle,
       heightSlot: e.heightSlot,
       baseWidthMm,
       totalWidthMm,
@@ -394,6 +449,8 @@ export function resolveMini(
       faceHeightMm,
       ...(back && { back }),
       levels,
+      ...(tongueWidthMm !== undefined && { tongueWidthMm }),
+      ...(tongueOffsetXMm !== undefined && { tongueOffsetXMm }),
       backBadgeOffsetXMm,
       fitLimits: [...limits],
       totalHeightMm: levels.topMm,
