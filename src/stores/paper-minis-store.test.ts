@@ -347,6 +347,39 @@ test('direct and loaded settings reject the same invalid fields', () => {
   });
 });
 
+describe('foamboard base style', () => {
+  test('accepts foamboard from direct and persisted settings while unknown values fall back to tent', () => {
+    // #given  one direct update and one stored setting for each accepted and unknown value
+    const direct = setup();
+    const loaded = setup();
+    const unknown = setup();
+    const storedUnknown = setup();
+    localStorage.setItem('pmg-settings', JSON.stringify({ baseStyle: 'foamboard' }));
+
+    // #when
+    // SAFETY: `foamboard` is the new runtime option under test; its public union has not widened yet.
+    direct.settings({ baseStyle: 'foamboard' as never });
+    loaded.loadSettings();
+    // SAFETY: `cardboard` exercises the schema's runtime fallback for an unknown value.
+    unknown.settings({ baseStyle: 'cardboard' as never });
+    localStorage.setItem('pmg-settings', JSON.stringify({ baseStyle: 'cardboard' }));
+    storedUnknown.loadSettings();
+
+    // #then  the Base style vocabulary is closed, with tent as the safe fallback
+    expect({
+      direct: direct.$settings.get().baseStyle,
+      loaded: loaded.$settings.get().baseStyle,
+      unknown: unknown.$settings.get().baseStyle,
+      storedUnknown: storedUnknown.$settings.get().baseStyle,
+    }).toEqual({
+      direct: 'foamboard',
+      loaded: 'foamboard',
+      unknown: 'tent',
+      storedUnknown: 'tent',
+    });
+  });
+});
+
 test('a printer measurement resolves to the scale used for layout and PDF generation', async () => {
   // #given
   let rendered: Parameters<PaperMinisRenderer> | undefined;

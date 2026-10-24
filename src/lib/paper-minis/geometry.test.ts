@@ -1305,3 +1305,56 @@ describe('flat base style', () => {
     );
   });
 });
+
+describe('foamboard base style', () => {
+  t('resolves each Medium face as one Face and one centred Tongue', () => {
+    // #given  a Medium has a 25 mm base and a 35 mm square Face
+    // SAFETY: `foamboard` is the new runtime option under test; its public union has not widened yet.
+    const foamboardOptions = {
+      ...sheetOpts,
+      baseStyle: 'foamboard' as never,
+      marginMm: 0,
+    };
+
+    const unresolvedMini: unknown = resolveMini(entry({}), 0, foamboardOptions)!.copies[0];
+
+    // SAFETY: The assertion below validates this required foamboard piece shape at the public resolver seam.
+    const mini = unresolvedMini as {
+      baseStyle: string;
+      tongueWidthMm: number;
+      totalHeightMm: number;
+    };
+
+    // #when
+    const piece = [mini.baseStyle, mini.tongueWidthMm, mini.totalHeightMm];
+
+    // #then  ADR-0004 gives foamboard one 35 mm Face and a 6 mm, 21 mm-wide Tongue
+    assert.deepEqual(piece, ['foamboard', 21, 41]);
+  });
+
+  t('uses one Face and Tongue at the page-height cap', () => {
+    // #given  calibrated 140 mm art, with no margin to leave only the single Tongue on A4
+    const tall = entry({
+      heightSlot: 'custom',
+      customWidthMm: 10,
+      customHeightMm: 140,
+      naturalWidth: 50,
+      naturalHeight: 100,
+      calibration: { head: 0.25, feet: 0.75 },
+    });
+
+    // #when
+    // SAFETY: `foamboard` is the new runtime option under test; its public union has not widened yet.
+    const mini = resolveMini(tall, 0, {
+      ...sheetOpts,
+      baseStyle: 'foamboard' as never,
+      marginMm: 0,
+    })!.copies[0];
+
+    // #then  the 270.27 mm scaled A4 height holds a 264.27 mm Face plus its 6 mm Tongue
+    assert.deepEqual(
+      [mini.imageHeightMm, mini.totalHeightMm, mini.fitLimits],
+      [264.27, 270.27, ['page']],
+    );
+  });
+});
