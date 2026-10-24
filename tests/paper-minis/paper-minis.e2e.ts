@@ -73,7 +73,6 @@ test.beforeEach(async ({ page }) => {
 
 test('prepares a WebP front at its decoded size', async ({ page }) => {
   // #given
-  await page.getByRole('button', { name: /^Фигурки/ }).click();
   await page.getByRole('checkbox', { name: 'Обрезать пустые поля' }).uncheck();
   // #when
   await page
@@ -254,10 +253,10 @@ test('row height and custom choices leave the other mini unchanged', async ({ pa
   });
 });
 
-test('paper picker changes the folded summary to Letter', async ({ page }) => {
+test('paper picker is available on first render and changes the saved format to Letter', async ({
+  page,
+}) => {
   // #given
-  const paperFold = page.getByRole('button', { name: /^Бумага/ });
-  await paperFold.click();
   const trigger = page.getByRole('button', { name: 'Формат' });
   await expect(trigger).toBeVisible();
 
@@ -269,8 +268,81 @@ test('paper picker changes the folded summary to Letter', async ({ page }) => {
   // #then
   expect({
     selected: (await trigger.textContent())?.trim(),
-    summary: await paperFold.textContent(),
-  }).toEqual({ selected: 'Letter', summary: 'БумагаLetter · поля 2 мм' });
+    saved: await page.evaluate(
+      () => JSON.parse(localStorage.getItem('pmg-settings') ?? '{}').pageSize,
+    ),
+  }).toEqual({ selected: 'Letter', saved: 'letter' });
+});
+
+test('sticky settings bar summarizes settings and returns to the header or downloads', async ({
+  page,
+}) => {
+  // #given
+  await page.setViewportSize({ width: 1280, height: 640 });
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'pmg-settings',
+      JSON.stringify({
+        pageSize: 'a4',
+        marginMm: 5,
+        baseStyle: 'tent',
+        normalization: true,
+        numberDuplicates: true,
+      }),
+    );
+  });
+  await page.reload();
+  await page.locator('astro-island:not([ssr])').waitFor();
+  const format = page.getByRole('button', { name: 'Формат' });
+  const edit = page.getByRole('button', { name: 'Изменить' });
+  await expect(edit).toBeHidden();
+  const artwork = await readFile(fixture('trim-6x5-to-4x3.png'));
+  await page.getByLabel('Добавить изображения', { exact: true }).setInputFiles(
+    Array.from({ length: 8 }, (_, index) => ({
+      name: `mini-${index + 1}.png`,
+      mimeType: 'image/png',
+      buffer: artwork,
+    })),
+  );
+  const finalMini = page.getByRole('article', { name: 'Миниатюра 8' });
+
+  // #when
+  await finalMini.scrollIntoViewIfNeeded();
+  await expect(edit).toBeVisible();
+  await expect(
+    page.getByText('A4 · поля 5 мм · складная · обрезка, нумерация', { exact: true }),
+  ).toBeVisible();
+  const stickyBar = edit.locator(
+    'xpath=ancestor::*[.//button[normalize-space()="Скачать PDF"]][1]',
+  );
+  const downloadPromise = page.waitForEvent('download');
+  await stickyBar.getByRole('button', { name: 'Скачать PDF', exact: true }).click();
+  const download = await downloadPromise;
+  const downloadPath = await download.path();
+
+  if (!downloadPath) throw new Error('The sticky bar did not save the downloaded PDF.');
+  const downloadedBytes = await readFile(downloadPath);
+
+  await edit.click();
+  await expect(format).toBeFocused();
+  await expect(edit).toBeHidden();
+
+  await page.getByRole('button', { name: 'Масштаб ▾' }).click();
+  const measurement = page.getByRole('spinbutton', { name: 'Вышло из 100 мм' });
+  await measurement.fill('97');
+  await measurement.press('Tab');
+  await finalMini.scrollIntoViewIfNeeded();
+  await expect(edit).toBeVisible();
+
+  // #then
+  expect({
+    downloadSignature: downloadedBytes.subarray(0, 5).toString('ascii'),
+    summaryWithScale: await page
+      .getByText('A4 · поля 5 мм · складная · обрезка, нумерация · масштаб 97 мм', {
+        exact: true,
+      })
+      .isVisible(),
+  }).toEqual({ downloadSignature: '%PDF-', summaryWithScale: true });
 });
 
 test('height picker selects with the keyboard and Escape restores trigger focus', async ({

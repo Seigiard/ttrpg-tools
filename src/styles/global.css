@@ -193,29 +193,192 @@ h3 {
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
   }
 
-  .minis-layout {
+  .minis-editor {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: 1.5rem;
+    container-type: inline-size;
   }
 
-  .minis-settings {
-    flex: 1 1 15rem;
+  .minis-header-card {
+    display: grid;
+    grid-template-columns: minmax(10rem, 0.8fr) minmax(0, 2fr) minmax(14rem, 1fr);
+    grid-template-rows: auto auto;
+    overflow: visible;
+    border: 1px solid var(--color-border);
+    border-radius: 0.75rem;
+    background: var(--color-surface-elevated);
+    scroll-margin-block-start: 1rem;
+  }
+
+  .minis-header-mini {
+    display: flex;
+    grid-row: 1 / -1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    min-block-size: 12rem;
+    padding-block: 1rem;
+    padding-inline: 1rem;
+    color: var(--color-text-muted);
+    text-align: center;
+  }
+
+  .minis-header-mini-drawing {
+    position: relative;
+    display: grid;
+    place-items: center;
+    inline-size: 5rem;
+    block-size: 7rem;
+  }
+
+  .minis-header-mini-figure {
+    position: relative;
+    z-index: 1;
+    color: var(--color-primary);
+    font-size: 4rem;
+    line-height: 1;
+    transform: rotate(180deg);
+  }
+
+  .minis-header-mini-base {
+    position: absolute;
+    inset-block-end: 0;
+    inline-size: 4.5rem;
+    block-size: 0.75rem;
+    border: 2px solid var(--color-border);
+    border-radius: 50%;
+    background: var(--color-surface);
+  }
+
+  .minis-header-fields {
+    display: grid;
+    grid-column: 2;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+    padding-block: 1rem 0.75rem;
+    padding-inline: 1rem;
+  }
+
+  .minis-header-footer {
+    display: flex;
+    grid-column: 2;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 1rem;
+    padding-block: 0.5rem 1rem;
+    padding-inline: 1rem;
+  }
+
+  .minis-header-pdf {
+    display: flex;
+    grid-column: 3;
+    grid-row: 1 / -1;
+    flex-direction: column;
+    justify-content: center;
+    gap: 1rem;
     min-inline-size: 0;
+    padding-block: 1rem;
+    padding-inline: 1rem;
+    border-start-end-radius: 0.75rem;
+    border-end-end-radius: 0.75rem;
+    background: color-mix(in oklch, var(--color-primary) 5%, var(--color-surface-elevated));
   }
 
-  .minis-settings > aside {
-    position: sticky;
-    inset-block-start: 1rem;
-    max-block-size: calc(100dvh - 2rem);
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    scrollbar-gutter: stable;
+  .minis-header-total {
+    min-block-size: 1.75rem;
+  }
+
+  .minis-summary-bar {
+    position: fixed;
+    z-index: 40;
+    inset-block-start: 0;
+    inset-inline: 0;
+    padding-block: 0.25rem;
+    padding-inline: var(--spacing-page-gutter);
+    border-block-end: 1px solid var(--color-border);
+    background: color-mix(in oklch, var(--color-surface-elevated) 94%, transparent);
+    box-shadow: 0 0.25rem 1rem oklch(0 0 0 / 8%);
+    backdrop-filter: blur(0.75rem);
+    transform: translateY(-100%);
+    visibility: hidden;
+  }
+
+  .minis-summary-bar[data-visible='true'] {
+    transform: translateY(0);
+    visibility: visible;
+  }
+
+  .minis-summary-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    max-inline-size: 72rem;
+    min-block-size: 3rem;
+    margin-inline: auto;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .minis-summary-bar {
+      transition:
+        transform 200ms ease-out,
+        visibility 200ms ease-out;
+    }
+  }
+
+  @container (width < 52rem) {
+    .minis-header-card {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .minis-header-mini,
+    .minis-header-fields,
+    .minis-header-footer,
+    .minis-header-pdf {
+      flex: none;
+      inline-size: 100%;
+    }
+
+    .minis-header-mini {
+      min-block-size: auto;
+      padding-block: 1.5rem 1rem;
+    }
+
+    .minis-header-pdf {
+      border-start-end-radius: 0;
+      border-end-start-radius: 0.75rem;
+      border-end-end-radius: 0.75rem;
+    }
+  }
+
+  @container (width < 40rem) {
+    .minis-header-fields {
+      grid-template-columns: 1fr;
+      padding-block: 0.75rem;
+    }
+
+    .minis-summary-bar {
+      padding-inline: 0.5rem;
+    }
+
+    .minis-summary-content {
+      flex-wrap: wrap;
+    }
+
+    .minis-summary-content > span {
+      flex: 1 1 100%;
+    }
+
+    .minis-summary-content > div {
+      margin-inline-start: auto;
+    }
   }
 
   .minis-workspace {
-    flex: 999 1 0;
-    min-inline-size: 50%;
+    min-inline-size: 0;
   }
 
   .artwork-frame {

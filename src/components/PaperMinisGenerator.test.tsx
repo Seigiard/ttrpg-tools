@@ -32,14 +32,6 @@ async function chooseSelectOption(trigger: HTMLElement, name: string | RegExp) {
   await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
 }
 
-function foldText(name: string) {
-  return screen.getByRole('button', { name: new RegExp(`^${name}`) }).textContent;
-}
-
-function openFold(name: string) {
-  fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${name}`) }));
-}
-
 async function addBack(bytes = png) {
   await act(async () => {
     fireEvent.change(
@@ -54,29 +46,195 @@ async function addBack(bytes = png) {
 test('printer scale reads as the default until a measurement is entered and can be cleared', () => {
   // #given
   render(<PaperMinisGenerator />);
-  openFold('Масштаб');
+  const defaultButton = screen.getByRole('button', { name: 'Масштаб ▾' });
+  const defaultButtonLabel = defaultButton.textContent;
+  fireEvent.click(defaultButton);
+
+  const resetBeforeMeasurement =
+    screen.queryByRole('button', { name: 'Сбросить измерение' })?.textContent ?? null;
 
   const measurement = screen.getByRole<HTMLInputElement>('spinbutton', {
     name: 'Вышло из 100 мм',
   });
 
+  const testSheet = screen.getByRole('button', { name: 'Скачать тестовый лист' });
+
   // #when
-  const defaultState = foldText('Масштаб');
   fireEvent.change(measurement, { target: { value: '91' } });
-  const measuredState = foldText('Масштаб');
+  fireEvent.blur(measurement);
+  const measuredButton = screen.getByRole('button', { name: 'Масштаб · 91 мм ▾' });
+  const measuredButtonLabel = measuredButton.textContent;
+
+  const savedMeasurement = JSON.parse(
+    localStorage.getItem('pmg-settings') ?? '{}',
+  ).printerMeasurementMm;
+
+  fireEvent.change(measurement, { target: { value: '79' } });
+  const invalidDraft = measurement.getAttribute('aria-invalid');
+  fireEvent.blur(measurement);
+  const restoredDraft = measurement.value;
   fireEvent.click(screen.getByRole('button', { name: 'Сбросить измерение' }));
 
   // #then
   expect({
-    defaultState,
-    measuredState,
+    defaultButton: defaultButtonLabel,
+    resetBeforeMeasurement,
+    testSheet: testSheet.textContent,
+    measuredButton: measuredButtonLabel,
+    savedMeasurement,
+    invalidDraft,
+    restoredDraft,
     input: measurement.value,
-    restoredState: foldText('Масштаб'),
+    restoredButton: screen.getByRole('button', { name: 'Масштаб ▾' }).textContent,
   }).toEqual({
-    defaultState: 'Масштабпо умолчанию',
-    measuredState: 'Масштабподогнан · 91 мм',
+    defaultButton: 'Масштаб ▾',
+    resetBeforeMeasurement: null,
+    testSheet: 'тестовый лист',
+    measuredButton: 'Масштаб · 91 мм ▾',
+    savedMeasurement: 91,
+    invalidDraft: 'true',
+    restoredDraft: '91',
     input: '',
-    restoredState: 'Масштабпо умолчанию',
+    restoredButton: 'Масштаб ▾',
+  });
+});
+
+test.each([
+  {
+    close: 'Escape',
+    savedMeasurement: '91',
+    restoredMeasurement: '91',
+    triggerName: 'Масштаб · 91 мм ▾',
+  },
+  {
+    close: 'outside pointerdown',
+    savedMeasurement: undefined,
+    restoredMeasurement: '',
+    triggerName: 'Масштаб ▾',
+  },
+] as const)(
+  'closing the printer scale with $close restores its invalid draft and PDF actions',
+  async ({ close, savedMeasurement, restoredMeasurement, triggerName }) => {
+    // #given
+    render(<PaperMinisGenerator />);
+    await addFront();
+    fireEvent.click(screen.getByRole('button', { name: 'Масштаб ▾' }));
+
+    const measurement = screen.getByRole<HTMLInputElement>('spinbutton', {
+      name: 'Вышло из 100 мм',
+    });
+
+    if (savedMeasurement !== undefined) {
+      fireEvent.change(measurement, { target: { value: savedMeasurement } });
+      fireEvent.blur(measurement);
+    }
+
+    const actions = ['Скачать PDF', 'Предпросмотр PDF', 'Экспорт в ZIP'];
+
+    const enabledWithValidDraft = actions.map(
+      (name) => !screen.getByRole<HTMLButtonElement>('button', { name }).disabled,
+    );
+
+    fireEvent.change(measurement, { target: { value: '79' } });
+
+    const disabledWithInvalidDraft = actions.map(
+      (name) => screen.getByRole<HTMLButtonElement>('button', { name }).disabled,
+    );
+
+    // #when
+    if (close === 'Escape') fireEvent.keyDown(measurement, { key: 'Escape' });
+    else {
+      fireEvent.pointerDown(document.body);
+      fireEvent.pointerUp(document.body);
+      fireEvent.click(document.body);
+    }
+
+    const enabledAfterClose = actions.map(
+      (name) => !screen.getByRole<HTMLButtonElement>('button', { name }).disabled,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: triggerName }));
+
+    const restored = screen.getByRole<HTMLInputElement>('spinbutton', {
+      name: 'Вышло из 100 мм',
+    });
+
+    // #then
+    expect({
+      enabledWithValidDraft,
+      disabledWithInvalidDraft,
+      enabledAfterClose,
+      restored: {
+        value: restored.value,
+        invalid: restored.getAttribute('aria-invalid'),
+      },
+    }).toEqual({
+      enabledWithValidDraft: [true, true, true],
+      disabledWithInvalidDraft: [true, true, true],
+      enabledAfterClose: [true, true, true],
+      restored: { value: restoredMeasurement, invalid: 'false' },
+    });
+  },
+);
+
+test('closing the printer scale with Escape returns focus to its trigger', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  const scale = screen.getByRole<HTMLButtonElement>('button', { name: 'Масштаб ▾' });
+  scale.focus();
+  fireEvent.click(scale);
+
+  const measurement = screen.getByRole<HTMLInputElement>('spinbutton', {
+    name: 'Вышло из 100 мм',
+  });
+
+  measurement.focus();
+  const focusStartedInside = document.activeElement === measurement;
+
+  // #when
+  fireEvent.keyDown(measurement, { key: 'Escape' });
+  await act(async () => {
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  });
+
+  // #then
+  expect({
+    focusStartedInside,
+    open: screen.queryByRole('spinbutton', { name: 'Вышло из 100 мм' }) !== null,
+    focused: document.activeElement === scale,
+  }).toEqual({ focusStartedInside: true, open: false, focused: true });
+});
+
+test('printer scale popover closes on Escape and an outside click', () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  const scale = screen.getByRole('button', { name: 'Масштаб ▾' });
+  fireEvent.click(scale);
+  screen.getByRole('spinbutton', { name: 'Вышло из 100 мм' }).focus();
+  const openBeforeEscape = screen.queryByRole('spinbutton', { name: 'Вышло из 100 мм' }) !== null;
+
+  // #when
+  fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+  const openAfterEscape = screen.queryByRole('spinbutton', { name: 'Вышло из 100 мм' }) !== null;
+  fireEvent.click(scale);
+
+  const openBeforeOutsideClick =
+    screen.queryByRole('spinbutton', { name: 'Вышло из 100 мм' }) !== null;
+
+  fireEvent.pointerDown(document.body);
+  fireEvent.click(document.body);
+
+  // #then
+  expect({
+    openBeforeEscape,
+    openAfterEscape,
+    openBeforeOutsideClick,
+    openAfterOutsideClick: screen.queryByRole('spinbutton', { name: 'Вышло из 100 мм' }) !== null,
+  }).toEqual({
+    openBeforeEscape: true,
+    openAfterEscape: false,
+    openBeforeOutsideClick: true,
+    openAfterOutsideClick: false,
   });
 });
 
@@ -84,7 +242,6 @@ test('blur restores an invalid draft and both PDF actions become available again
   // #given
   render(<PaperMinisGenerator />);
   await addFront();
-  openFold('Бумага');
   const margin = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Поля, мм' });
   const count = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Количество копий' });
   fireEvent.change(margin, { target: { value: '5' } });
@@ -329,11 +486,45 @@ test('the PDF button describes its output with Russian plural forms', async () =
   expect(summary?.textContent).toBe('1 миниатюра · 1 лист A4');
 });
 
+test('numbering is available on first render and persists both checkbox states', () => {
+  // #given
+  render(<PaperMinisGenerator />);
+
+  const numbering = screen.getByRole<HTMLInputElement>('checkbox', {
+    name: 'Нумеровать копии',
+  });
+
+  const initial = numbering.checked;
+
+  // #when
+  fireEvent.click(numbering);
+
+  const enabled = {
+    checked: numbering.checked,
+    saved: JSON.parse(localStorage.getItem('pmg-settings') ?? '{}').numberDuplicates ?? null,
+  };
+
+  fireEvent.click(numbering);
+
+  // #then
+  expect({
+    initial,
+    enabled,
+    disabled: {
+      checked: numbering.checked,
+      saved: JSON.parse(localStorage.getItem('pmg-settings') ?? '{}').numberDuplicates ?? null,
+    },
+  }).toEqual({
+    initial: false,
+    enabled: { checked: true, saved: true },
+    disabled: { checked: false, saved: false },
+  });
+});
+
 test('the Base style control lists every style and routes a foamboard choice to settings', async () => {
   // #given
   render(<PaperMinisGenerator />);
   await addFront();
-  openFold('Бумага');
   const download = screen.getByRole('button', { name: 'Скачать PDF' });
   const summary = document.getElementById(download.getAttribute('aria-describedby') ?? '');
   const tentSummary = summary?.textContent;
@@ -375,7 +566,6 @@ test('the foamboard counter uses Russian plural forms for Front and Back sheets'
   tallPng.writeUInt32BE(2, 20);
   render(<PaperMinisGenerator />);
   await addFront(tallPng);
-  openFold('Бумага');
   fireEvent.change(screen.getByRole('spinbutton', { name: 'Поля, мм' }), {
     target: { value: '0' },
   });
@@ -469,7 +659,7 @@ test('printer scale test sheet can download before any minis are added', async (
 
   try {
     render(<PaperMinisGenerator />);
-    openFold('Масштаб');
+    fireEvent.click(screen.getByRole('button', { name: 'Масштаб ▾' }));
 
     const download = screen.getByRole<HTMLButtonElement>('button', {
       name: 'Скачать тестовый лист',
