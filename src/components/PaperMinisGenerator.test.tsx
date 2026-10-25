@@ -652,33 +652,46 @@ test('the header fold runs on mount, replay, and Base style change', async () =>
     const scene = screen.queryByTestId('mini-3d');
     const mountStart = scene?.getAttribute('data-t') ?? null;
 
-    // #when
-    for (let time = 0; time <= 10_000 && scene?.getAttribute('data-t') !== '1'; time += 1_000) {
-      const pending = [...frames.values()];
-      frames.clear();
-      act(() => pending.forEach((callback) => callback(time)));
-    }
+    const runFold = (timestamps: number[]) =>
+      timestamps.map((time) => {
+        const pending = [...frames.values()];
+        frames.clear();
+        act(() => pending.forEach((callback) => callback(time)));
 
-    const mountEnd = scene?.getAttribute('data-t') ?? null;
+        return {
+          assembly: scene?.getAttribute('data-t') ?? null,
+          pose:
+            [...(scene?.querySelectorAll<HTMLElement>('[data-part-role]') ?? [])]
+              .map((part) => `${part.dataset.partRole}:${part.style.transform}`)
+              .join('|') || null,
+        };
+      });
+
+    const summarizeFold = (snapshots: ReturnType<typeof runFold>) => {
+      const beforeAssembly = snapshots.filter(({ assembly }) => assembly !== '1');
+
+      return {
+        hasIntermediateAssembly: snapshots.some(({ assembly }) => {
+          const value = Number(assembly);
+
+          return value > 0 && value < 1;
+        }),
+        poseChangesBeforeAssembly: new Set(beforeAssembly.map(({ pose }) => pose)).size > 1,
+        end: snapshots.at(-1)?.assembly ?? null,
+      };
+    };
+
+    // #when
+    const mountFold = summarizeFold(runFold([0, 300, 600, 900]));
 
     const pendingAfterMount = frames.size;
 
     const replay = screen.queryByRole('button', { name: 'Повторить сборку' });
-    replay?.focus();
+    act(() => replay?.focus());
     fireEvent.click(replay ?? document.body);
     const replayStart = scene?.getAttribute('data-t') ?? null;
 
-    for (
-      let time = 11_000;
-      time <= 19_000 && scene?.getAttribute('data-t') !== '1';
-      time += 1_000
-    ) {
-      const pending = [...frames.values()];
-      frames.clear();
-      act(() => pending.forEach((callback) => callback(time)));
-    }
-
-    const replayEnd = scene?.getAttribute('data-t') ?? null;
+    const replayFold = summarizeFold(runFold([2_000, 2_300, 2_600, 2_900]));
 
     const replayControl = {
       exists: replay !== null,
@@ -691,34 +704,34 @@ test('the header fold runs on mount, replay, and Base style change', async () =>
     await chooseSelectOption(screen.getByRole('button', { name: /Складная/ }), 'На пенокартоне');
     const styleChangeStart = scene?.getAttribute('data-t') ?? null;
 
-    for (
-      let time = 20_000;
-      time <= 30_000 && scene?.getAttribute('data-t') !== '1';
-      time += 1_000
-    ) {
-      const pending = [...frames.values()];
-      frames.clear();
-      act(() => pending.forEach((callback) => callback(time)));
-    }
+    const styleChangeFold = summarizeFold(runFold([4_000, 4_300, 4_600, 4_900]));
 
     // #then
     expect({
       mountStart,
-      mountEnd,
+      mountFold,
       pendingAfterMount,
       replayStart,
-      replayEnd,
+      replayFold,
       replayControl,
       styleChangeStart,
-      styleChangeEnd: scene?.getAttribute('data-t') ?? null,
+      styleChangeFold,
       changedStyle: scene?.getAttribute('data-base-style') ?? null,
       pendingAfterStyleChange: frames.size,
     }).toEqual({
       mountStart: '0',
-      mountEnd: '1',
+      mountFold: {
+        hasIntermediateAssembly: true,
+        poseChangesBeforeAssembly: true,
+        end: '1',
+      },
       pendingAfterMount: 0,
       replayStart: '0',
-      replayEnd: '1',
+      replayFold: {
+        hasIntermediateAssembly: true,
+        poseChangesBeforeAssembly: true,
+        end: '1',
+      },
       replayControl: {
         exists: true,
         nativeButton: 'BUTTON',
@@ -727,7 +740,11 @@ test('the header fold runs on mount, replay, and Base style change', async () =>
         decorativeIcon: true,
       },
       styleChangeStart: '0',
-      styleChangeEnd: '1',
+      styleChangeFold: {
+        hasIntermediateAssembly: true,
+        poseChangesBeforeAssembly: true,
+        end: '1',
+      },
       changedStyle: 'foamboard',
       pendingAfterStyleChange: 0,
     });
