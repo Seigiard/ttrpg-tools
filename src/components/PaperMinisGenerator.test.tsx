@@ -616,7 +616,7 @@ test.each([
   },
 );
 
-test('the header fold runs once on mount and restarts when Base style changes', async () => {
+test('the header fold runs on mount, replay, and Base style change', async () => {
   // #given
   const originalMatchMedia = window.matchMedia;
   const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
@@ -663,6 +663,31 @@ test('the header fold runs once on mount and restarts when Base style changes', 
 
     const pendingAfterMount = frames.size;
 
+    const replay = screen.queryByRole('button', { name: 'Повторить сборку' });
+    replay?.focus();
+    fireEvent.click(replay ?? document.body);
+    const replayStart = scene?.getAttribute('data-t') ?? null;
+
+    for (
+      let time = 11_000;
+      time <= 19_000 && scene?.getAttribute('data-t') !== '1';
+      time += 1_000
+    ) {
+      const pending = [...frames.values()];
+      frames.clear();
+      act(() => pending.forEach((callback) => callback(time)));
+    }
+
+    const replayEnd = scene?.getAttribute('data-t') ?? null;
+
+    const replayControl = {
+      exists: replay !== null,
+      nativeButton: replay?.tagName ?? null,
+      keyboardReachable: document.activeElement === replay,
+      tabIndex: replay?.tabIndex ?? null,
+      decorativeIcon: replay ? replay.querySelector('[aria-hidden="true"]') !== null : false,
+    };
+
     await chooseSelectOption(screen.getByRole('button', { name: /Складная/ }), 'На пенокартоне');
     const styleChangeStart = scene?.getAttribute('data-t') ?? null;
 
@@ -681,6 +706,9 @@ test('the header fold runs once on mount and restarts when Base style changes', 
       mountStart,
       mountEnd,
       pendingAfterMount,
+      replayStart,
+      replayEnd,
+      replayControl,
       styleChangeStart,
       styleChangeEnd: scene?.getAttribute('data-t') ?? null,
       changedStyle: scene?.getAttribute('data-base-style') ?? null,
@@ -689,6 +717,15 @@ test('the header fold runs once on mount and restarts when Base style changes', 
       mountStart: '0',
       mountEnd: '1',
       pendingAfterMount: 0,
+      replayStart: '0',
+      replayEnd: '1',
+      replayControl: {
+        exists: true,
+        nativeButton: 'BUTTON',
+        keyboardReachable: true,
+        tabIndex: 0,
+        decorativeIcon: true,
+      },
       styleChangeStart: '0',
       styleChangeEnd: '1',
       changedStyle: 'foamboard',
@@ -704,7 +741,7 @@ test('the header fold runs once on mount and restarts when Base style changes', 
   }
 });
 
-test('reduced motion mounts the assembled mini without requesting an animation frame', () => {
+test('reduced motion mounts and replays assembled without requesting an animation frame', () => {
   // #given
   const originalMatchMedia = window.matchMedia;
   const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
@@ -733,12 +770,15 @@ test('reduced motion mounts the assembled mini without requesting an animation f
     // #when
     render(<PaperMinisGenerator />);
     const scene = screen.queryByTestId('mini-3d');
+    const replay = screen.queryByRole('button', { name: 'Повторить сборку' });
+    fireEvent.click(replay ?? document.body);
 
     // #then
     expect({
+      replayExists: replay !== null,
       assembly: scene?.getAttribute('data-t') ?? null,
       requestedFrames,
-    }).toEqual({ assembly: '1', requestedFrames: 0 });
+    }).toEqual({ replayExists: true, assembly: '1', requestedFrames: 0 });
   } finally {
     Object.defineProperty(window, 'matchMedia', {
       configurable: true,

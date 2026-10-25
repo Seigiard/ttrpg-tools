@@ -3,7 +3,15 @@ import assert from 'node:assert/strict';
 import { describe, test as t } from 'bun:test';
 
 import { resolveMini, type BaseStyle, type PackedMini } from './geometry.ts';
-import { miniParts, poseMini, type MiniPart, type MiniPartPose } from './mini-3d.ts';
+import {
+  miniParts,
+  poseFoamSlab,
+  poseMini,
+  poseMiniStand,
+  type FoamSlabPose,
+  type MiniPart,
+  type MiniPartPose,
+} from './mini-3d.ts';
 import { HEIGHT_SLOT_ORDER } from './sizes.ts';
 import type { PackingEntry } from './types.ts';
 
@@ -108,6 +116,38 @@ function rangesLieOnOppositeSides(
     (first[1] <= plane + toleranceMm && second[0] >= plane - toleranceMm) ||
     (second[1] <= plane + toleranceMm && first[0] >= plane - toleranceMm)
   );
+}
+
+function segmentCrossesOpenBox(
+  start: { yMm: number; zMm: number },
+  end: { yMm: number; zMm: number },
+  box: FoamSlabPose,
+): boolean {
+  let intervalStart = 0;
+  let intervalEnd = 1;
+
+  for (const [axis, minimum, maximum] of [
+    ['yMm', box.yMinMm, box.yMaxMm],
+    ['zMm', box.zMinMm, box.zMaxMm],
+  ] as const) {
+    const delta = end[axis] - start[axis];
+    const openMinimum = minimum + toleranceMm;
+    const openMaximum = maximum - toleranceMm;
+
+    if (openMinimum >= openMaximum) return false;
+
+    if (Math.abs(delta) <= toleranceMm) {
+      if (start[axis] <= openMinimum || start[axis] >= openMaximum) return false;
+      continue;
+    }
+
+    const first = (openMinimum - start[axis]) / delta;
+    const second = (openMaximum - start[axis]) / delta;
+    intervalStart = Math.max(intervalStart, Math.min(first, second));
+    intervalEnd = Math.min(intervalEnd, Math.max(first, second));
+  }
+
+  return intervalStart < intervalEnd;
 }
 
 type ExpectedPart = readonly [
@@ -883,5 +923,220 @@ describe('assembled poses', () => {
         backTongueBelowFace: true,
       },
     );
+  });
+});
+
+describe('stand and foamboard assembly poses', () => {
+  t(
+    'flat and foamboard stands rise continuously from below the table into their resting pose',
+    () => {
+      // #given
+      const expectedRestingPose = { yMinMm: 0, yMaxMm: 3 };
+
+      // #when
+      const observations = Object.fromEntries(
+        (['flat', 'foamboard'] as const).map((baseStyle) => {
+          const poses = continuityTimes.map((time) => poseMiniStand(baseStyle, time));
+
+          const steps = poses.slice(1).map((pose, index) => pose.yMinMm - poses[index]!.yMinMm);
+
+          return [
+            baseStyle,
+            {
+              startsFullyBelowTable: poses[0]!.yMaxMm <= toleranceMm,
+              rises: poses.some(
+                (pose, index) => index > 0 && pose.yMinMm > poses[index - 1]!.yMinMm,
+              ),
+              risesMonotonically: steps.every((step) => step >= -toleranceMm),
+              risesAcrossMoreThanOneSample: Math.max(...steps) < 3 - toleranceMm,
+              keepsThreeMmHeight: poses.every(
+                (pose) => Math.abs(pose.yMaxMm - pose.yMinMm - 3) <= toleranceMm,
+              ),
+              restingPose: poses.at(-1)!,
+            },
+          ];
+        }),
+      );
+
+      // #then
+      assert.deepEqual(observations, {
+        flat: {
+          startsFullyBelowTable: true,
+          rises: true,
+          risesMonotonically: true,
+          risesAcrossMoreThanOneSample: true,
+          keepsThreeMmHeight: true,
+          restingPose: expectedRestingPose,
+        },
+        foamboard: {
+          startsFullyBelowTable: true,
+          rises: true,
+          risesMonotonically: true,
+          risesAcrossMoreThanOneSample: true,
+          keepsThreeMmHeight: true,
+          restingPose: expectedRestingPose,
+        },
+      });
+    },
+  );
+
+  t('foamboard sheets rise, receive the descending slab, close, and then receive the stand', () => {
+    // #given
+    const mini = resolvedMini('foamboard');
+    const parts = miniParts(mini);
+    const frontFacePart = parts.find((part) => part.role === 'frontFace' && part.sheet === 'main')!;
+    const backFacePart = parts.find((part) => part.role === 'backFace' && part.sheet === 'back')!;
+
+    const expectedSlab = {
+      yMinMm: 0,
+      yMaxMm: mini.levels.topMm,
+      zMinMm: -5,
+      zMaxMm: 0,
+    };
+
+    const samples = continuityTimes.map((time) => {
+      const poses = poseMini(parts, time);
+      const slab = poseFoamSlab(mini, time);
+      const stand = poseMiniStand('foamboard', time);
+      const frontFace = poses.get(frontFacePart.id)!;
+      const backFace = poses.get(backFacePart.id)!;
+
+      return {
+        time,
+        poses,
+        slab,
+        stand,
+        frontFace,
+        backFace,
+        facesVertical: isVertical(frontFace) && isVertical(backFace),
+        faceGapMm: Math.abs(frontFace.zMm - backFace.zMm),
+      };
+    });
+
+    const movement = samples.slice(1).map((sample, index) => {
+      const previous = samples[index]!;
+
+      const sheetStepMm = Math.max(
+        Math.hypot(
+          sample.frontFace.yMm - previous.frontFace.yMm,
+          sample.frontFace.zMm - previous.frontFace.zMm,
+        ),
+        Math.hypot(
+          sample.backFace.yMm - previous.backFace.yMm,
+          sample.backFace.zMm - previous.backFace.zMm,
+        ),
+        Math.abs(sample.frontFace.psiRad - previous.frontFace.psiRad),
+        Math.abs(sample.backFace.psiRad - previous.backFace.psiRad),
+      );
+
+      return {
+        index: index + 1,
+        sheets: sheetStepMm > toleranceMm,
+        slab: Math.abs(sample.slab.yMinMm - previous.slab.yMinMm) > toleranceMm,
+        stand: Math.abs(sample.stand.yMinMm - previous.stand.yMinMm) > toleranceMm,
+      };
+    });
+
+    const slabMovement = movement.filter((step) => step.slab);
+    const firstSlabStep = slabMovement[0]?.index ?? -1;
+    const lastSlabStep = slabMovement.at(-1)?.index ?? -1;
+    const closureMovement = movement.filter((step) => step.index > lastSlabStep && step.sheets);
+    const lastClosureStep = closureMovement.at(-1)?.index ?? -1;
+    const standMovement = movement.filter((step) => step.stand);
+
+    let slabIntersectsSheet = false;
+
+    for (const sample of samples) {
+      for (const part of parts) {
+        const pose = sample.poses.get(part.id);
+
+        if (!pose) {
+          slabIntersectsSheet = true;
+          continue;
+        }
+
+        slabIntersectsSheet ||= segmentCrossesOpenBox(pose, endpoint(part, pose), sample.slab);
+      }
+    }
+
+    const helperControls = {
+      detectsCrossing: segmentCrossesOpenBox(
+        { yMm: -1, zMm: -2.5 },
+        { yMm: 2, zMm: -2.5 },
+        { yMinMm: 0, yMaxMm: 1, zMinMm: -5, zMaxMm: 0 },
+      ),
+      acceptsBoundaryContact: !segmentCrossesOpenBox(
+        { yMm: 0, zMm: -5 },
+        { yMm: 1, zMm: -5 },
+        { yMinMm: 0, yMaxMm: 1, zMinMm: -5, zMaxMm: 0 },
+      ),
+      rejectsMiss: !segmentCrossesOpenBox(
+        { yMm: 2, zMm: 2 },
+        { yMm: 3, zMm: 3 },
+        { yMinMm: 0, yMaxMm: 1, zMinMm: -5, zMaxMm: 0 },
+      ),
+    };
+
+    // #when
+    const actual = {
+      helperControls,
+      slabStartsAboveSheets: samples[0]!.slab.yMinMm > mini.levels.topMm + toleranceMm,
+      sheetsRiseBeforeSlab:
+        firstSlabStep > 0 && movement.slice(0, firstSlabStep - 1).some((step) => step.sheets),
+      slabDescends:
+        slabMovement.length > 0 &&
+        slabMovement.every(
+          (step) =>
+            samples[step.index]!.slab.yMinMm < samples[step.index - 1]!.slab.yMinMm + toleranceMm,
+        ),
+      sheetsStayVerticalAndOpenDuringDescent: slabMovement.every((step) => {
+        const sample = samples[step.index]!;
+
+        return sample.facesVertical && sample.faceGapMm > 5 + toleranceMm && !step.sheets;
+      }),
+      sheetsCloseAfterSlab:
+        closureMovement.length > 0 &&
+        closureMovement.every(
+          (step) =>
+            Math.abs(samples[step.index - 1]!.slab.yMinMm - expectedSlab.yMinMm) <= toleranceMm &&
+            Math.abs(samples[step.index - 1]!.slab.yMaxMm - expectedSlab.yMaxMm) <= toleranceMm,
+        ),
+      standRisesAfterSheetsClose:
+        standMovement.length > 0 &&
+        standMovement.every(
+          (step) =>
+            step.index > lastClosureStep &&
+            Math.abs(samples[step.index - 1]!.faceGapMm - 5) <= toleranceMm,
+        ),
+      slabNeverIntersectsSheets: !slabIntersectsSheet,
+      slabNeverGoesBelowTable: samples.every((sample) => sample.slab.yMinMm >= -toleranceMm),
+      slabDescendsContinuously: samples
+        .slice(1)
+        .every(
+          (sample, index) =>
+            sample.slab.yMinMm <= samples[index]!.slab.yMinMm + toleranceMm &&
+            samples[index]!.slab.yMinMm - sample.slab.yMinMm <= 15.81,
+        ),
+      assembledSlab: samples.at(-1)!.slab,
+    };
+
+    // #then
+    assert.deepEqual(actual, {
+      helperControls: {
+        detectsCrossing: true,
+        acceptsBoundaryContact: true,
+        rejectsMiss: true,
+      },
+      slabStartsAboveSheets: true,
+      sheetsRiseBeforeSlab: true,
+      slabDescends: true,
+      sheetsStayVerticalAndOpenDuringDescent: true,
+      sheetsCloseAfterSlab: true,
+      standRisesAfterSheetsClose: true,
+      slabNeverIntersectsSheets: true,
+      slabNeverGoesBelowTable: true,
+      slabDescendsContinuously: true,
+      assembledSlab: expectedSlab,
+    });
   });
 });
