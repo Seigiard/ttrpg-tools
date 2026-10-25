@@ -225,31 +225,107 @@ h3 {
     text-align: center;
   }
 
-  .minis-header-mini-drawing {
+  .mini-3d-scene {
     position: relative;
-    display: grid;
-    place-items: center;
-    inline-size: 5rem;
-    block-size: 7rem;
+    inline-size: min(100%, 12rem);
+    block-size: 10rem;
+    perspective: 40rem;
+    overflow: clip;
   }
 
-  .minis-header-mini-figure {
-    position: relative;
-    z-index: 1;
-    color: var(--color-primary);
-    font-size: 4rem;
-    line-height: 1;
-    transform: rotate(180deg);
-  }
-
-  .minis-header-mini-base {
+  .mini-3d-world {
     position: absolute;
-    inset-block-end: 0;
-    inline-size: 4.5rem;
-    block-size: 0.75rem;
-    border: 2px solid var(--color-border);
+    inset-inline-start: 50%;
+    inset-block-end: 0.9rem;
+    transform-style: preserve-3d;
+  }
+
+  .mini-3d-part {
+    position: absolute;
+    transform-origin: 50% 100%;
+    border: 1px solid color-mix(in oklch, var(--color-border) 80%, var(--color-primary));
+    transform-style: preserve-3d;
+  }
+
+  .mini-3d-side {
+    position: absolute;
+    inset: 0;
+    overflow: clip;
+    background: color-mix(in oklch, var(--color-surface) 92%, var(--color-primary));
+    backface-visibility: hidden;
+  }
+
+  .mini-3d-reverse {
+    background: oklch(0.95 0.008 85);
+    transform: rotateY(180deg);
+  }
+
+  .mini-3d-art {
+    position: absolute;
+  }
+
+  .mini-3d-placeholder {
+    position: absolute;
+    inset: 16% 26% 8%;
+    border-radius: 45% 45% 14% 14%;
+    background: var(--color-primary);
+  }
+
+  .mini-3d-shade {
+    position: absolute;
+    inset: 0;
+    background: oklch(0 0 none);
+  }
+
+  .mini-3d-badge {
+    position: absolute;
+    inset-block-end: 12%;
+    inset-inline-end: 10%;
+    min-inline-size: 1.1rem;
+    padding-inline: 0.2rem;
+    border: 1px solid oklch(0.55 0 none);
+    border-radius: 0.1rem;
+    background: oklch(1 0 none);
+    color: var(--color-text);
+    font-size: 0.7rem;
+    line-height: 1.1;
+    text-align: center;
+  }
+
+  .mini-3d-stand {
+    position: absolute;
+    transform-style: preserve-3d;
+  }
+
+  .mini-3d-stand-disc,
+  .mini-3d-stand-slot {
+    position: absolute;
+    display: block;
+    background: oklch(0.15 0 none);
+  }
+
+  .mini-3d-stand-disc {
+    inline-size: var(--mini-disc-size);
+    block-size: var(--mini-disc-size);
+    margin-inline-start: var(--mini-disc-offset);
+    margin-block-start: var(--mini-disc-offset);
     border-radius: 50%;
-    background: var(--color-surface);
+    transform: rotateX(90deg) translateZ(var(--mini-stand-height));
+  }
+
+  .mini-3d-stand-slot {
+    inline-size: var(--mini-slot-width);
+    block-size: var(--mini-slot-height);
+    margin-inline-start: var(--mini-slot-x);
+    margin-block-start: var(--mini-slot-y);
+    border-radius: 0.1rem;
+    transform: translateZ(var(--mini-stand-height));
+  }
+
+  .mini-3d-shadow {
+    position: absolute;
+    border-radius: 50%;
+    background: radial-gradient(ellipse, oklch(0 0 none / 24%), oklch(0 0 none / 0) 70%);
   }
 
   .minis-header-fields {

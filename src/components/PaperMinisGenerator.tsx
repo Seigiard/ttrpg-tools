@@ -28,11 +28,16 @@ import {
   selectItemClassName,
 } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { createPaperMinisStore, type CalibrationSession } from '@/stores/paper-minis-store';
-import { ARTWORK_ACCEPT, artworkMimeType } from '@/lib/paper-minis/artwork-formats';
+import {
+  createPaperMinisStore,
+  packOptions,
+  type CalibrationSession,
+} from '@/stores/paper-minis-store';
+import { ARTWORK_ACCEPT } from '@/lib/paper-minis/artwork-formats';
 import { isSupportedArtwork } from '@/lib/paper-minis/artwork';
 import type { CalibrationLine } from '@/lib/paper-minis/calibration-session';
 import { entryStatusWarning, type BaseStyle } from '@/lib/paper-minis/geometry';
+import { resolveEntry } from '@/lib/paper-minis/packing';
 import { buildFilename, buildPrinterScaleTestSheetFilename } from '@/lib/paper-minis/pdf-filenames';
 import {
   CUSTOM_SIZE_NAME,
@@ -44,6 +49,8 @@ import {
 import type { HeightCalibration, PreparedArtwork } from '@/lib/paper-minis/types';
 import { pluralRu } from '@/lib/plural';
 import { cn } from '@/lib/utils';
+import { PaperMini3d } from './PaperMini3d';
+import { useArtworkUrl } from './use-artwork-url';
 
 const field =
   'min-h-11 w-full rounded-lg border border-border bg-surface-elevated px-3 text-text focus-visible:outline-2 focus-visible:outline-primary';
@@ -84,29 +91,6 @@ function buildZipFilename(date = new Date()) {
   const day = String(date.getDate()).padStart(2, '0');
 
   return `paper-minis-${year}-${month}-${day}.zip`;
-}
-
-function useArtworkUrl(artwork?: PreparedArtwork | null) {
-  const [url, setUrl] = useState<string>();
-  useEffect(() => {
-    if (!artwork) {
-      setUrl(undefined);
-
-      return;
-    }
-
-    const next = URL.createObjectURL(
-      new Blob([artwork.bytes.slice()], {
-        type: artworkMimeType(artwork.format),
-      }),
-    );
-
-    setUrl(next);
-
-    return () => URL.revokeObjectURL(next);
-  }, [artwork]);
-
-  return url;
 }
 
 function lineStyle(value: number) {
@@ -498,6 +482,12 @@ export default function PaperMinisGenerator() {
   const totalSummary =
     rows.length > 0 ? `${pluralRu(packed.miniCount, miniatureForms)} · ${sheetSummary}` : '—';
 
+  const firstRow = rows[0];
+
+  const firstMini = firstRow
+    ? resolveEntry(firstRow, 0, packOptions(settings)).mini?.copies[0]
+    : undefined;
+
   const assemblyInstruction =
     settings.baseStyle === 'flat'
       ? 'Вырежьте развёртку по внешним меткам, сделайте два надреза у плеч язычка, согните пополам между изображениями, склейте половинки и вставьте оба язычка в подставку.'
@@ -679,10 +669,12 @@ export default function PaperMinisGenerator() {
         <div className="minis-editor">
           <div ref={headerRef} className="minis-header-card">
             <div className="minis-header-mini">
-              <div className="minis-header-mini-drawing" aria-hidden="true">
-                <span className="minis-header-mini-figure">♙</span>
-                <span className="minis-header-mini-base" />
-              </div>
+              <PaperMini3d
+                baseStyle={settings.baseStyle}
+                mini={firstMini}
+                artwork={firstRow?.artwork}
+                backArtwork={firstRow?.backArtwork}
+              />
               <p>как собрать одну фигурку</p>
             </div>
 

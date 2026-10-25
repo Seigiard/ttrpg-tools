@@ -134,7 +134,7 @@ function printerMeasurementInput(settings: Readonly<PaperMinisSettings>) {
   };
 }
 
-function packOptions(settings: Readonly<PaperMinisSettings>): PackOptions {
+export function packOptions(settings: Readonly<PaperMinisSettings>): PackOptions {
   return {
     pageSize: settings.pageSize,
     marginMm: settings.marginMm,
