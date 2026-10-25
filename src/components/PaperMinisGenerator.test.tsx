@@ -556,6 +556,198 @@ test('the Base style control lists every style and routes a foamboard choice to 
   });
 });
 
+test('the header shows a neutral 3D mini and changes its printed parts with Base style', async () => {
+  // #given
+  render(<PaperMinisGenerator />);
+  const scene = screen.queryByTestId('mini-3d');
+
+  const initial = {
+    baseStyle: scene?.getAttribute('data-base-style') ?? null,
+    art: scene?.getAttribute('data-art') ?? null,
+    oldPlaceholder: document.querySelector('.minis-header-mini-figure')?.textContent ?? null,
+  };
+
+  // #when
+  await chooseSelectOption(screen.getByRole('button', { name: /Складная/ }), 'Плоская');
+
+  // #then
+  expect({
+    initial,
+    changedStyle: scene?.getAttribute('data-base-style') ?? null,
+    changedParts: [...(scene?.querySelectorAll('[data-part-role]') ?? [])].flatMap((part) => {
+      const role = part.getAttribute('data-part-role');
+
+      return role === 'hinge' ? [] : [role];
+    }),
+  }).toEqual({
+    initial: { baseStyle: 'tent', art: 'placeholder', oldPlaceholder: null },
+    changedStyle: 'flat',
+    changedParts: ['frontTongue', 'frontFace', 'backFace', 'backTongue'],
+  });
+});
+
+test.each([
+  { baseStyle: 'tent', numbered: true, expectedRole: 'backTab', expectedText: '1' },
+  { baseStyle: 'flat', numbered: true, expectedRole: 'backTongue', expectedText: '1' },
+  { baseStyle: 'foamboard', numbered: true, expectedRole: 'backTongue', expectedText: '1' },
+  { baseStyle: 'tent', numbered: false, expectedRole: null, expectedText: null },
+] as const)(
+  'the $baseStyle scene puts copy numbering on the printed part when numbered is $numbered',
+  async ({ baseStyle, numbered, expectedRole, expectedText }) => {
+    // #given
+    localStorage.setItem(
+      'pmg-settings',
+      JSON.stringify({ normalization: false, baseStyle, numberDuplicates: numbered }),
+    );
+    render(<PaperMinisGenerator />);
+
+    // #when
+    await addFront();
+    const scene = screen.queryByTestId('mini-3d');
+    const badge = scene?.querySelector('[data-testid="mini-3d-badge"]') ?? null;
+
+    // #then
+    expect({
+      baseStyle: scene?.getAttribute('data-base-style') ?? null,
+      art: scene?.getAttribute('data-art') ?? null,
+      badgeRole: badge?.closest('[data-part-role]')?.getAttribute('data-part-role') ?? null,
+      badgeText: badge?.textContent ?? null,
+    }).toEqual({ baseStyle, art: 'artwork', badgeRole: expectedRole, badgeText: expectedText });
+  },
+);
+
+test('the header fold runs once on mount and restarts when Base style changes', async () => {
+  // #given
+  const originalMatchMedia = window.matchMedia;
+  const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+  const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
+  const frames = new Map<number, FrameRequestCallback>();
+  let nextFrame = 1;
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    value: (query: string) =>
+      ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener() {},
+        removeListener() {},
+        addEventListener() {},
+        removeEventListener() {},
+        dispatchEvent: () => true,
+      }) satisfies MediaQueryList,
+  });
+  globalThis.requestAnimationFrame = (callback) => {
+    const id = nextFrame;
+    nextFrame += 1;
+    frames.set(id, callback);
+
+    return id;
+  };
+
+  globalThis.cancelAnimationFrame = (id) => frames.delete(id);
+
+  try {
+    render(<PaperMinisGenerator />);
+    const scene = screen.queryByTestId('mini-3d');
+    const mountStart = scene?.getAttribute('data-t') ?? null;
+
+    // #when
+    for (let time = 0; time <= 10_000 && scene?.getAttribute('data-t') !== '1'; time += 1_000) {
+      const pending = [...frames.values()];
+      frames.clear();
+      act(() => pending.forEach((callback) => callback(time)));
+    }
+
+    const mountEnd = scene?.getAttribute('data-t') ?? null;
+
+    const pendingAfterMount = frames.size;
+
+    await chooseSelectOption(screen.getByRole('button', { name: /Складная/ }), 'На пенокартоне');
+    const styleChangeStart = scene?.getAttribute('data-t') ?? null;
+
+    for (
+      let time = 20_000;
+      time <= 30_000 && scene?.getAttribute('data-t') !== '1';
+      time += 1_000
+    ) {
+      const pending = [...frames.values()];
+      frames.clear();
+      act(() => pending.forEach((callback) => callback(time)));
+    }
+
+    // #then
+    expect({
+      mountStart,
+      mountEnd,
+      pendingAfterMount,
+      styleChangeStart,
+      styleChangeEnd: scene?.getAttribute('data-t') ?? null,
+      changedStyle: scene?.getAttribute('data-base-style') ?? null,
+      pendingAfterStyleChange: frames.size,
+    }).toEqual({
+      mountStart: '0',
+      mountEnd: '1',
+      pendingAfterMount: 0,
+      styleChangeStart: '0',
+      styleChangeEnd: '1',
+      changedStyle: 'foamboard',
+      pendingAfterStyleChange: 0,
+    });
+  } finally {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: originalMatchMedia,
+    });
+    globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+    globalThis.cancelAnimationFrame = originalCancelAnimationFrame;
+  }
+});
+
+test('reduced motion mounts the assembled mini without requesting an animation frame', () => {
+  // #given
+  const originalMatchMedia = window.matchMedia;
+  const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+  let requestedFrames = 0;
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    value: (query: string) =>
+      ({
+        matches: query === '(prefers-reduced-motion: reduce)',
+        media: query,
+        onchange: null,
+        addListener() {},
+        removeListener() {},
+        addEventListener() {},
+        removeEventListener() {},
+        dispatchEvent: () => true,
+      }) satisfies MediaQueryList,
+  });
+  globalThis.requestAnimationFrame = () => {
+    requestedFrames += 1;
+
+    return requestedFrames;
+  };
+
+  try {
+    // #when
+    render(<PaperMinisGenerator />);
+    const scene = screen.queryByTestId('mini-3d');
+
+    // #then
+    expect({
+      assembly: scene?.getAttribute('data-t') ?? null,
+      requestedFrames,
+    }).toEqual({ assembly: '1', requestedFrames: 0 });
+  } finally {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: originalMatchMedia,
+    });
+    globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+  }
+});
+
 test('the foamboard counter uses Russian plural forms for Front and Back sheets', async () => {
   // #given
   localStorage.setItem(
