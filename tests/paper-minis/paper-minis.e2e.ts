@@ -100,6 +100,122 @@ test('normalization trims transparent margins to the figure bounds', async ({ pa
   ).toEqual({ size: [4, 3], alpha: [255, 255, 255, 255] });
 });
 
+test('the header 3D scene has layout and textures its front face with uploaded artwork', async ({
+  page,
+}) => {
+  // #given
+  const input = page.getByLabel('Добавить изображения', { exact: true });
+
+  // #when
+  await input.setInputFiles(fixture('trim-6x5-to-4x3.png'));
+  const scene = page.getByTestId('mini-3d');
+  await expect(scene).toHaveAttribute('data-art', 'artwork');
+  await expect(scene).toHaveAttribute('data-t', '1');
+  const frontFace = scene.locator('[data-part-role="frontFace"]');
+  const artwork = frontFace.locator('img');
+  await artwork.waitFor({ state: 'attached' });
+  const [sceneLayout, frontFaceLayout, artworkLayout] = await Promise.all([
+    scene.evaluate((element) => {
+      const box = element.getBoundingClientRect();
+
+      return {
+        visible: element.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }),
+        hasWidth: box.width > 0,
+        hasHeight: box.height > 0,
+      };
+    }),
+    frontFace.evaluate((element) => {
+      const box = element.getBoundingClientRect();
+
+      return {
+        visible: element.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }),
+        hasWidth: box.width > 0,
+        hasHeight: box.height > 0,
+      };
+    }),
+    artwork.evaluate(async (element) => {
+      const image = element as HTMLImageElement;
+      await image.decode();
+      const box = image.getBoundingClientRect();
+
+      return {
+        visible: image.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }),
+        hasWidth: box.width > 0,
+        hasHeight: box.height > 0,
+        naturalSize: [image.naturalWidth, image.naturalHeight],
+      };
+    }),
+  ]);
+
+  // #then
+  expect({ sceneLayout, frontFaceLayout, artworkLayout }).toEqual({
+    sceneLayout: { visible: true, hasWidth: true, hasHeight: true },
+    frontFaceLayout: { visible: true, hasWidth: true, hasHeight: true },
+    artworkLayout: {
+      visible: true,
+      hasWidth: true,
+      hasHeight: true,
+      naturalSize: [4, 3],
+    },
+  });
+});
+
+test('assembled wide and tall minis keep every part inside and centred for every base style', async ({
+  page,
+}) => {
+  // #given
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const fixtures = ['wide-800x80.png', 'tall-80x800.png'];
+  const baseStyles = [
+    { value: 'tent', label: 'Складная', partCount: 6 },
+    { value: 'flat', label: 'Плоская', partCount: 5 },
+    { value: 'foamboard', label: 'На пенокартоне', partCount: 4 },
+  ] as const;
+  const observed: Record<
+    string,
+    { partCount: number; allPartsHaveLayout: boolean; allPartsInside: boolean; centred: boolean }
+  > = {};
+
+  // #when
+  for (const fixtureName of fixtures) {
+    await page.reload();
+    await page.locator('astro-island:not([ssr])').waitFor();
+    await page
+      .getByLabel('Добавить изображения', { exact: true })
+      .setInputFiles(fixture(fixtureName));
+
+    for (const baseStyle of baseStyles) {
+      const scene = page.getByTestId('mini-3d');
+
+      if ((await scene.getAttribute('data-base-style')) !== baseStyle.value) {
+        await page.getByRole('button', { name: /Складная|Плоская|На пенокартоне/ }).click();
+        await page.getByRole('option', { name: baseStyle.label, exact: true }).click();
+      }
+
+      await expect(scene).toHaveAttribute('data-base-style', baseStyle.value);
+      await expect(scene).toHaveAttribute('data-t', '1');
+      observed[`${fixtureName}:${baseStyle.value}`] = await measureSceneFit(scene);
+    }
+  }
+
+  // #then
+  expect(observed).toEqual(
+    Object.fromEntries(
+      fixtures.flatMap((fixtureName) =>
+        baseStyles.map((baseStyle) => [
+          `${fixtureName}:${baseStyle.value}`,
+          {
+            partCount: baseStyle.partCount,
+            allPartsHaveLayout: true,
+            allPartsInside: true,
+            centred: true,
+          },
+        ]),
+      ),
+    ),
+  );
+});
+
 test('normalization failure keeps the original artwork and shows a warning', async ({ page }) => {
   // #given
   const expectedWarning = 'Не удалось обрезать изображение. Будет напечатан оригинал.';
@@ -645,6 +761,37 @@ async function markerPositions(slot: Locator) {
     return [head, feet].map((line) =>
       Number(((line.getBoundingClientRect().top - imageBox.top) / imageBox.height).toFixed(2)),
     );
+  });
+}
+
+async function measureSceneFit(scene: Locator) {
+  return scene.evaluate((element) => {
+    const tolerancePx = 1;
+    const sceneBox = element.getBoundingClientRect();
+    const partElements = Array.from(element.querySelectorAll<HTMLElement>('[data-part-role]'));
+    const partBoxes = partElements.map((part) => part.getBoundingClientRect());
+    const unionLeft = Math.min(...partBoxes.map((box) => box.left));
+    const unionRight = Math.max(...partBoxes.map((box) => box.right));
+    const partsCentreX = (unionLeft + unionRight) / 2;
+    const sceneCentreX = (sceneBox.left + sceneBox.right) / 2;
+
+    return {
+      partCount: partElements.length,
+      allPartsHaveLayout: partElements.every(
+        (part, index) =>
+          part.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) &&
+          partBoxes[index]!.width > 0 &&
+          partBoxes[index]!.height > 0,
+      ),
+      allPartsInside: partBoxes.every(
+        (box) =>
+          box.left >= sceneBox.left - tolerancePx &&
+          box.right <= sceneBox.right + tolerancePx &&
+          box.top >= sceneBox.top - tolerancePx &&
+          box.bottom <= sceneBox.bottom + tolerancePx,
+      ),
+      centred: Math.abs(partsCentreX - sceneCentreX) <= sceneBox.width * 0.1,
+    };
   });
 }
 
