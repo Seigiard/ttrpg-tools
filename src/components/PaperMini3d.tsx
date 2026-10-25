@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { BaseStyle, PackedMini } from '@/lib/paper-minis/geometry';
 import {
   endpoint,
@@ -37,6 +37,9 @@ const FRAME_CENTER_Y_PX = -64;
 const SCENE_PERSPECTIVE_PX = 640;
 
 export function PaperMini3d({ baseStyle, mini, artwork, backArtwork }: PaperMini3dProps) {
+  const sceneRef = useRef<HTMLDivElement>(null);
+  const [sceneWidth, setSceneWidth] = useState(FRAME_WIDTH_PX);
+
   const parts = useMemo(
     () => (mini ? miniParts(mini) : fallbackParts(baseStyle)),
     [baseStyle, mini],
@@ -72,6 +75,24 @@ export function PaperMini3d({ baseStyle, mini, artwork, backArtwork }: PaperMini
     return () => cancelAnimationFrame(frame);
   }, [baseStyle, replay]);
 
+  useLayoutEffect(() => {
+    const scene = sceneRef.current;
+
+    if (!scene) return;
+
+    const updateWidth = () => {
+      const width = scene.clientWidth;
+
+      if (width > 0) setSceneWidth((current) => (current === width ? current : width));
+    };
+
+    updateWidth();
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(scene);
+
+    return () => observer.disconnect();
+  }, []);
+
   const poses = useMemo(() => poseMini(parts, assembly), [assembly, parts]);
 
   const paperWidthMm = mini?.totalWidthMm ?? 29;
@@ -92,8 +113,8 @@ export function PaperMini3d({ baseStyle, mini, artwork, backArtwork }: PaperMini
   );
 
   const frame = useMemo(
-    () => frameFor(parts, poses, paperWidthMm, standZ, standPose, foamSlab),
-    [foamSlab, paperWidthMm, parts, poses, standPose, standZ],
+    () => frameFor(parts, poses, paperWidthMm, sceneWidth, standZ, standPose, foamSlab),
+    [foamSlab, paperWidthMm, parts, poses, sceneWidth, standPose, standZ],
   );
 
   const badgeRole = baseStyle === 'tent' ? 'backTab' : 'backTongue';
@@ -121,8 +142,8 @@ export function PaperMini3d({ baseStyle, mini, artwork, backArtwork }: PaperMini
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1fr) 2rem',
-        gridTemplateRows: '2rem 10rem',
+        gridTemplateColumns: 'minmax(0, 1fr) 2.75rem',
+        gridTemplateRows: '2.75rem 10rem',
         inlineSize: 'min(100%, 12rem)',
       }}
     >
@@ -138,6 +159,7 @@ export function PaperMini3d({ baseStyle, mini, artwork, backArtwork }: PaperMini
         <span aria-hidden="true">↻</span>
       </Button>
       <div
+        ref={sceneRef}
         data-testid="mini-3d"
         data-base-style={baseStyle}
         data-t={assembly === 1 ? '1' : String(assembly)}
@@ -303,7 +325,7 @@ function FoamSlab({
           blockSize: `${height}px`,
           marginInlineStart: `${-depth / 2}px`,
           marginBlockStart: `${-height}px`,
-          transform: `translate3d(${-width / 2}px, ${-pose.yMinMm * frame.scale}px, ${-depth / 2}px) rotateY(90deg)`,
+          transform: `translate3d(${-width / 2}px, ${-pose.yMinMm * frame.scale}px, ${-depth / 2}px) rotateY(-90deg)`,
         }}
       />
       <span
@@ -313,7 +335,7 @@ function FoamSlab({
           blockSize: `${height}px`,
           marginInlineStart: `${-depth / 2}px`,
           marginBlockStart: `${-height}px`,
-          transform: `translate3d(${width / 2}px, ${-pose.yMinMm * frame.scale}px, ${-depth / 2}px) rotateY(-90deg)`,
+          transform: `translate3d(${width / 2}px, ${-pose.yMinMm * frame.scale}px, ${-depth / 2}px) rotateY(90deg)`,
         }}
       />
       <span
@@ -376,6 +398,7 @@ function frameFor(
   parts: MiniPart[],
   poses: Map<string, MiniPartPose>,
   widthMm: number,
+  frameWidthPx: number,
   standZ?: number,
   standPose?: { yMinMm: number; yMaxMm: number },
   foamSlab?: { yMinMm: number; yMaxMm: number; zMinMm: number; zMaxMm: number },
@@ -397,7 +420,7 @@ function frameFor(
 
   const z = points.map((point) => point.z);
   const centerZ = (Math.min(...z) + Math.max(...z)) / 2;
-  const scale = frameScale(points, centerZ);
+  const scale = frameScale(points, centerZ, frameWidthPx);
   const projected = points.map((point) => projectWorldPoint(point, centerZ, scale));
   const x = projected.map((point) => point.x);
   const y = projected.map((point) => point.y);
@@ -573,7 +596,7 @@ type WorldPoint = { x: number; y: number; z: number };
 
 type ProjectedPoint = { x: number; y: number };
 
-function frameScale(points: WorldPoint[], centerZ: number): number {
+function frameScale(points: WorldPoint[], centerZ: number, frameWidthPx: number): number {
   let minimum = 0;
 
   let maximum = 2.6;
@@ -588,7 +611,7 @@ function frameScale(points: WorldPoint[], centerZ: number): number {
     const y = projected.map((point) => point.y);
 
     const fits =
-      Math.max(...x) - Math.min(...x) <= FRAME_WIDTH_PX &&
+      Math.max(...x) - Math.min(...x) <= frameWidthPx &&
       Math.max(...y) - Math.min(...y) <= FRAME_HEIGHT_PX;
 
     if (fits) minimum = scale;
