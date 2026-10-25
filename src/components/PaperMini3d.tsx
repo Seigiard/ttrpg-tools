@@ -119,93 +119,104 @@ export function PaperMini3d({ baseStyle, mini, artwork, backArtwork }: PaperMini
 
   return (
     <div
-      data-testid="mini-3d"
-      data-base-style={baseStyle}
-      data-t={assembly === 1 ? '1' : String(assembly)}
-      data-art={artwork ? 'artwork' : 'placeholder'}
-      className="mini-3d-scene"
-      aria-label="как собрать одну фигурку"
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1fr) 2rem',
+        gridTemplateRows: '2rem 10rem',
+        inlineSize: 'min(100%, 12rem)',
+      }}
     >
       <Button
         aria-label="Повторить сборку"
-        className="absolute end-1 top-1 z-10 size-11"
+        className="size-8"
         size="icon-xs"
+        style={{ gridColumn: 2, gridRow: 1 }}
         title="Повторить сборку"
-        variant="outline"
+        variant="ghost"
         onPress={() => setReplay((current) => current + 1)}
       >
         <span aria-hidden="true">↻</span>
       </Button>
-      <div className="mini-3d-world" style={worldStyle(frame)}>
-        <div className="mini-3d-shadow" style={shadowStyle(frame)} />
-        {standZ !== undefined && standPose && assembly >= 0.8 && (
-          <MiniStand frame={frame} pose={standPose} standZ={standZ} />
-        )}
-        {foamSlab && <FoamSlab frame={frame} mini={mini} pose={foamSlab} />}
-        {parts.map((miniPart) => {
-          const pose = poses.get(miniPart.id);
+      <div
+        data-testid="mini-3d"
+        data-base-style={baseStyle}
+        data-t={assembly === 1 ? '1' : String(assembly)}
+        data-art={artwork ? 'artwork' : 'placeholder'}
+        className="mini-3d-scene"
+        style={{ gridColumn: '1 / -1', gridRow: 2 }}
+        aria-label="как собрать одну фигурку"
+      >
+        <div className="mini-3d-world" style={worldStyle(frame)}>
+          <div className="mini-3d-shadow" style={shadowStyle(frame)} />
+          {standZ !== undefined && standPose && assembly >= 0.8 && (
+            <MiniStand frame={frame} pose={standPose} standZ={standZ} />
+          )}
+          {foamSlab && <FoamSlab frame={frame} mini={mini} pose={foamSlab} />}
+          {parts.map((miniPart) => {
+            const pose = poses.get(miniPart.id);
 
-          if (!pose) return null;
+            if (!pose) return null;
 
-          const isFace = miniPart.role === 'frontFace' || miniPart.role === 'backFace';
-          const isBack = miniPart.role === 'backFace';
-          const dimensions = isBack ? image?.back : image?.front;
-          const artUrl = isBack ? backUrl : frontUrl;
-          const label = mini?.label && miniPart.role === badgeRole ? mini.label : undefined;
-          const printFacesAway = baseStyle === 'foamboard' && isBack;
+            const isFace = miniPart.role === 'frontFace' || miniPart.role === 'backFace';
+            const isBack = miniPart.role === 'backFace';
+            const dimensions = isBack ? image?.back : image?.front;
+            const artUrl = isBack ? backUrl : frontUrl;
+            const label = mini?.label && miniPart.role === badgeRole ? mini.label : undefined;
+            const printFacesAway = baseStyle === 'foamboard' && isBack;
 
-          return (
-            <div
-              key={miniPart.id}
-              data-part-role={miniPart.role}
-              className={`mini-3d-part${isFace ? ' mini-3d-face' : ''}`}
-              style={partStyle(miniPart, pose, paperWidthMm, frame.scale)}
-            >
+            return (
               <div
-                className="mini-3d-side mini-3d-print"
-                style={printFacesAway ? { transform: 'rotateY(180deg)' } : undefined}
+                key={miniPart.id}
+                data-part-role={miniPart.role}
+                className={`mini-3d-part${isFace ? ' mini-3d-face' : ''}`}
+                style={partStyle(miniPart, pose, paperWidthMm, frame.scale)}
               >
-                {isFace && dimensions && artUrl ? (
-                  <img
-                    className="mini-3d-art"
-                    style={{
-                      ...artStyle(
-                        miniPart,
-                        dimensions,
-                        frame.scale,
-                        baseStyle === 'foamboard' ? (mini?.marginMm ?? 0) : undefined,
-                      ),
-                      ...(isBack &&
-                        baseStyle !== 'foamboard' && {
-                          transform: backArtwork ? 'rotate(180deg)' : 'scaleY(-1)',
-                        }),
-                    }}
-                    src={artUrl}
-                    alt=""
-                  />
-                ) : isFace ? (
-                  <span className="mini-3d-placeholder" aria-hidden="true" />
-                ) : null}
-                {label && mini && (
-                  <span
-                    data-testid="mini-3d-badge"
-                    className="mini-3d-badge"
-                    style={badgeStyle(mini, frame.scale)}
-                  >
-                    {label}
-                  </span>
-                )}
-                <span className="mini-3d-shade" style={{ opacity: shadeFor(pose) }} />
+                <div
+                  className="mini-3d-side mini-3d-print"
+                  style={printFacesAway ? { transform: 'rotateY(180deg)' } : undefined}
+                >
+                  {isFace && dimensions && artUrl ? (
+                    <img
+                      className="mini-3d-art"
+                      style={{
+                        ...artStyle(
+                          miniPart,
+                          dimensions,
+                          frame.scale,
+                          baseStyle === 'foamboard' ? (mini?.marginMm ?? 0) : undefined,
+                        ),
+                        ...(isBack &&
+                          baseStyle !== 'foamboard' && {
+                            transform: backArtwork ? 'rotate(180deg)' : 'scaleY(-1)',
+                          }),
+                      }}
+                      src={artUrl}
+                      alt=""
+                    />
+                  ) : isFace ? (
+                    <span className="mini-3d-placeholder" aria-hidden="true" />
+                  ) : null}
+                  {label && mini && (
+                    <span
+                      data-testid="mini-3d-badge"
+                      className="mini-3d-badge"
+                      style={badgeStyle(mini, frame.scale)}
+                    >
+                      {label}
+                    </span>
+                  )}
+                  <span className="mini-3d-shade" style={{ opacity: shadeFor(pose) }} />
+                </div>
+                <div
+                  className="mini-3d-side mini-3d-reverse"
+                  style={printFacesAway ? { transform: 'none' } : undefined}
+                >
+                  <span className="mini-3d-shade" style={{ opacity: shadeFor(pose, true) }} />
+                </div>
               </div>
-              <div
-                className="mini-3d-side mini-3d-reverse"
-                style={printFacesAway ? { transform: 'none' } : undefined}
-              >
-                <span className="mini-3d-shade" style={{ opacity: shadeFor(pose, true) }} />
-              </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     </div>
   );
