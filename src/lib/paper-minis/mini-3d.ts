@@ -117,12 +117,19 @@ export function poseMini(parts: MiniPart[], t: number): Map<string, MiniPartPose
   return poseFoamboard(parts, clampedT);
 }
 
-export function poseMiniStand(_baseStyle: Exclude<BaseStyle, 'tent'>, _t: number): MiniStandPose {
-  return { yMinMm: 0, yMaxMm: 3 };
+export function poseMiniStand(_baseStyle: Exclude<BaseStyle, 'tent'>, t: number): MiniStandPose {
+  const progress = phaseProgress(t, [0.8, 1]);
+  const yMinMm = progress === 1 ? 0 : -3 * (1 - progress);
+
+  return { yMinMm, yMaxMm: yMinMm + 3 };
 }
 
-export function poseFoamSlab(_mini: PackedMini, _t: number): FoamSlabPose {
-  return { yMinMm: 0, yMaxMm: 0, zMinMm: 0, zMaxMm: 0 };
+export function poseFoamSlab(mini: PackedMini, t: number): FoamSlabPose {
+  const progress = phaseProgress(t, [0.35, 0.65]);
+  const heightMm = mini.levels.topMm;
+  const yMinMm = (heightMm + 5) * (1 - progress);
+
+  return { yMinMm, yMaxMm: yMinMm + heightMm, zMinMm: -5, zMaxMm: 0 };
 }
 
 function requirePart(
@@ -279,6 +286,8 @@ function poseFlat(parts: MiniPart[], t: number): Map<string, MiniPartPose> {
 
 function poseFoamboard(parts: MiniPart[], t: number): Map<string, MiniPartPose> {
   const poses = new Map<string, MiniPartPose>();
+  const riseProgress = phaseProgress(t, [0, 0.35]);
+  const closeProgress = phaseProgress(t, [0.65, 0.8]);
 
   for (const sheet of ['main', 'back'] as const) {
     const sheetParts = parts
@@ -287,12 +296,15 @@ function poseFoamboard(parts: MiniPart[], t: number): Map<string, MiniPartPose> 
 
     const sheetTop = Math.max(...sheetParts.map((candidate) => candidate.toMm));
     const initialZ = sheet === 'main' ? sheetTop + 5 : -5;
+    const openZ = sheet === 'main' ? 5 : -10;
     const assembledZ = sheet === 'main' ? 0 : -5;
-    const psiRad = -Math.PI / 2 + (Math.PI / 2) * t;
+    const psiRad = -Math.PI / 2 + (Math.PI / 2) * riseProgress;
+    const zAfterRise = initialZ + (openZ - initialZ) * riseProgress;
+    const zMm = zAfterRise + (assembledZ - openZ) * closeProgress;
 
     let next: MiniPartPose = {
       yMm: 0,
-      zMm: initialZ + (assembledZ - initialZ) * t,
+      zMm,
       psiRad,
     };
 

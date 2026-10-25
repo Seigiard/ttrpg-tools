@@ -3,11 +3,14 @@ import type { BaseStyle, PackedMini } from '@/lib/paper-minis/geometry';
 import {
   endpoint,
   miniParts,
+  poseFoamSlab,
   poseMini,
+  poseMiniStand,
   type MiniPart,
   type MiniPartPose,
 } from '@/lib/paper-minis/mini-3d';
 import type { PreparedArtwork } from '@/lib/paper-minis/types';
+import { Button } from '@/components/ui/button';
 import { useArtworkUrl } from './use-artwork-url';
 
 export type PaperMini3dProps = {
@@ -40,6 +43,7 @@ export function PaperMini3d({ baseStyle, mini, artwork, backArtwork }: PaperMini
   );
 
   const [assembly, setAssembly] = useState(0);
+  const [replay, setReplay] = useState(0);
   const frontUrl = useArtworkUrl(artwork);
   const backUrl = useArtworkUrl(backArtwork) ?? frontUrl;
 
@@ -66,7 +70,7 @@ export function PaperMini3d({ baseStyle, mini, artwork, backArtwork }: PaperMini
     frame = requestAnimationFrame(animate);
 
     return () => cancelAnimationFrame(frame);
-  }, [baseStyle]);
+  }, [baseStyle, replay]);
 
   const poses = useMemo(() => poseMini(parts, assembly), [assembly, parts]);
 
@@ -77,9 +81,19 @@ export function PaperMini3d({ baseStyle, mini, artwork, backArtwork }: PaperMini
     [baseStyle, parts],
   );
 
+  const standPose = useMemo(
+    () => (baseStyle === 'tent' ? undefined : poseMiniStand(baseStyle, assembly)),
+    [assembly, baseStyle],
+  );
+
+  const foamSlab = useMemo(
+    () => (baseStyle === 'foamboard' && mini ? poseFoamSlab(mini, assembly) : undefined),
+    [assembly, baseStyle, mini],
+  );
+
   const frame = useMemo(
-    () => frameFor(parts, poses, paperWidthMm, standZ),
-    [paperWidthMm, parts, poses, standZ],
+    () => frameFor(parts, poses, paperWidthMm, standZ, standPose, foamSlab),
+    [foamSlab, paperWidthMm, parts, poses, standPose, standZ],
   );
 
   const badgeRole = baseStyle === 'tent' ? 'backTab' : 'backTongue';
@@ -112,11 +126,22 @@ export function PaperMini3d({ baseStyle, mini, artwork, backArtwork }: PaperMini
       className="mini-3d-scene"
       aria-label="как собрать одну фигурку"
     >
+      <Button
+        aria-label="Повторить сборку"
+        className="absolute end-1 top-1 z-10 size-11"
+        size="icon-xs"
+        title="Повторить сборку"
+        variant="outline"
+        onPress={() => setReplay((current) => current + 1)}
+      >
+        <span aria-hidden="true">↻</span>
+      </Button>
       <div className="mini-3d-world" style={worldStyle(frame)}>
         <div className="mini-3d-shadow" style={shadowStyle(frame)} />
-        {standZ !== undefined && assembly > 0.7 && (
-          <MiniStand frame={frame} standZ={standZ} opacity={(assembly - 0.7) / 0.3} />
+        {standZ !== undefined && standPose && assembly >= 0.8 && (
+          <MiniStand frame={frame} pose={standPose} standZ={standZ} />
         )}
+        {foamSlab && <FoamSlab frame={frame} mini={mini} pose={foamSlab} />}
         {parts.map((miniPart) => {
           const pose = poses.get(miniPart.id);
 
@@ -188,11 +213,11 @@ export function PaperMini3d({ baseStyle, mini, artwork, backArtwork }: PaperMini
 
 function MiniStand({
   frame,
-  opacity,
+  pose,
   standZ,
 }: {
   frame: { centerZ: number; scale: number };
-  opacity: number;
+  pose: { yMinMm: number; yMaxMm: number };
   standZ: number;
 }) {
   const { scale } = frame;
@@ -206,14 +231,100 @@ function MiniStand({
     '--mini-slot-x': `${-12 * scale}px`,
     '--mini-slot-y': `${-3 * scale}px`,
     '--mini-stand-height': `${scale}px`,
-    opacity,
-    transform: `translateZ(${standZ * scale}px)`,
+    transform: `translate3d(0, ${-pose.yMinMm * scale}px, ${standZ * scale}px)`,
   } as CSSProperties;
 
   return (
     <div className="mini-3d-stand" style={style} aria-hidden="true">
       <span className="mini-3d-stand-disc" />
       <span className="mini-3d-stand-slot" />
+    </div>
+  );
+}
+
+function FoamSlab({
+  frame,
+  mini,
+  pose,
+}: {
+  frame: { scale: number };
+  mini?: PackedMini;
+  pose: { yMinMm: number; yMaxMm: number; zMinMm: number; zMaxMm: number };
+}) {
+  if (!mini) return null;
+
+  const width = mini.totalWidthMm * frame.scale;
+  const height = (pose.yMaxMm - pose.yMinMm) * frame.scale;
+  const depth = (pose.zMaxMm - pose.zMinMm) * frame.scale;
+
+  const base: CSSProperties = {
+    position: 'absolute',
+    background: 'var(--color-border)',
+    backfaceVisibility: 'hidden',
+  };
+
+  return (
+    <div aria-hidden="true" style={{ transformStyle: 'preserve-3d' }}>
+      <span
+        style={{
+          ...base,
+          inlineSize: `${width}px`,
+          blockSize: `${height}px`,
+          marginInlineStart: `${-width / 2}px`,
+          marginBlockStart: `${-height}px`,
+          transform: `translate3d(0, ${-pose.yMinMm * frame.scale}px, ${pose.zMaxMm * frame.scale}px)`,
+        }}
+      />
+      <span
+        style={{
+          ...base,
+          inlineSize: `${width}px`,
+          blockSize: `${height}px`,
+          marginInlineStart: `${-width / 2}px`,
+          marginBlockStart: `${-height}px`,
+          transform: `translate3d(0, ${-pose.yMinMm * frame.scale}px, ${pose.zMinMm * frame.scale}px) rotateY(180deg)`,
+        }}
+      />
+      <span
+        style={{
+          ...base,
+          inlineSize: `${depth}px`,
+          blockSize: `${height}px`,
+          marginInlineStart: `${-depth / 2}px`,
+          marginBlockStart: `${-height}px`,
+          transform: `translate3d(${-width / 2}px, ${-pose.yMinMm * frame.scale}px, ${-depth / 2}px) rotateY(90deg)`,
+        }}
+      />
+      <span
+        style={{
+          ...base,
+          inlineSize: `${depth}px`,
+          blockSize: `${height}px`,
+          marginInlineStart: `${-depth / 2}px`,
+          marginBlockStart: `${-height}px`,
+          transform: `translate3d(${width / 2}px, ${-pose.yMinMm * frame.scale}px, ${-depth / 2}px) rotateY(-90deg)`,
+        }}
+      />
+      <span
+        style={{
+          ...base,
+          inlineSize: `${width}px`,
+          blockSize: `${depth}px`,
+          marginInlineStart: `${-width / 2}px`,
+          marginBlockStart: `${-depth / 2}px`,
+          transform: `translate3d(0, ${-pose.yMaxMm * frame.scale}px, ${-depth / 2}px) rotateX(90deg)`,
+        }}
+      />
+      <span
+        style={{
+          ...base,
+          inlineSize: `${width}px`,
+          blockSize: `${depth}px`,
+          marginInlineStart: `${-width / 2}px`,
+          marginBlockStart: `${-depth / 2}px`,
+          transform: `translate3d(0, ${-pose.yMinMm * frame.scale}px, ${-depth / 2}px) rotateX(-90deg)`,
+        }}
+      />
     </div>
   );
 }
@@ -255,6 +366,8 @@ function frameFor(
   poses: Map<string, MiniPartPose>,
   widthMm: number,
   standZ?: number,
+  standPose?: { yMinMm: number; yMaxMm: number },
+  foamSlab?: { yMinMm: number; yMaxMm: number; zMinMm: number; zMaxMm: number },
 ) {
   const points = parts.flatMap((miniPart) => {
     const pose = poses.get(miniPart.id);
@@ -267,7 +380,9 @@ function frameFor(
     ]);
   });
 
-  if (standZ !== undefined) points.push(...standPoints(standZ));
+  if (standZ !== undefined) points.push(...standPoints(standZ, standPose?.yMinMm ?? 0));
+
+  if (foamSlab) points.push(...slabPoints(foamSlab, widthMm));
 
   const z = points.map((point) => point.z);
   const centerZ = (Math.min(...z) + Math.max(...z)) / 2;
@@ -422,11 +537,25 @@ function standPosition(parts: MiniPart[]): number {
   return z.reduce((total, value) => total + value, 0) / z.length;
 }
 
-function standPoints(standZ: number): WorldPoint[] {
+function standPoints(standZ: number, yMm: number): WorldPoint[] {
   return [
-    ...[-17, 17].flatMap((x) => [-17, 17].map((z) => ({ x, y: 0, z: standZ + z }))),
-    ...[-12, 12].flatMap((x) => [0, 3].map((y) => ({ x, y, z: standZ }))),
+    ...[-17, 17].flatMap((x) => [-17, 17].map((z) => ({ x, y: yMm, z: standZ + z }))),
+    ...[-12, 12].flatMap((x) => [yMm, yMm + 3].map((y) => ({ x, y, z: standZ }))),
   ];
+}
+
+function slabPoints(
+  {
+    yMinMm,
+    yMaxMm,
+    zMinMm,
+    zMaxMm,
+  }: { yMinMm: number; yMaxMm: number; zMinMm: number; zMaxMm: number },
+  widthMm: number,
+): WorldPoint[] {
+  return [-widthMm / 2, widthMm / 2].flatMap((x) =>
+    [yMinMm, yMaxMm].flatMap((y) => [zMinMm, zMaxMm].map((z) => ({ x, y, z }))),
+  );
 }
 
 type WorldPoint = { x: number; y: number; z: number };
