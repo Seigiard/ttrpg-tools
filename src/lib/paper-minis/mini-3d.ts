@@ -1,4 +1,4 @@
-import type { PackedMini } from './geometry';
+import type { BaseStyle, PackedMini } from './geometry';
 
 export type MiniPartRole =
   | 'floorStrip'
@@ -21,6 +21,15 @@ export type MiniPart = {
 export type MiniPartPose = { yMm: number; zMm: number; psiRad: number };
 
 export type MiniPartEndpoint = { yMm: number; zMm: number };
+
+export type MiniStandPose = { yMinMm: number; yMaxMm: number };
+
+export type FoamSlabPose = {
+  yMinMm: number;
+  yMaxMm: number;
+  zMinMm: number;
+  zMaxMm: number;
+};
 
 const HINGE_HALF_LENGTH_MM = 0.25;
 
@@ -106,6 +115,14 @@ export function poseMini(parts: MiniPart[], t: number): Map<string, MiniPartPose
   if (style === 'flat') return poseFlat(parts, clampedT);
 
   return poseFoamboard(parts, clampedT);
+}
+
+export function poseMiniStand(_baseStyle: Exclude<BaseStyle, 'tent'>, _t: number): MiniStandPose {
+  return { yMinMm: 0, yMaxMm: 3 };
+}
+
+export function poseFoamSlab(_mini: PackedMini, _t: number): FoamSlabPose {
+  return { yMinMm: 0, yMaxMm: 0, zMinMm: 0, zMaxMm: 0 };
 }
 
 function requirePart(
